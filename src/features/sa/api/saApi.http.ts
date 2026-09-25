@@ -9,6 +9,7 @@
  */
 import { getList, getOne, send, upload } from "@/lib/api";
 import type { FilterSpec } from "@/lib/listQuery";
+import { scopeKey } from "@/mocks/scope";
 import type {
   SAImportApplied,
   SAImportBatch,
@@ -16,7 +17,9 @@ import type {
   SAImportDiff,
   SAImportSummary,
   SIM3LONApplied,
+  SIM3LONApplyReview,
   SIM3LONPreview,
+  SIM3LONReconciliationPreview,
   ScheduleAgreement,
   SAFilterParams,
   SAStatus,
@@ -265,6 +268,32 @@ interface SIM3LONApplyResponse {
   daily_targets_written: number;
 }
 
+interface SIM3LONReconciliationResponse {
+  candidate_batch_id: string;
+  expected_predecessor_batch_id: string | null;
+  source_created_at: string;
+  review_ready: boolean;
+  expected_plan_versions: Array<{ plan_id: string; version: number; status: string }>;
+  changes: Array<{
+    plan_id?: string;
+    outlet_id: string;
+    product_id: string;
+    operational_date: string;
+    baseline_qty: number;
+    current_qty: number | null;
+    proposed_qty: number;
+    classification: SIM3LONReconciliationPreview["changes"][number]["classification"];
+    non_draft_discrepancy: boolean;
+    crew_assignment_affected: boolean;
+  }>;
+  blockers: Array<{
+    code: string;
+    message: string;
+    plan_id?: string;
+    registration_code?: string;
+  }>;
+}
+
 function toSIM3LONPreview(row: SIM3LONPreviewResponse): SIM3LONPreview {
   return {
     id: row.id,
@@ -296,6 +325,44 @@ function toSIM3LONPreview(row: SIM3LONPreviewResponse): SIM3LONPreview {
       removedOutlets: row.changes.removed_outlets,
     },
   };
+}
+
+function toSIM3LONReconciliation(row: SIM3LONReconciliationResponse): SIM3LONReconciliationPreview {
+  return {
+    candidateBatchId: row.candidate_batch_id,
+    expectedPredecessorBatchId: row.expected_predecessor_batch_id ?? null,
+    sourceCreatedAt: row.source_created_at,
+    reviewReady: row.review_ready,
+    expectedPlanVersions: (row.expected_plan_versions ?? []).map((plan) => ({
+      planId: plan.plan_id,
+      version: plan.version,
+      status: plan.status,
+    })),
+    changes: (row.changes ?? []).map((change) => ({
+      planId: change.plan_id,
+      outletId: change.outlet_id,
+      productId: change.product_id,
+      operationalDate: change.operational_date,
+      baselineQty: change.baseline_qty,
+      currentQty: change.current_qty ?? null,
+      proposedQty: change.proposed_qty,
+      classification: change.classification,
+      nonDraftDiscrepancy: change.non_draft_discrepancy,
+      crewAssignmentAffected: change.crew_assignment_affected,
+    })),
+    blockers: (row.blockers ?? []).map((blocker) => ({
+      code: blocker.code,
+      message: blocker.message,
+      planId: blocker.plan_id,
+      registrationCode: blocker.registration_code,
+    })),
+  };
+}
+
+function assertScope(originScope: readonly [string, string]): void {
+  if (scopeKey().join("|") !== originScope.join("|")) {
+    throw new Error("Tenant berubah. Muat ulang impor pada tenant yang sesuai.");
+  }
 }
 
 /**
@@ -434,7 +501,9 @@ export const saApiHttp: ScheduleAgreementApi = {
   },
 
   async previewSIM3LON(file: File, supplierName: string, productId: string): Promise<SIM3LONPreview> {
+    const originScope = scopeKey();
     const branchId = await defaultBranchID();
+    assertScope(originScope);
     const preview = await upload<SIM3LONPreviewResponse>(
       "/sim3lon-imports/preview",
       file,
@@ -442,11 +511,36 @@ export const saApiHttp: ScheduleAgreementApi = {
       60_000,
       { branch_id: branchId, product_id: productId, supplier_name: supplierName },
     );
+    assertScope(originScope);
     return toSIM3LONPreview(preview);
   },
 
-  async applySIM3LON(batchId: string): Promise<SIM3LONApplied> {
-    const applied = await send<SIM3LONApplyResponse>("post", `/sim3lon-imports/${batchId}/apply`);
+  async getSIM3LONReconciliation(batchId: string): Promise<SIM3LONReconciliationPreview> {
+    const originScope = scopeKey();
+    const preview = await getOne<SIM3LONReconciliationResponse>(
+      `/sim3lon-imports/${batchId}/reconciliation-preview`,
+    );
+    assertScope(originScope);
+    return toSIM3LONReconciliation(preview);
+  },
+
+  async applySIM3LON(batchId: string, review?: SIM3LONApplyReview): Promise<SIM3LONApplied> {
+    const originScope = scopeKey();
+    const body = review
+      ? {
+          expected_predecessor_batch_id: review.expectedPredecessorBatchId,
+          accepted_plans: review.acceptedPlans.map((plan) => ({
+            plan_id: plan.planId,
+            expected_version: plan.expectedVersion,
+          })),
+        }
+      : undefined;
+    const applied = await send<SIM3LONApplyResponse>(
+      "post",
+      `/sim3lon-imports/${batchId}/apply`,
+      body,
+    );
+    assertScope(originScope);
     return {
       id: applied.id,
       baseAgreementId: applied.base_schedule_agreement_id,

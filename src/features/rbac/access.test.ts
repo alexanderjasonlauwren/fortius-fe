@@ -2,7 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import { describeAccess, describeRoles } from "./access";
 import { PERMISSIONS } from "./permissions";
-import { navGroupsFor, landingPathFor, usesDriverConsole } from "@/layouts/nav";
+import { NAV_GROUPS, navGroupsFor, landingPathFor, titleFor, usesDriverConsole } from "@/layouts/nav";
+
+describe("financial report navigation", () => {
+  it("places the renamed report immediately after Beranda without duplicates", () => {
+    const items = NAV_GROUPS.flatMap((group) => group.items);
+    expect(items.slice(0, 2).map((item) => item.href)).toEqual(["/dashboard", "/reports"]);
+    expect(items.filter((item) => item.href === "/reports")).toHaveLength(1);
+    expect(titleFor("/reports")).toBe("Laporan Keuangan");
+  });
+  it("retains the report's invoice permission gate", () => {
+    expect(navGroupsFor([]).flatMap((group) => group.items).some((item) => item.href === "/reports")).toBe(false);
+    expect(navGroupsFor([PERMISSIONS.INVOICES_VIEW]).flatMap((group) => group.items).some((item) => item.href === "/reports")).toBe(true);
+  });
+});
 
 describe("describeRoles", () => {
   // The whole reason this replaced ROLE_LABEL[role]: a person can hold several,
@@ -83,11 +96,65 @@ describe("the driver console", () => {
     expect(usesDriverConsole([])).toBe(false);
     expect(landingPathFor(undefined)).toBe("/dashboard");
   });
+
+  // The regression this whole set exists for: the seeded `driver` role
+  // (fortius-backend seeds/04-role-permissions/seeder.go) holds fourteen
+  // permissions, not one -- delivery proofs, GPS filing, stock movements, its
+  // own expense/OCR claim path, notifications, and the near-universal
+  // iam.read.tenants. An exact one-permission match sent every real driver
+  // account to the full twenty-item console, filtered down to whichever
+  // unrelated items happened to share a permission code (Tenant, because
+  // iam.read.tenants also gates it; Keuangan, because distribution.read/
+  // create.expenses and the OCR reads also gate those pages) -- and then
+  // straight into a Beranda that refuses them, since /dashboard needs
+  // DISTRIBUTION_VIEW, which nothing in this bundle grants.
+  it("is where the real seeded driver role lands, not a filtered admin console", () => {
+    const seededDriver = [
+      PERMISSIONS.DELIVERIES_VIEW,
+      PERMISSIONS.DELIVERIES_EXECUTE,
+      PERMISSIONS.DELIVERY_PROOFS_VIEW,
+      PERMISSIONS.DELIVERY_PROOFS_CREATE,
+      PERMISSIONS.GPS_TRACKS_CREATE,
+      PERMISSIONS.STOCK_MOVEMENTS_VIEW,
+      PERMISSIONS.STOCK_MOVEMENTS_CREATE,
+      PERMISSIONS.EXPENSES_VIEW,
+      PERMISSIONS.EXPENSES_CREATE,
+      PERMISSIONS.OCR_CREATE,
+      PERMISSIONS.OCR_VIEW,
+      PERMISSIONS.OCR_VERIFY,
+      PERMISSIONS.OCR_ARCHIVE_VIEW,
+      PERMISSIONS.NOTIFICATIONS_VIEW,
+      PERMISSIONS.SETTINGS_VIEW,
+    ];
+
+    expect(usesDriverConsole(seededDriver)).toBe(true);
+    expect(landingPathFor(seededDriver)).toBe("/sopir");
+
+    const shown = navGroupsFor(seededDriver).flatMap((g) => g.items.map((i) => i.href));
+    expect(shown).toEqual(["/sopir"]);
+    expect(shown).not.toContain("/tenants");
+    expect(shown).not.toContain("/expenses");
+  });
+
+  // A dispatcher's grant is not a subset of the driver bundle -- it holds
+  // distribution.read.distribution_orders and a dozen other codes no driver
+  // does -- so even though every one of the driver bundle's own permissions
+  // could theoretically overlap, one grant outside it is enough to keep the
+  // full console.
+  it("keeps the full console for a role whose grants merely overlap the driver bundle", () => {
+    const almostDriver = [
+      PERMISSIONS.DELIVERIES_EXECUTE,
+      PERMISSIONS.EXPENSES_VIEW,
+      PERMISSIONS.OCR_ARCHIVE_VIEW,
+      PERMISSIONS.DISTRIBUTION_VIEW,
+    ];
+    expect(usesDriverConsole(almostDriver)).toBe(false);
+  });
 });
 
 describe("the nav a role is shown", () => {
   const hrefs = (permissions: readonly string[]) =>
-    navGroupsFor(permissions).flatMap((g) => g.items.map((i) => i.href));
+    navGroupsFor(permissions, "manual").flatMap((g) => g.items.map((i) => i.href));
 
   // The bug this whole gate exists for. GET /monitoring/board requires
   // deliveries read AND gps_tracks read; warehouse_staff, finance_officer and

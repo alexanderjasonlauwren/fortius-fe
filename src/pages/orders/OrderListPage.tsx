@@ -23,6 +23,7 @@ import {
 } from "@/features/orders/api/orderApi";
 import { getOutletOptions } from "@/features/distribution/api/distributionApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
+import { useIntakePolicy } from "@/features/distribution/hooks/useIntakePolicy";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
@@ -62,6 +63,11 @@ function todayIso(offset = 0) {
 }
 
 export function OrderListPage() {
+  const policy = useIntakePolicy();
+  const manualIntake = policy.allowsManualIntake;
+  const assertManualIntake = () => {
+    if (!manualIntake) throw new Error("Intake manual tidak tersedia. Gunakan alokasi SIM3LON pada Perencanaan Distribusi.");
+  };
   const [tab, setTab] = useState<Tab>("Baru");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -82,16 +88,17 @@ export function OrderListPage() {
     queryFn: () => getOrders({ status: tab, search }),
   });
   const totals = useQuery({ queryKey: [...scopeKey(), "order-totals"], queryFn: getOrderTotals });
-  const plans = useQuery({ queryKey: [...scopeKey(), "schedulable-plans"], queryFn: getSchedulablePlans });
+  const plans = useQuery({ queryKey: [...scopeKey(), "schedulable-plans"], queryFn: getSchedulablePlans, enabled: manualIntake });
   const outlet = useQuery({
     queryKey: [...scopeKey(), "outlet-options"],
     queryFn: getOutletOptions,
+    enabled: manualIntake,
   });
 
   const clearSelection = () => setSelected(new Set());
 
   const approveMutation = useDeskMutation({
-    mutationFn: (id: string) => approveOrder(id),
+    mutationFn: (id: string) => { assertManualIntake(); return approveOrder(id); },
     errorTitle: "Persetujuan gagal",
     success: (o) => ({
       title: `${o.kode} disetujui`,
@@ -100,7 +107,7 @@ export function OrderListPage() {
   });
 
   const batchApprove = useDeskMutation({
-    mutationFn: (ids: string[]) => approveOrderBatch(ids),
+    mutationFn: (ids: string[]) => { assertManualIntake(); return approveOrderBatch(ids); },
     errorTitle: "Persetujuan massal gagal",
     success: (r) => ({
       title: `${r.approved} pesanan disetujui`,
@@ -111,8 +118,9 @@ export function OrderListPage() {
   });
 
   const rejectMutation = useDeskMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      declineOrder(id, reason),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => {
+      assertManualIntake(); return declineOrder(id, reason);
+    },
     errorTitle: "Penolakan gagal",
     success: (o) => ({ title: `${o.kode} ditolak`, tone: "warning" }),
     onDone: () => {
@@ -122,8 +130,9 @@ export function OrderListPage() {
   });
 
   const scheduleMutation = useDeskMutation({
-    mutationFn: ({ plan, ids }: { plan: string; ids: string[] }) =>
-      addOrdersToPlan(plan, ids),
+    mutationFn: ({ plan, ids }: { plan: string; ids: string[] }) => {
+      assertManualIntake(); return addOrdersToPlan(plan, ids);
+    },
     errorTitle: "Penjadwalan gagal",
     success: (count) => ({
       title: `${count} pesanan masuk rencana`,
@@ -136,7 +145,7 @@ export function OrderListPage() {
   });
 
   const createMutation = useDeskMutation({
-    mutationFn: createOrder,
+    mutationFn: (input: Parameters<typeof createOrder>[0]) => { assertManualIntake(); return createOrder(input); },
     errorTitle: "Pesanan tidak tercatat",
     success: (o) => ({ title: `Pesanan ${o.kode} dicatat` }),
     onDone: () => setCreating(false),
@@ -174,7 +183,7 @@ export function OrderListPage() {
       header: "",
       width: "1%",
       render: (row) =>
-        row.status === selectableStatus ? (
+        manualIntake && row.status === selectableStatus ? (
           <input
             type="checkbox"
             aria-label={`Pilih ${row.kode}`}
@@ -273,7 +282,7 @@ export function OrderListPage() {
       align: "right",
       width: "1%",
       render: (row) =>
-        row.status === "Baru" ? (
+        manualIntake && row.status === "Baru" ? (
           <div className="flex items-center justify-end gap-1">
             <Button
               size="xs"
@@ -303,15 +312,15 @@ export function OrderListPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Operasi harian"
-        title={`Pesanan ${outletLabelTitle()}`}
-        description={`Permintaan yang masuk dari ${outletLabel()}. Pesanan yang disetujui dapat ditarik langsung ke rencana distribusi.`}
+        title={`${manualIntake ? "Pesanan" : "Histori Pesanan"} ${outletLabelTitle()}`}
+        description={manualIntake ? `Permintaan yang masuk dari ${outletLabel()}. Pesanan yang disetujui dapat ditarik langsung ke rencana distribusi.` : "Histori pesanan lama hanya dapat dibaca. Alokasi SIM3LON ditinjau melalui Perencanaan Distribusi."}
         actions={
           <>
             <Button variant="outline" onClick={() => exportMutation.mutate(undefined as never)}>
               <Download className="h-3.5 w-3.5" />
               Unduh CSV
             </Button>
-            <Button
+            {manualIntake ? <Button
               onClick={() => {
                 setForm((f) => ({
                   ...f,
@@ -322,10 +331,14 @@ export function OrderListPage() {
             >
               <Plus className="h-3.5 w-3.5" />
               Catat pesanan
-            </Button>
+            </Button> : null}
           </>
         }
       />
+
+      {!manualIntake ? <div className="rounded-lg border border-line bg-panel px-5 py-3 text-sm text-ink-muted" role="status">
+        {policy.isError ? <>Kebijakan sumber pesanan belum tersedia. Intake manual dinonaktifkan. <Button size="sm" variant="outline" onClick={() => void policy.refetch()}>Coba lagi</Button></> : policy.isPending ? "Memuat kebijakan sumber pesanan; intake manual belum tersedia." : <>Pesanan mengikuti SIM3LON. <Link className="text-ink underline" to="/distribution">Buka Perencanaan Distribusi</Link>.</>}
+      </div> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
@@ -367,7 +380,7 @@ export function OrderListPage() {
           }
         />
 
-        {selectable.length > 0 && (
+        {manualIntake && selectable.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 border-b border-line bg-panel-sunk px-5 py-2.5">
             <label className="flex items-center gap-2 text-xs text-ink-muted">
               <input
@@ -435,18 +448,18 @@ export function OrderListPage() {
           defaultSortDir="desc"
           emptyIcon={ClipboardList}
           emptyMessage="Tidak ada pesanan"
-          emptyDescription="Catat pesanan yang masuk lewat telepon atau pesan, lalu setujui untuk dijadwalkan."
+          emptyDescription={manualIntake ? "Catat pesanan yang masuk lewat telepon atau pesan, lalu setujui untuk dijadwalkan." : "Tidak ada histori pesanan untuk filter ini. Alokasi harian tersedia melalui SIM3LON."}
           emptyAction={
-            <Button size="sm" onClick={() => setCreating(true)}>
+            manualIntake ? <Button size="sm" onClick={() => setCreating(true)}>
               Catat pesanan
-            </Button>
+            </Button> : <Link to="/distribution" className="text-sm text-ink underline">Buka Perencanaan Distribusi</Link>
           }
           dense
         />
       </Panel>
 
       {/* Record an order */}
-      <Dialog open={creating} onOpenChange={setCreating}>
+      <Dialog open={manualIntake && creating} onOpenChange={setCreating}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Catat pesanan {outletLabel()}</DialogTitle>
@@ -522,13 +535,13 @@ export function OrderListPage() {
       </Dialog>
 
       {/* Schedule into a plan */}
-      <Dialog open={scheduling} onOpenChange={setScheduling}>
+      <Dialog open={manualIntake && scheduling} onOpenChange={setScheduling}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Jadwalkan {chosen.length} pesanan</DialogTitle>
             <DialogDescription>
               Pesanan ditambahkan sebagai titik singgah pada rencana yang dipilih.
-              Kuota baru berkurang saat rencana dikonfirmasi.
+              Menyimpan titik singgah mereservasi kuota; konfirmasi menetapkan rencana operasional.
             </DialogDescription>
           </DialogHeader>
 
@@ -563,7 +576,7 @@ export function OrderListPage() {
       </Dialog>
 
       {/* Reject */}
-      <Dialog open={!!rejecting} onOpenChange={(open) => !open && setRejecting(null)}>
+      <Dialog open={manualIntake && !!rejecting} onOpenChange={(open) => !open && setRejecting(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Tolak {rejecting?.kode}</DialogTitle>

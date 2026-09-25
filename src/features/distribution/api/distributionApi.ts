@@ -4,7 +4,7 @@
  * Both implementations are passed to `pick`, so the choice is visible here and
  * a build cannot silently fall back to the mock.
  */
-import { assertMockAllowed, pick } from "@/lib/dataSource";
+import { pick } from "@/lib/dataSource";
 import {
   addApprovedOrders as addApprovedOrdersMock,
   distributionApiMock,
@@ -13,6 +13,7 @@ import {
 import {
   addApprovedOrders as addApprovedOrdersHttp,
   distributionApiHttp,
+  printRouteSheet as printRouteSheetHttp,
 } from "./distributionApi.http";
 import type { DistributionApi } from "./contract";
 
@@ -24,6 +25,7 @@ export const getPlanDetail = api.getPlanDetail.bind(api);
 export const getMonthlyGrid = api.getMonthlyGrid.bind(api);
 export const getPaymentBoard = api.getPaymentBoard.bind(api);
 export const createPlan = api.createPlan.bind(api);
+export const createSourcePlan = api.createSourcePlan.bind(api);
 export const saveDraft = api.saveDraft.bind(api);
 export const confirmPlan = api.confirmPlan.bind(api);
 export const cancelDistributionPlan = api.cancelDistributionPlan.bind(api);
@@ -47,12 +49,9 @@ export const dispatchTrip = api.dispatchTrip.bind(api);
 export const addApprovedOrders = pick(addApprovedOrdersMock, addApprovedOrdersHttp);
 
 /**
- * The route sheet is mock-only for a narrower reason: it prints an address and
- * a delivery time per stop, and neither is on the order-item response. Printing
- * a sheet with "—" where the driver needs the address is worse than saying the
- * sheet is not ready.
+ * The address gap that kept this mock-only is closed: `printRouteSheetHttp`
+ * resolves each stop's address from `getOutletList()`. The delivery-time gap
+ * is real and stays a "—", the same placeholder the live planning screen
+ * already shows for it.
  */
-export async function printRouteSheet(planId: string) {
-  assertMockAllowed("distribution.printRouteSheet");
-  return printRouteSheetMock(planId);
-}
+export const printRouteSheet = pick(printRouteSheetMock, printRouteSheetHttp);

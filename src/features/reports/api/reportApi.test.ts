@@ -138,16 +138,24 @@ describe("getReportSummary", () => {
     expect(summary.suratJalanTertunda).toBe(0);
   });
 
-  it("passes the resolved range as a date filter on /deliveries", async () => {
+  /**
+   * The upper bound is `lt` the day after the window, not `lte` its last day:
+   * `date` filters `created_at`, a timestamp, and the server compares `lte`
+   * literally against midnight UTC -- `lte` the last day would exclude
+   * almost all of it (verified live against the running service).
+   */
+  it("passes the resolved range as a half-open date filter on /deliveries", async () => {
     mockLists({ deliveries: [], payments: [], invoices: [] });
     await reportApiHttp.getReportSummary("7h");
 
     const window = resolveRange("7h");
+    const exclusiveEnd = new Date(`${window.to}T00:00:00Z`);
+    exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
     const [, params] = getList.mock.calls.find(([path]) => path === "/deliveries")!;
     expect(params.filters).toEqual(
       expect.arrayContaining([
         { field: "date", operator: "gte", value: window.from },
-        { field: "date", operator: "lte", value: window.to },
+        { field: "date", operator: "lt", value: exclusiveEnd.toISOString().slice(0, 10) },
       ]),
     );
   });
@@ -176,10 +184,10 @@ describe("getDailySeries", () => {
 });
 
 describe("getTopOutlet", () => {
-  it("sums delivered_qty and invoice totals per outlet, joined to outlet names", async () => {
+  it("sums dispatched_qty and invoice totals per outlet, joined to outlet names", async () => {
     const window = resolveRange("7h");
     mockLists({
-      deliveries: [delivery(), delivery({ delivered_qty: 10 })],
+      deliveries: [delivery(), delivery({ dispatched_qty: 10, delivered_qty: 0 })],
       payments: [],
       invoices: [
         { outlet_id: OUTLET_ID, total_amount: 250_000, outstanding_amount: 0, issued_at: window.to },
@@ -190,9 +198,32 @@ describe("getTopOutlet", () => {
 
     expect(row.nama).toBe("Pangkalan Ahmad");
     expect(row.kecamatan).toBe("Sidorejo");
-    expect(row.unit).toBe(100);
+    expect(row.unit).toBe(110);
     expect(row.suratJalan).toBe(2);
     expect(row.nilai).toBe(250_000);
+  });
+
+  /**
+   * Revenue now posts at dispatch, valued at dispatched_qty (see
+   * invoice.CreateFromDelivery's own doc) -- so a delivery nobody has filed
+   * a driver confirmation for yet, with delivered_qty still 0, is exactly
+   * the ordinary case now, not an edge case. Summing delivered_qty here
+   * showed a real, already-invoiced shipment as 0 tabung beside its own
+   * non-zero rupiah value.
+   */
+  it("counts a dispatched-but-not-yet-delivered stop, not just a completed one", async () => {
+    mockLists({
+      deliveries: [delivery({ delivery_status: "pending", dispatched_qty: 70, delivered_qty: 0 })],
+      payments: [],
+      invoices: [
+        { outlet_id: OUTLET_ID, total_amount: 1_050_000, outstanding_amount: 0, issued_at: resolveRange("7h").to },
+      ],
+    });
+
+    const [row] = await reportApiHttp.getTopOutlet("7h");
+
+    expect(row.unit).toBe(70);
+    expect(row.nilai).toBe(1_050_000);
   });
 });
 

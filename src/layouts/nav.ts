@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { allowsManualIntake, type OrderIntakeMode } from "@/features/distribution/api/intakePolicy.contract";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import {
   Network,
@@ -56,7 +57,7 @@ export interface NavGroup {
 
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Operasi harian",
+    label: "Menu utama",
     items: [
       {
         name: "Beranda",
@@ -64,6 +65,18 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: LayoutDashboard,
         hint: "Papan berangkat hari ini dan angka kunci",
       },
+      {
+        name: "Laporan Keuangan",
+        href: "/reports",
+        icon: FileText,
+        hint: "Rekap distribusi, kas terverifikasi, dan piutang per periode",
+        permission: PERMISSIONS.INVOICES_VIEW,
+      },
+    ],
+  },
+  {
+    label: "Operasi harian",
+    items: [
       {
         name: `Pesanan ${outletLabelTitle()}`,
         href: "/orders",
@@ -147,13 +160,6 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: PERMISSIONS.JOURNALS_VIEW,
       },
       {
-        name: "Laporan",
-        href: "/reports",
-        icon: FileText,
-        hint: "Rekap distribusi dan pendapatan per periode",
-        permission: PERMISSIONS.INVOICES_VIEW,
-      },
-      {
         name: "Rekap Transaksi",
         href: "/transactions",
         icon: Table2,
@@ -217,7 +223,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/users",
         icon: Users,
         hint: "Akun tim dan jejak aktivitas sistem",
-        permission: PERMISSIONS.USERS_VIEW,
+        permission: PERMISSIONS.USER_ROLES_VIEW,
       },
     ],
   },
@@ -270,6 +276,37 @@ export const ALL_NAV_ITEMS: NavItem[] = [
 ];
 
 /**
+ * The permissions the seeded `driver` role grants -- mirrors
+ * fortius-backend/seeds/04-role-permissions/seeder.go, rolePermissionMap
+ * ["driver"], the same trade tenantprovisioning's maxTenantDepth makes on the
+ * backend: the seed is the source of truth, and duplicating its shape here is
+ * what lets usesDriverConsole recognise the role without asking the question
+ * below, which has no honest answer.
+ *
+ * Kept in sync by hand. A permission the seed adds to the driver role and this
+ * set does not gets treated as "holds something outside the driver bundle",
+ * which sends a real driver to the twenty-item console instead of narrowing
+ * it -- the safe direction to be wrong in, but worth fixing here too.
+ */
+const DRIVER_ROLE_PERMISSIONS = new Set<string>([
+  PERMISSIONS.DELIVERIES_VIEW,
+  PERMISSIONS.DELIVERIES_EXECUTE,
+  PERMISSIONS.DELIVERY_PROOFS_VIEW,
+  PERMISSIONS.DELIVERY_PROOFS_CREATE,
+  PERMISSIONS.GPS_TRACKS_CREATE,
+  PERMISSIONS.STOCK_MOVEMENTS_VIEW,
+  PERMISSIONS.STOCK_MOVEMENTS_CREATE,
+  PERMISSIONS.EXPENSES_VIEW,
+  PERMISSIONS.EXPENSES_CREATE,
+  PERMISSIONS.OCR_CREATE,
+  PERMISSIONS.OCR_VIEW,
+  PERMISSIONS.OCR_VERIFY,
+  PERMISSIONS.OCR_ARCHIVE_VIEW,
+  PERMISSIONS.NOTIFICATIONS_VIEW,
+  PERMISSIONS.SETTINGS_VIEW,
+]);
+
+/**
  * Whether this person works from the driver console.
  *
  * Derived from what they may do, not from a role name. The console used to ask
@@ -280,14 +317,18 @@ export const ALL_NAV_ITEMS: NavItem[] = [
  * one.
  *
  * The real question is narrower and answerable: someone who may record a
- * delivery and may do nothing else has only one screen to be on. A dispatcher
- * who can also execute deliveries holds far more than this and keeps the full
- * console, which is the correct outcome and the one a role name got wrong the
- * moment anybody held two.
+ * delivery and holds nothing outside the driver bundle above has only one
+ * screen to be on. A dispatcher who can also execute deliveries holds
+ * `distribution.read.distribution_orders` and a dozen other grants no driver
+ * does, so the subset check below fails for them and they keep the full
+ * console -- the correct outcome, and the one a role name (or an exact
+ * one-permission match, which this used to be) got wrong the moment the
+ * driver role legitimately grew past a single permission.
  */
 export function usesDriverConsole(permissions: readonly string[] = []): boolean {
   return (
-    permissions.length === 1 && permissions[0] === PERMISSIONS.DELIVERIES_EXECUTE
+    permissions.includes(PERMISSIONS.DELIVERIES_EXECUTE) &&
+    permissions.every((code) => DRIVER_ROLE_PERMISSIONS.has(code))
   );
 }
 
@@ -321,12 +362,16 @@ export function mayOpen(item: NavItem, permissions: readonly string[]): boolean 
  * A group whose items are all filtered away is dropped, or "Keuangan" renders
  * as a heading with nothing under it.
  */
-export function navGroupsFor(permissions?: readonly string[]): NavGroup[] {
+export function isAvailableForIntake(item: NavItem, mode?: OrderIntakeMode): boolean {
+  return item.href !== "/orders" || allowsManualIntake(mode);
+}
+
+export function navGroupsFor(permissions?: readonly string[], mode?: OrderIntakeMode): NavGroup[] {
   if (usesDriverConsole(permissions)) return DRIVER_NAV_GROUPS;
   const held = permissions ?? [];
   return NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => mayOpen(item, held)),
+    items: group.items.filter((item) => mayOpen(item, held) && isAvailableForIntake(item, mode)),
   })).filter((group) => group.items.length > 0);
 }
 

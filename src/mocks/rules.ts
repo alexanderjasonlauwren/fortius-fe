@@ -91,6 +91,26 @@ function requireSa(db: Database, saId: ID): SAEntity {
   return sa;
 }
 
+/** Used quota plus every still-editable draft reservation for one agreement. */
+function allocatedQuota(
+  db: Database,
+  saId: ID,
+  replacement?: { planId: ID; total: number },
+): number {
+  let draftTotal = 0;
+  for (const plan of db.plans) {
+    if (plan.saId !== saId || plan.status !== "Draft") continue;
+    if (replacement && plan.id === replacement.planId) {
+      draftTotal += replacement.total;
+      continue;
+    }
+    draftTotal += db.planRows
+      .filter((row) => row.planId === plan.id)
+      .reduce((sum, row) => sum + row.jumlahUnit, 0);
+  }
+  return requireSa(db, saId).terpakai + draftTotal;
+}
+
 /** Keeps SA status in step with how much of its quota is drawn down. */
 function refreshSaStatus(sa: SAEntity) {
   if (sa.status === "Draft") return;
@@ -131,6 +151,7 @@ export function createScheduleAgreement(input: {
       periodeMulai: input.periodeMulai,
       periodeBerakhir: input.periodeBerakhir,
       totalKuota: input.totalKuota,
+      dialokasikan: 0,
       terpakai: 0,
       status: "Draft",
       catatan: input.catatan,
@@ -299,6 +320,7 @@ export function createPlan(input: { tanggal: string; saId: ID; catatan?: string 
     const plan: PlanEntity = {
       ...stampScope({}),
       id: nextId("plan"),
+      version: 1,
       kode: docNumber(db, "rencana", input.tanggal),
       tanggal: input.tanggal,
       saId: input.saId,
@@ -323,18 +345,21 @@ export function createPlan(input: { tanggal: string; saId: ID; catatan?: string 
 export function savePlanRows(
   planId: ID,
   rows: Array<Omit<PlanRowEntity, "planId">>,
+  expectedVersion: number,
 ): PlanRowEntity[] {
   return mutate((db) => {
     const plan = requirePlan(db, planId);
     if (plan.status !== "Draft") {
       throw new ApiError("Rencana yang sudah dikonfirmasi tidak dapat diubah.");
     }
+    if (plan.version !== expectedVersion) {
+      throw new ApiError("Rencana ini berubah. Muat ulang sebelum menyimpan.", 409);
+    }
     for (const row of rows) {
       if (row.jumlahUnit <= 0) {
         throw new ApiError(`Jumlah ${unitLabel()} setiap ${outletLabel()} harus lebih dari nol.`);
       }
     }
-    db.planRows = db.planRows.filter((r) => r.planId !== planId);
     // Lines are authoritative; the scalar beside them is recomputed, never
     // trusted from the caller.
     const saved = rows.map((r) => ({
@@ -342,7 +367,21 @@ export function savePlanRows(
       planId,
       jumlahUnit: r.lines.length > 0 ? sumJumlah(r.lines) : r.jumlahUnit,
     }));
+    const sa = requireSa(db, plan.saId);
+    const nextAllocated = allocatedQuota(db, sa.id, {
+      planId,
+      total: saved.reduce((sum, row) => sum + row.jumlahUnit, 0),
+    });
+    if (nextAllocated > sa.totalKuota) {
+      throw new ApiError(
+        `Kuota ${sa.nomorSA} tidak mencukupi untuk reservasi draf ini.`,
+        409,
+      );
+    }
+    db.planRows = db.planRows.filter((r) => r.planId !== planId);
     db.planRows.push(...saved);
+    sa.dialokasikan = nextAllocated;
+    plan.version += 1;
     recordAudit(db, {
       action: "plan.save_draft",
       entity: "DistributionPlan",
@@ -393,10 +432,10 @@ export function confirmPlan(planId: ID): { deliveries: number; total: number } {
 
     const total = rows.reduce((s, r) => s + r.jumlahUnit, 0);
     const sa = requireSa(db, plan.saId);
-    const sisa = sa.totalKuota - sa.terpakai;
-    if (total > sisa) {
+    const nextAllocated = allocatedQuota(db, sa.id);
+    if (nextAllocated > sa.totalKuota) {
       throw new ApiError(
-        `Kuota ${sa.nomorSA} tidak mencukupi. Tersisa ${fmt(sisa)} ${unitLabel()}, rencana ini butuh ${fmt(total)}.`,
+        `Kuota ${sa.nomorSA} tidak mencukupi. Tersisa ${fmt(Math.max(0, sa.totalKuota - sa.dialokasikan))} ${unitLabel()}.`,
       );
     }
 
@@ -421,6 +460,9 @@ export function confirmPlan(planId: ID): { deliveries: number; total: number } {
     }
 
     sa.terpakai += total;
+    // The plan leaves the draft pool at the same instant its quantity becomes
+    // used, so confirming consumes the existing reservation exactly once.
+    sa.dialokasikan = nextAllocated;
     refreshSaStatus(sa);
 
     const actor = recordAudit(db, {
@@ -503,6 +545,8 @@ export function cancelPlan(planId: ID) {
       db.deliveries = db.deliveries.filter((d) => d.planId !== planId);
     }
     plan.status = "Batal";
+    const sa = requireSa(db, plan.saId);
+    sa.dialokasikan = allocatedQuota(db, sa.id);
     recordAudit(db, {
       action: "plan.cancel",
       entity: "DistributionPlan",
@@ -1152,7 +1196,20 @@ export function deleteOutlet(id: ID) {
   });
 }
 
-export function saveDriver(input: Partial<DriverEntity> & { id?: ID }): DriverEntity {
+/**
+ * `akunUsername`/`akunEmail`/`akunPassword` mirror
+ * `DriverWriteInput` (features/drivers/api/contract.ts) without importing it —
+ * that module imports from `@/mocks/types`, and importing it back here would
+ * make the dependency circular.
+ */
+type SaveDriverInput = Partial<DriverEntity> & {
+  id?: ID;
+  akunUsername?: string;
+  akunEmail?: string;
+  akunPassword?: string;
+};
+
+export function saveDriver(input: SaveDriverInput): DriverEntity {
   return mutate((db) => {
     if (!input.nama?.trim()) throw new ApiError("Nama driver wajib diisi.");
     if (!input.id && !input.kode?.trim()) throw new ApiError("Kode driver wajib diisi.");
@@ -1173,6 +1230,13 @@ export function saveDriver(input: Partial<DriverEntity> & { id?: ID }): DriverEn
       return existing;
     }
 
+    if (!input.akunUsername?.trim()) throw new ApiError("Username akun wajib diisi.");
+    if (!input.akunPassword?.trim()) throw new ApiError("Kata sandi akun wajib diisi.");
+    const akunEmail = input.akunEmail?.trim();
+    if (akunEmail && db.users.some((u) => u.email.toLowerCase() === akunEmail.toLowerCase())) {
+      throw new ApiError(`Email ${akunEmail} sudah dipakai.`, 409);
+    }
+
     const created: DriverEntity = {
       ...stampScope({}),
       id: nextId("drv"),
@@ -1183,12 +1247,32 @@ export function saveDriver(input: Partial<DriverEntity> & { id?: ID }): DriverEn
       status: input.status ?? "Standby",
       bergabungPada: isoDate(startOfToday()),
     };
+
+    // A driver is always a person, and a person here is always a user: the
+    // login is provisioned in the same step, not left for someone to wire up
+    // from the Users page afterwards. Mirrors saveUser's own shape for a
+    // `driver`-role account.
+    const account: UserEntity = {
+      id: nextId("usr"),
+      nama: created.nama,
+      email: akunEmail || `${input.akunUsername.trim()}@sidistrib.id`,
+      role: "driver",
+      telepon: created.telepon,
+      driverId: created.id,
+      cabang: "Semua cabang",
+      branchIds: [],
+      scopeType: "tenant",
+      status: "Aktif",
+      dibuatPada: isoDate(startOfToday()),
+    };
+    created.userId = account.id;
+    db.users.unshift(account);
     db.drivers.unshift(created);
     recordAudit(db, {
       action: "driver.create",
       entity: "Driver",
       entityId: created.id,
-      summary: `Menambahkan driver ${created.nama}.`,
+      summary: `Menambahkan driver ${created.nama} dan akun login ${input.akunUsername.trim()}.`,
     });
     return created;
   });
@@ -1261,30 +1345,42 @@ export function deleteVehicle(id: ID) {
 }
 
 /**
- * Records or edits a BAST claim's own paperwork fields. Mirrors
- * transportationApi.http.ts's own CreateClaimRequest/UpdateClaimRequest so
- * the two builds accept the same shape.
+ * The mock LPG 3kg's own weight and the transport-fee rate -- neither exists
+ * as real mock data (ProductEntity carries no weightKg, and there is no mock
+ * `transport_fee_tariffs` table), so both are fixed constants matching the
+ * real backend's own confirmed, unchanging default (docs/distribution-
+ * business-rules.md §8: Rp354.64/kg has not moved across 33 months of the
+ * source spreadsheet). Documented in DATA_SOURCES.md's own transportation
+ * row -- a real per-product weight and a real tariff history are both out of
+ * scope for the mock, not silently invented as if they were live data.
  */
+const MOCK_WEIGHT_KG_PER_UNIT = 3;
+const MOCK_TARIFF_RATE_PER_KG = 354.64;
+
+function periodBounds(period: string): { periodStart: string; periodEnd: string } {
+  const [year, month] = period.split("-").map(Number);
+  if (!year || !month) throw new ApiError("Periode harus berformat YYYY-MM.");
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 1));
+  return { periodStart: isoDate(start), periodEnd: isoDate(end) };
+}
+
+/** Opens an empty draft for one billing period -- no lines, no amount. generateTransportationClaimLines derives both. */
 export function saveTransportationClaim(
-  input: Partial<TransportationClaimEntity> & { id?: ID },
+  input: {
+    id?: ID;
+    period?: string;
+    handoverDate?: string;
+    handoverReference?: string;
+    branchId?: ID;
+  },
 ): TransportationClaimEntity {
   return mutate((db) => {
-    if (!input.handoverReference?.trim()) {
-      throw new ApiError("Nomor referensi BAST wajib diisi.");
-    }
-    if (!input.handoverDate) {
-      throw new ApiError("Tanggal serah terima wajib diisi.");
-    }
-    if (!input.claimedAmount || input.claimedAmount <= 0) {
-      throw new ApiError("Nilai klaim harus lebih dari nol.");
-    }
-
     if (input.id) {
       const existing = db.transportationClaims.find((c) => c.id === input.id);
       if (!existing) throw new ApiError("Klaim BAST tidak ditemukan.", 404);
-      existing.handoverReference = input.handoverReference.trim();
-      existing.handoverDate = input.handoverDate;
-      existing.claimedAmount = input.claimedAmount;
+      if (input.handoverReference !== undefined) existing.handoverReference = input.handoverReference.trim() || undefined;
+      if (input.handoverDate !== undefined) existing.handoverDate = input.handoverDate;
       existing.version += 1;
       existing.updatedAt = new Date().toISOString();
       recordAudit(db, {
@@ -1296,16 +1392,24 @@ export function saveTransportationClaim(
       return existing;
     }
 
+    if (!input.period) throw new ApiError("Periode wajib diisi.");
+    if (!input.handoverDate) throw new ApiError("Tanggal serah terima wajib diisi.");
+    const { periodStart, periodEnd } = periodBounds(input.period);
+
     const now = new Date();
     const created: TransportationClaimEntity = {
-      ...stampScope({}),
+      ...stampScope({}, input.branchId ? { branchId: input.branchId } : undefined),
       id: nextId("bast"),
-      claimNumber: `BAST-${isoDate(now).replace(/-/g, "").slice(0, 6)}-${String(db.transportationClaims.length + 1).padStart(4, "0")}`,
-      handoverReference: input.handoverReference.trim(),
+      claimNumber: `BAST-${input.period.replace("-", "")}-${String(db.transportationClaims.length + 1).padStart(4, "0")}`,
+      handoverReference: input.handoverReference?.trim() || undefined,
       handoverDate: input.handoverDate,
-      claimedAmount: input.claimedAmount,
+      periodStart,
+      periodEnd,
+      claimedAmount: 0,
+      totalQty: 0,
+      totalWeightKg: 0,
       claimStatus: "draft",
-      deliveryIds: input.deliveryIds ?? [],
+      deliveryIds: [],
       version: 1,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
@@ -1315,22 +1419,108 @@ export function saveTransportationClaim(
       action: "transportation_claim.create",
       entity: "TransportationClaim",
       entityId: created.id,
-      summary: `Mencatat BAST ${created.handoverReference}.`,
+      summary: `Membuka klaim BAST untuk periode ${input.period}.`,
     });
     return created;
   });
 }
 
-/** Records what the agent read off iVendor -- any of the six statuses, in any order. */
+/**
+ * (Re)derives a draft's lines from Selesai deliveries in its own branch and
+ * period, priced at the mock's own fixed rate/weight (see those constants'
+ * own doc). Regeneration replaces the previous set wholesale, the same
+ * "delete then re-derive" contract the real GenerateLines carries.
+ *
+ * Ledger posting on submit/paid/reject is NOT wired in the mock -- doing so
+ * would mean extending AccountRole/JournalSourceType (both closed unions
+ * that already lag the real backend's own expense/purchase source types)
+ * for every feature, not just this one. Documented as a gap in
+ * DATA_SOURCES.md rather than silently simulated.
+ */
+export function generateTransportationClaimLines(id: ID): TransportationClaimEntity {
+  return mutate((db) => {
+    const claim = db.transportationClaims.find((c) => c.id === id);
+    if (!claim) throw new ApiError("Klaim BAST tidak ditemukan.", 404);
+    if (claim.claimStatus !== "draft") {
+      throw new ApiError(
+        "Hanya klaim berstatus draft yang lini-nya dapat dibuat ulang -- klaim yang sudah " +
+          "diserahkan adalah catatan yang sudah dikirim ke prinsipal.",
+        409,
+      );
+    }
+    if (!claim.periodStart || !claim.periodEnd) {
+      throw new ApiError("Klaim ini tidak memiliki periode penagihan.", 409);
+    }
+
+    const alreadyClaimed = new Set(
+      db.transportationClaims.filter((c) => c.id !== id).flatMap((c) => c.deliveryIds),
+    );
+    const matched = db.deliveries.filter(
+      (d) =>
+        d.branchId === claim.branchId &&
+        d.status === "Selesai" &&
+        d.tanggal >= claim.periodStart! &&
+        d.tanggal < claim.periodEnd! &&
+        !alreadyClaimed.has(d.id),
+    );
+
+    let totalQty = 0;
+    for (const delivery of matched) {
+      for (const line of delivery.lines) totalQty += line.realisasi;
+    }
+    const totalWeightKg = totalQty * MOCK_WEIGHT_KG_PER_UNIT;
+    const claimedAmount = Math.round(totalWeightKg * MOCK_TARIFF_RATE_PER_KG * 100) / 100;
+
+    claim.deliveryIds = matched.map((d) => d.id);
+    claim.totalQty = totalQty;
+    claim.totalWeightKg = totalWeightKg;
+    claim.claimedAmount = claimedAmount;
+    claim.version += 1;
+    claim.updatedAt = new Date().toISOString();
+    recordAudit(db, {
+      action: "transportation_claim.generate_lines",
+      entity: "TransportationClaim",
+      entityId: claim.id,
+      summary: `Membuat ulang lini klaim BAST ${claim.claimNumber} dari ${matched.length} pengiriman.`,
+    });
+    return claim;
+  });
+}
+
+/**
+ * Records what the agent read off iVendor -- any of the six statuses, in any
+ * order. settledAt/settledAmount/settlementMode are required together only
+ * on the transition to "paid", and settledAmount must match the claim's own
+ * claimedAmount -- mirrors the real UpdateStatusRequest's own rule.
+ */
 export function updateTransportationClaimStatus(
   id: ID,
   claimStatus: TransportationClaimEntity["claimStatus"],
   principalInvoiceNumber?: string,
   statusNote?: string,
+  settlement?: { settledAt?: string; settledAmount?: number; settlementMode?: "cash" | "bank" },
 ): TransportationClaimEntity {
   return mutate((db) => {
     const claim = db.transportationClaims.find((c) => c.id === id);
     if (!claim) throw new ApiError("Klaim BAST tidak ditemukan.", 404);
+
+    if (claimStatus === "paid") {
+      if (!settlement?.settledAt || !settlement.settledAmount || !settlement.settlementMode) {
+        throw new ApiError(
+          "Menandai klaim lunas memerlukan tanggal pelunasan, jumlah, dan metode pembayaran.",
+        );
+      }
+      if (settlement.settledAmount !== claim.claimedAmount) {
+        throw new ApiError(
+          `Jumlah pelunasan ${settlement.settledAmount} tidak sama dengan nilai klaim ` +
+            `${claim.claimedAmount} -- pemotongan pajak atau pembayaran sebagian belum didukung.`,
+        );
+      }
+      claim.settledAt = settlement.settledAt;
+      claim.settledAmount = settlement.settledAmount;
+      claim.settlementMode = settlement.settlementMode;
+    }
+
     claim.claimStatus = claimStatus;
     if (principalInvoiceNumber !== undefined) claim.principalInvoiceNumber = principalInvoiceNumber;
     if (statusNote !== undefined) claim.statusNote = statusNote;

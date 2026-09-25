@@ -416,18 +416,38 @@ function seedTransportationClaims(deliveries: DeliveryEntity[]): TransportationC
 
   return rows.map((row, i) => {
     const handoverDate = addDays(today, row.offsetDays);
+    // The period is the calendar month the handover date falls in -- a claim
+    // is signed a few days after the month it covers, same as the real
+    // spreadsheet this feature replaces (each of its 33 sheets is titled
+    // "PERIODE BULAN <month>" and signed after month-end).
+    const periodStart = new Date(handoverDate.getFullYear(), handoverDate.getMonth(), 1);
+    const periodEnd = new Date(handoverDate.getFullYear(), handoverDate.getMonth() + 1, 1);
+    // totalQty is the base random figure, not claimedAmount -- claimedAmount
+    // is DERIVED (weight x the mock's own fixed rate), the same direction
+    // generateTransportationClaimLines computes it in, not typed by hand.
+    const totalQty = randInt(80, 400) * 10;
+    const totalWeightKg = totalQty * 3;
+    const claimedAmount = Math.round(totalWeightKg * 354.64 * 100) / 100;
     return {
       ...branchFor(),
       id: `bast-${String(i + 1).padStart(3, "0")}`,
-      claimNumber: `BAST-${isoDate(handoverDate).replace(/-/g, "").slice(0, 6)}-${String(i + 1).padStart(4, "0")}`,
-      handoverReference: `BAST/${randInt(100, 999)}/${handoverDate.getFullYear()}`,
+      claimNumber: `BAST-${isoDate(periodStart).replace(/-/g, "").slice(0, 6)}-${String(i + 1).padStart(4, "0")}`,
+      handoverReference:
+        row.claimStatus === "draft" ? undefined : `BAST/${randInt(100, 999)}/${handoverDate.getFullYear()}`,
       handoverDate: isoDate(handoverDate),
-      claimedAmount: randInt(8, 40) * 100_000,
+      periodStart: isoDate(periodStart),
+      periodEnd: isoDate(periodEnd),
+      claimedAmount,
+      totalQty,
+      totalWeightKg,
       principalInvoiceNumber: row.principalInvoiceNumber,
       claimStatus: row.claimStatus,
       statusNote: row.statusNote,
       statusUpdatedAt:
         row.claimStatus === "draft" ? undefined : addDays(handoverDate, 2).toISOString(),
+      settledAt: row.claimStatus === "paid" ? isoDate(addDays(handoverDate, 5)) : undefined,
+      settledAmount: row.claimStatus === "paid" ? claimedAmount : undefined,
+      settlementMode: row.claimStatus === "paid" ? "bank" : undefined,
       deliveryIds: row.deliveryIds ?? [],
       version: 1,
       createdAt: handoverDate.toISOString(),
@@ -501,6 +521,7 @@ function seedScheduleAgreements(): SAEntity[] {
       periodeMulai: isoDate(mulai),
       periodeBerakhir: isoDate(berakhir),
       totalKuota,
+      dialokasikan: Math.round(totalKuota * p.ratio),
       terpakai: Math.round(totalKuota * p.ratio),
       status: p.status,
       diunggahOleh: "Alex Lawrence",
@@ -612,6 +633,7 @@ function seedOperations(
     plans.push({
       ...scope,
       id: planId,
+      version: 1,
       kode: `RD-${isoDate(date).replace(/-/g, "")}`,
       tanggal: isoDate(date),
       saId: activeSa.id,
@@ -1070,7 +1092,7 @@ function seedProducts(): ProductEntity[] {
   // `returnable` marks the products where the customer hands back an empty in
   // exchange — cylinders do, accessories do not.
   const catalog = [
-    { nama: "LPG 3 kg Subsidi", ukuran: "3 kg", satuan: "tabung", returnable: true, jual: 12_000, beli: 10_200 },
+    { nama: "LPG 3 kg Subsidi", ukuran: "3 kg", satuan: "tabung", returnable: true, jual: 15_520, beli: 10_000 },
     { nama: "LPG 5,5 kg Bright Gas", ukuran: "5,5 kg", satuan: "tabung", returnable: true, jual: 88_000, beli: 79_500 },
     { nama: "LPG 12 kg", ukuran: "12 kg", satuan: "tabung", returnable: true, jual: 192_000, beli: 175_000 },
     { nama: "LPG 50 kg", ukuran: "50 kg", satuan: "tabung", returnable: true, jual: 810_000, beli: 742_000 },
@@ -1547,6 +1569,8 @@ export function createSeedDatabase(): Database {
     saDailyTargets,
     // Uploads are made in the browser, so the seeded day starts with none.
     saImportBatches: [],
+    sim3lonSourceSnapshots: [],
+    sim3lonPlanSources: [],
     plans,
     planRows,
     deliveries,

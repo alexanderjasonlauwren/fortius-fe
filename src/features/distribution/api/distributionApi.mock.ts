@@ -7,8 +7,8 @@
  * rather than the only thing the console can talk to.
  */
 import { crewedArmada, crewedVehicle } from "@/mocks/fleet";
-import { scopedDb } from "@/mocks/scope";
-import { ApiError, currentActorId, latency } from "@/mocks/db";
+import { getActiveScope, scopedDb } from "@/mocks/scope";
+import { ApiError, currentActorId, latency, mutate, nextId, recordAudit } from "@/mocks/db";
 import {
   cancelPlan,
   confirmPlan as confirmPlanRule,
@@ -19,7 +19,7 @@ import {
 import { printDocument } from "@/lib/export";
 import { outletExposure } from "@/mocks/ar";
 import { isoDate, startOfToday } from "@/mocks/seed";
-import type { PlanEntity } from "@/mocks/types";
+import type { PlanEntity, PlanRowEntity } from "@/mocks/types";
 import type {
   AssignmentSuggestion,
   DistributionMonthGrid,
@@ -38,6 +38,7 @@ import type {
   TripAssignment,
 } from "./contract";
 import { suggestAssignment as suggestAssignmentLocal } from "./suggestAssignment";
+import { compareStops } from "../lib/stopOrder";
 import { outletLabelTitle, unitLabel, unitLabelTitle } from "@/lib/lexicon";
 
 function toPlanView(plan: PlanEntity): DistributionPlan {
@@ -55,16 +56,12 @@ function toPlanView(plan: PlanEntity): DistributionPlan {
     status: plan.status,
     saId: plan.saId,
     nomorSA: sa?.nomorSA ?? "—",
-    sisaKuotaSA: sa ? Math.max(0, sa.totalKuota - sa.terpakai) : 0,
+    sisaKuotaSA: sa ? Math.max(0, sa.totalKuota - sa.dialokasikan) : 0,
     catatan: plan.catatan,
     dibuatOleh: plan.dibuatOleh,
     dikonfirmasiOleh: plan.dikonfirmasiOleh,
     dikonfirmasiPada: plan.dikonfirmasiPada,
-    // The browser store has no optimistic-locking counter and needs none:
-    // there is one tab, one writer, and nothing to race. A constant keeps the
-    // domain type honest for the adapter that does need one, without inventing
-    // a number that would imply this build checks it.
-    version: 1,
+    version: plan.version,
   };
 }
 
@@ -92,7 +89,6 @@ async function getPlanDetail(planId: string): Promise<PlanRow[]> {
 
   return db.planRows
     .filter((r) => r.planId === planId)
-    .sort((a, b) => a.jamPengiriman.localeCompare(b.jamPengiriman))
     .map((r) => {
       const pkl = db.outlets.find((p) => p.id === r.outletId);
       const driver = db.drivers.find((d) => d.id === r.driverId);
@@ -122,6 +118,7 @@ async function getPlanDetail(planId: string): Promise<PlanRow[]> {
           )?.plat ?? "Belum ditetapkan",
         jamPengiriman: r.jamPengiriman,
         tripNo: r.tripNo ?? null,
+        urutan: r.urutan ?? null,
         // The mock has no trips table, so a run has no id of its own — the
         // same `driverId#tripNo` key the planner already groups rows by
         // stands in for one. See `dispatchTrip`'s own header comment.
@@ -132,7 +129,11 @@ async function getPlanDetail(planId: string): Promise<PlanRow[]> {
         piutangJatuhTempo: exp.jatuhTempo,
         alasanBlokir: exp.alasan,
       } satisfies PlanRow;
-    });
+    })
+    // By run and position, matching the http build and the board itself --
+    // not delivery-hour order, which said nothing about which truck a stop was
+    // on or where in its route it fell.
+    .sort(compareStops);
 }
 
 function datesInMonth(month: string): string[] {
@@ -274,7 +275,7 @@ async function getPaymentBoard(date: string): Promise<DistributionPaymentBoard> 
   };
 }
 
-async function saveDraft(planId: string, rows: PlanRow[]): Promise<void> {
+async function saveDraft(planId: string, rows: PlanRow[], version: number): Promise<DistributionPlan> {
   await latency("write");
   savePlanRows(
     planId,
@@ -293,8 +294,16 @@ async function saveDraft(planId: string, rows: PlanRow[]): Promise<void> {
       // Persisted, or accepting a suggestion would collapse every trip back
       // into one the moment the draft was saved.
       tripNo: r.tripNo,
+      // Same reasoning as tripNo -- a saved order that forgot its stops'
+      // positions would reopen to alphabetical order regardless of what the
+      // planner arranged.
+      urutan: r.urutan ?? null,
     })),
+    version,
   );
+  const saved = scopedDb().plans.find((plan) => plan.id === planId);
+  if (!saved) throw new Error("Rencana distribusi tidak ditemukan.");
+  return toPlanView(saved);
 }
 
 async function confirmPlan(planId: string): Promise<DistributionPlan> {
@@ -312,6 +321,58 @@ async function confirmPlan(planId: string): Promise<DistributionPlan> {
 async function createPlan(input: { tanggal: string; saId: string }) {
   await latency("write");
   return toPlanView(createPlanRule(input));
+}
+
+async function createSourcePlan(input: { batchId: string; tanggal: string; notes?: string }) {
+  await latency("write");
+  const scope = getActiveScope();
+  const plan = mutate((db) => {
+    const source = db.sim3lonSourceSnapshots.find((row) =>
+      row.batchId === input.batchId && row.tenantId === scope.actingTenantId &&
+      (!scope.branchId || row.branchId === scope.branchId));
+    if (!source || source.status !== "applied" || !source.complete || input.tanggal.slice(0, 7) !== source.periodMonth) {
+      throw new ApiError("Sumber SIM3LON belum lengkap atau tidak mencakup tanggal yang dipilih.", 409);
+    }
+    const sa = db.scheduleAgreements.find((row) => row.id === source.saId && row.tenantId === source.tenantId && row.branchId === source.branchId);
+    if (!sa || sa.status === "Draft" || sa.productId !== source.productId) {
+      throw new ApiError("Sumber SIM3LON tidak memiliki Base SA aktif yang sesuai.", 409);
+    }
+    if (db.sim3lonPlanSources.some((row) => row.tenantId === source.tenantId && row.branchId === source.branchId && row.productId === source.productId && row.operationalDate === input.tanggal)) {
+      throw new ApiError("Rencana bersumber SIM3LON sudah ada untuk cabang, produk, dan tanggal ini.", 409);
+    }
+    const dated = source.rows.filter((row) => row.date === input.tanggal);
+    if (dated.length === 0 || dated.some((row) => row.qty < 0 || !db.outlets.some((outlet) => outlet.id === row.outletId && outlet.tenantId === source.tenantId && outlet.branchId === source.branchId))) {
+      throw new ApiError("Pemetaan pangkalan atau snapshot harian SIM3LON belum lengkap.", 409);
+    }
+    const positive = dated.filter((row) => row.qty > 0);
+    if (positive.length === 0) throw new ApiError("Tidak ada alokasi positif untuk tanggal yang dipilih.", 409);
+
+    const created: PlanEntity = {
+      tenantId: source.tenantId, branchId: source.branchId, id: nextId("plan"), version: 1,
+      kode: `RD-${input.tanggal.replace(/-/g, "")}-${String(db.plans.length + 1).padStart(3, "0")}`,
+      tanggal: input.tanggal, saId: sa.id, status: "Draft", catatan: input.notes,
+      dibuatOleh: "", dibuatPada: new Date().toISOString(),
+    };
+    const rows: PlanRowEntity[] = positive.map((row) => ({
+      id: nextId("row"), planId: created.id, outletId: row.outletId, driverId: null,
+      vehicleId: null, lines: [{ productId: source.productId, jumlah: row.qty }], jumlahUnit: row.qty,
+      jamPengiriman: "07:00", tripNo: null,
+    }));
+    const total = rows.reduce((sum, row) => sum + row.jumlahUnit, 0);
+    if (sa.dialokasikan + total > sa.totalKuota) {
+      throw new ApiError("Kuota Base SA tidak cukup untuk rencana sumber ini.", 409);
+    }
+    const audit = recordAudit(db, { action: "plan.create_from_sim3lon", entity: "DistributionPlan", entityId: created.id,
+      summary: `Membuat ${created.kode} dari batch ${source.batchId}: ${rows.length} pangkalan.` });
+    created.dibuatOleh = audit.actor;
+    db.plans.unshift(created);
+    db.planRows.push(...rows);
+    sa.dialokasikan += total;
+    db.sim3lonPlanSources.push({ tenantId: source.tenantId, branchId: source.branchId, planId: created.id,
+      batchId: source.batchId, productId: source.productId, operationalDate: input.tanggal });
+    return created;
+  });
+  return toPlanView(plan);
 }
 
 async function cancelDistributionPlan(planId: string): Promise<void> {
@@ -421,15 +482,16 @@ async function getVehicleOptions(): Promise<VehicleOption[]> {
  * of that run. The service keeps them on `dispatch_trips`; the shape the caller
  * passes is the same either way, which is the point of the contract.
  */
-async function applyAssignment(planId: string, trips: TripAssignment[]): Promise<void> {
+async function applyAssignment(planId: string, trips: TripAssignment[], version: number): Promise<void> {
   await latency("write");
-  const placement = new Map<string, { driverId: string; vehicleId: string; tripNo: number }>();
+  const placement = new Map<string, { driverId: string; vehicleId: string; tripNo: number; urutan: number }>();
   for (const trip of trips) {
     for (const stop of trip.stops) {
       placement.set(stop.outletId, {
         driverId: trip.driverId,
         vehicleId: trip.vehicleId,
         tripNo: trip.tripNo,
+        urutan: stop.sequenceNo,
       });
     }
   }
@@ -448,9 +510,10 @@ async function applyAssignment(planId: string, trips: TripAssignment[]): Promise
         jumlahUnit: r.jumlahUnit,
         jamPengiriman: r.jamPengiriman,
         tripNo: at?.tripNo ?? null,
+        urutan: at?.urutan ?? null,
       };
     });
-  savePlanRows(planId, rows);
+  savePlanRows(planId, rows, version);
 }
 
 /**
@@ -526,8 +589,8 @@ async function getActiveSaOptions(): Promise<PlanOption[]> {
     .map((s) => ({
       id: s.id,
       label: s.nomorSA,
-      sublabel: `${s.supplier} · sisa ${(s.totalKuota - s.terpakai).toLocaleString("id-ID")} ${unitLabel()}`,
-      disabled: s.terpakai >= s.totalKuota,
+      sublabel: `${s.supplier} · sisa ${(s.totalKuota - s.dialokasikan).toLocaleString("id-ID")} ${unitLabel()}`,
+      disabled: s.dialokasikan >= s.totalKuota,
     }));
 }
 
@@ -538,9 +601,21 @@ export async function printRouteSheet(planId: string): Promise<void> {
   const plan = db.plans.find((p) => p.id === planId);
   if (!plan) throw new Error("Rencana distribusi tidak ditemukan.");
 
+  // By run and position, matching `compareStops` -- a stop with neither sorts
+  // last, by outlet name.
   const rows = db.planRows
     .filter((r) => r.planId === planId)
-    .sort((a, b) => a.jamPengiriman.localeCompare(b.jamPengiriman));
+    .sort((a, b) => {
+      const tripA = a.tripNo ?? Infinity;
+      const tripB = b.tripNo ?? Infinity;
+      if (tripA !== tripB) return tripA - tripB;
+      const posA = a.urutan ?? Infinity;
+      const posB = b.urutan ?? Infinity;
+      if (posA !== posB) return posA - posB;
+      const nameA = db.outlets.find((p) => p.id === a.outletId)?.nama ?? "";
+      const nameB = db.outlets.find((p) => p.id === b.outletId)?.nama ?? "";
+      return nameA.localeCompare(nameB);
+    });
   const total = rows.reduce((s, r) => s + r.jumlahUnit, 0);
   const fmt = (n: number) => n.toLocaleString("id-ID");
 
@@ -559,7 +634,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
     <table>
       <thead>
         <tr>
-          <th>Jam</th><th>${outletLabelTitle()}</th><th>Alamat</th><th>Driver / Armada</th>
+          <th>#</th><th>Jam</th><th>${outletLabelTitle()}</th><th>Alamat</th><th>Driver / Armada</th>
           <th style="text-align:right">${unitLabelTitle()}</th><th style="width:90px">Diterima</th>
         </tr>
       </thead>
@@ -569,6 +644,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
             const pkl = db.outlets.find((p) => p.id === r.outletId);
             const drv = db.drivers.find((d) => d.id === r.driverId);
             return `<tr>
+              <td class="code">${r.urutan ?? "—"}</td>
               <td class="code">${r.jamPengiriman}</td>
               <td>${pkl?.nama ?? "—"}</td>
               <td>${pkl ? `${pkl.alamat}, Kec. ${pkl.kecamatan}` : "—"}</td>
@@ -579,7 +655,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
           })
           .join("")}
       </tbody>
-      <tfoot><tr><td colspan="4">Total muatan</td><td class="num">${fmt(total)}</td><td></td></tr></tfoot>
+      <tfoot><tr><td colspan="5">Total muatan</td><td class="num">${fmt(total)}</td><td></td></tr></tfoot>
     </table>
     <div class="sign">
       <div>Petugas gudang<span></span></div>
@@ -611,6 +687,7 @@ export const distributionApiMock: DistributionApi = {
   getMonthlyGrid,
   getPaymentBoard,
   createPlan,
+  createSourcePlan,
   saveDraft,
   confirmPlan,
   cancelDistributionPlan,

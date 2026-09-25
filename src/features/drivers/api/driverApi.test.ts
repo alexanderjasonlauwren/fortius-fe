@@ -23,7 +23,7 @@ vi.mock("@/lib/api", () => ({
 }));
 vi.mock("@/lib/export", () => ({ exportCsv: vi.fn(), timestampSuffix: () => "x" }));
 
-const { driverApiHttp } = await import("./driverApi.http");
+const { driverApiHttp, getDriverSchedule } = await import("./driverApi.http");
 
 const ID = "11111111-1111-4111-8111-111111111111";
 
@@ -118,6 +118,39 @@ it("marks the delivery-derived figures unavailable", async () => {
   expect(driver.ketepatan).toBe(0);
 });
 
+describe("getDriverSchedule", () => {
+  /** Today's stops for this one driver -- not the whole fleet's, and not
+   *  yesterday's. */
+  it("filters by driver and today's date", async () => {
+    getList.mockResolvedValue({ items: [], pagination: {} });
+
+    await getDriverSchedule(ID);
+
+    const [path, params] = getList.mock.calls[0];
+    expect(path).toBe("/deliveries");
+    const fields = params.filters.map((f: { field: string }) => f.field);
+    expect(fields).toEqual(["driver_id", "date", "date"]);
+    expect(params.filters[0]).toEqual({ field: "driver_id", operator: "eq", value: ID });
+  });
+
+  /** The real five-state lifecycle folds onto the console's four words. */
+  it("maps the real delivery lifecycle onto the console's four words", async () => {
+    getList.mockResolvedValue({
+      items: [
+        { id: "1", delivery_number: "SJ-1", dispatched_qty: 10, delivered_qty: 10, delivery_status: "delivered" },
+        { id: "2", delivery_number: "SJ-2", dispatched_qty: 10, delivered_qty: 0, delivery_status: "on_route" },
+        { id: "3", delivery_number: "SJ-3", dispatched_qty: 10, delivered_qty: 0, delivery_status: "failed" },
+        { id: "4", delivery_number: "SJ-4", dispatched_qty: 10, delivered_qty: 0, delivery_status: "pending" },
+      ],
+      pagination: {},
+    });
+
+    const rows = await getDriverSchedule(ID);
+
+    expect(rows.map((r) => r.status)).toEqual(["Selesai", "Proses", "Tertunda", "Antrian"]);
+  });
+});
+
 describe("writing", () => {
   it("reads the version before updating and sends it back", async () => {
     getOne.mockResolvedValue(wire({ version: 5 }));
@@ -142,4 +175,73 @@ describe("writing", () => {
       value: "atv",
     });
   });
+
+  /**
+   * The gap this whole change closes: a driver is always a person, and a
+   * person here is always a user, so registering one must provision the login
+   * in the same request rather than leaving it to be wired up separately.
+   */
+  it("provisions a login alongside a new driver", async () => {
+    send.mockResolvedValue(wire());
+
+    await driverApiHttp.createOrUpdateDriver({
+      kode: "DRV-002",
+      nama: "Baru",
+      telepon: "081234567890",
+      akunUsername: "  baru_driver  ",
+      akunEmail: "  baru@sidistrib.id  ",
+      akunPassword: "Str0ng!Passw0rd",
+    });
+
+    const body = send.mock.calls[0][2];
+    expect(body.account).toEqual({
+      username: "baru_driver",
+      email: "baru@sidistrib.id",
+      password: "Str0ng!Passw0rd",
+    });
+  });
+
+  /** An existing driver's login is managed from the Users page. Re-sending
+   * account fields on an update must not ask the service to provision a
+   * second one. */
+  it("never sends an account on update", async () => {
+    getOne.mockResolvedValue(wire({ version: 5 }));
+    send.mockResolvedValue(wire({ version: 6 }));
+
+    await driverApiHttp.createOrUpdateDriver({
+      id: ID,
+      nama: "Slamet R.",
+      akunUsername: "should_be_ignored",
+      akunPassword: "Str0ng!Passw0rd",
+    });
+
+    const body = send.mock.calls[0][2];
+    expect(body).not.toHaveProperty("account");
+  });
+
+  /** An account is optional: bulk-imported drivers legitimately have no login
+   * yet, and this must not invent one from an empty username. */
+  it("omits the account entirely when no username is given", async () => {
+    send.mockResolvedValue(wire());
+
+    await driverApiHttp.createOrUpdateDriver({
+      kode: "DRV-003",
+      nama: "Tanpa Akun",
+      telepon: "081234567890",
+    });
+
+    const body = send.mock.calls[0][2];
+    expect(body).not.toHaveProperty("account");
+  });
+});
+
+/** The account, once linked, must round-trip back onto the domain object --
+ * otherwise the console has no way to tell a driver already has a login from
+ * one that does not. */
+it("carries the linked user id", async () => {
+  getOne.mockResolvedValue(wire({ user_id: "33333333-3333-4333-8333-333333333333" }));
+
+  const driver = await driverApiHttp.getDriverDetail(ID);
+
+  expect(driver.userId).toBe("33333333-3333-4333-8333-333333333333");
 });

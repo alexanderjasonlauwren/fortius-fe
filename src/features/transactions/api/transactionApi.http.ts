@@ -39,6 +39,7 @@
  * actually been billed so far.
  */
 import { getList } from "@/lib/api";
+import { addDays, isoDate } from "@/mocks/seed";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getDrivers } from "@/features/drivers/api/driverApi";
 import { exportCsv, exportExcel, timestampSuffix, type ExcelColumn } from "@/lib/export";
@@ -145,13 +146,22 @@ function toRow(r: TransactionResponse): TransactionRow {
   };
 }
 
+/**
+ * `filters.to` is inclusive, but the server's `date` filter compares `lte`
+ * literally against midnight UTC of that day -- against `created_at`, a
+ * timestamp, that excludes almost all of `to` itself (verified live: a
+ * delivery at 16:52 UTC matched `gte` its own day but not `lte` it). The
+ * exclusive `lt` bound one day later is the only one that reads "through the
+ * end of `to`" correctly.
+ */
 async function fetchRows(filters?: TransactionFilters): Promise<TransactionRow[]> {
+  const exclusiveEnd = filters?.to ? isoDate(addDays(new Date(`${filters.to}T00:00:00Z`), 1)) : undefined;
   const page = await getList<TransactionResponse>("/transactions", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "created_at", direction: "desc" }],
     filters: [
       ...(filters?.from ? [{ field: "date", operator: "gte" as const, value: filters.from }] : []),
-      ...(filters?.to ? [{ field: "date", operator: "lte" as const, value: filters.to }] : []),
+      ...(exclusiveEnd ? [{ field: "date", operator: "lt" as const, value: exclusiveEnd }] : []),
       ...(filters?.outletId && filters.outletId !== "Semua"
         ? [{ field: "outlet_id", operator: "eq" as const, value: filters.outletId }]
         : []),

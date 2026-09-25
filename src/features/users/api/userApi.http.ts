@@ -21,10 +21,44 @@ interface UserResponse {
   phone?: string;
   avatar_url?: string;
   status: string;
+  last_login_at?: string;
+  roles?: UserRoleAssignmentResponse[];
   version: number;
   created_at: string;
   updated_at: string;
 }
+
+interface UserRoleAssignmentResponse {
+  code: string;
+  name: string;
+  scope_type: "global" | "tenant" | "subtree" | "branch" | "outlet";
+  branch_id?: string;
+  branch_name?: string;
+}
+
+const ROLE_CODES: Record<UserEntity["role"], readonly string[]> = {
+  admin: ["super_admin", "tenant_admin"],
+  manager: ["ops_manager"],
+  finance: ["finance_officer"],
+  staff: ["dispatcher", "warehouse_staff"],
+  viewer: ["auditor_viewer"],
+  driver: ["driver"],
+};
+
+const ROLE_BY_CODE = new Map(
+  Object.entries(ROLE_CODES).flatMap(([role, codes]) =>
+    codes.map((code) => [code, role as UserEntity["role"]] as const),
+  ),
+);
+
+const ROLE_PRIORITY: readonly UserEntity["role"][] = [
+  "admin",
+  "manager",
+  "finance",
+  "staff",
+  "viewer",
+  "driver",
+];
 
 /**
  * Status codes are three letters on the wire — `atv`, `ina`, `del` — because
@@ -37,20 +71,45 @@ const STATUS_TO_DOMAIN: Record<string, UserStatusEntity> = {
 };
 
 function toDomain(row: UserResponse): UserEntity {
+  const assignments = row.roles ?? [];
+  const roleCodes = [...new Set(assignments.map((assignment) => assignment.code))];
+  const roleNames = [...new Set(assignments.map((assignment) => assignment.name))];
+  const categories = new Set(
+    roleCodes.flatMap((code) => {
+      const category = ROLE_BY_CODE.get(code);
+      return category ? [category] : [];
+    }),
+  );
+  const primaryRole = ROLE_PRIORITY.find((candidate) => categories.has(candidate)) ?? "viewer";
+  const tenantWide = assignments.some(({ scope_type }) =>
+    ["global", "tenant", "subtree"].includes(scope_type),
+  );
+  const branchIds = [
+    ...new Set(assignments.flatMap(({ branch_id }) => (branch_id ? [branch_id] : []))),
+  ];
+  const branchNames = [
+    ...new Set(assignments.flatMap(({ branch_name }) => (branch_name ? [branch_name] : []))),
+  ];
+
   return {
     id: row.id,
     nama: row.full_name,
     email: row.email ?? "",
-    // The backend resolves roles per request and does not return them on the
-    // user record. Until an endpoint exposes them, this is a placeholder rather
-    // than a guess dressed up as data.
-    role: "viewer" as UserRole as UserEntity["role"],
+    role: primaryRole as UserRole as UserEntity["role"],
+    roleCodes,
+    roleNames,
     telepon: row.phone ?? "",
-    cabang: "",
-    branchIds: [],
-    scopeType: "tenant",
+    cabang: assignments.length === 0 ? "" : tenantWide ? "Semua cabang" : branchNames.join(", "),
+    branchIds,
+    scopeType: tenantWide
+      ? "tenant"
+      : assignments.some(({ scope_type }) => scope_type === "branch")
+        ? "branch"
+        : assignments.some(({ scope_type }) => scope_type === "outlet")
+          ? "outlet"
+          : "tenant",
     status: STATUS_TO_DOMAIN[row.status] ?? "Nonaktif",
-    terakhirMasuk: undefined,
+    terakhirMasuk: row.last_login_at,
     dibuatPada: row.created_at,
   };
 }
@@ -59,6 +118,19 @@ export async function getUsers(filters?: UserFilters): Promise<UserEntity[]> {
   const page = await getList<UserResponse>("/users", {
     search: filters?.search,
     pageSize: 100,
+  });
+  return page.items.map(toDomain);
+}
+
+export async function getUsersWithAccess(filters?: UserFilters): Promise<UserEntity[]> {
+  const roleCodes =
+    filters?.role && filters.role !== "Semua" ? ROLE_CODES[filters.role] : undefined;
+  const page = await getList<UserResponse>("/users/access", {
+    search: filters?.search,
+    pageSize: 100,
+    filters: roleCodes
+      ? [{ field: "role_code", operator: "in", value: roleCodes.join(",") }]
+      : [],
   });
   return page.items.map(toDomain);
 }
@@ -94,5 +166,5 @@ export async function removeUser(id: string): Promise<void> {
 // Compile-time proof that this adapter satisfies the contract. Without it a
 // drifting signature is discovered by a page that fails to build, or worse by
 // one that builds and reads a field that is not there.
-const _contract: UsersApi = { getUsers, createOrUpdateUser, removeUser };
+const _contract: UsersApi = { getUsers, getUsersWithAccess, createOrUpdateUser, removeUser };
 void _contract;

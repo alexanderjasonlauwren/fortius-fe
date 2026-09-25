@@ -3,6 +3,8 @@ import { Building2, Check, ChevronDown, Layers, Network } from "lucide-react";
 import { useScope } from "./useScope";
 import { businessTypeLabel } from "./businessType";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/features/auth/store/authStore";
+import { usesDriverConsole } from "@/layouts/nav";
 
 /**
  * Current tenant and branch, and how to change either.
@@ -23,6 +25,7 @@ export function ScopeSwitcher() {
   } = useScope();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const permissions = useAuthStore((s) => s.user?.permissions);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -39,7 +42,15 @@ export function ScopeSwitcher() {
 
   // Nothing to switch between at either level: state the scope without
   // offering a choice.
-  if (branches.length <= 1 && !canSeeAll && !canSwitchTenant) {
+  //
+  // A sopir is the other reason to collapse this. GET /tenants returns their
+  // own tenant's ancestors too -- for breadcrumb context, so `canSwitchTenant`
+  // reads true the moment their tenant sits under a group -- but a driver's
+  // whole world is the one branch their driver record belongs to, never a
+  // different tenant and never a consolidated "every branch" view. Offering
+  // either here would be a choice with no correct answer to give someone whose
+  // job is a single run, not a switch to Bimbo Holdings' own books.
+  if ((branches.length <= 1 && !canSeeAll && !canSwitchTenant) || usesDriverConsole(permissions)) {
     return (
       <span className="hidden items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-ink-muted sm:flex">
         <Building2 className="h-3.5 w-3.5" />

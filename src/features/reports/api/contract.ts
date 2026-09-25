@@ -10,9 +10,16 @@
  */
 import { addDays, isoDate, startOfToday } from "@/mocks/seed";
 
-export type ReportRange = "7h" | "30h" | "bulan-ini" | "bulan-lalu";
+export type ReportRange = "hari-ini" | "7h" | "30h" | "bulan-ini" | "bulan-lalu";
+
+export function reportRangeFromParam(value: string | null): ReportRange {
+  return value !== null && Object.prototype.hasOwnProperty.call(RANGE_LABEL, value)
+    ? value as ReportRange
+    : "30h";
+}
 
 export const RANGE_LABEL: Record<ReportRange, string> = {
+  "hari-ini": "Hari ini",
   "7h": "7 hari terakhir",
   "30h": "30 hari terakhir",
   "bulan-ini": "Bulan berjalan",
@@ -22,6 +29,8 @@ export const RANGE_LABEL: Record<ReportRange, string> = {
 export function resolveRange(range: ReportRange): { from: string; to: string } {
   const today = startOfToday();
   switch (range) {
+    case "hari-ini":
+      return { from: isoDate(today), to: isoDate(today) };
     case "7h":
       return { from: isoDate(addDays(today, -6)), to: isoDate(today) };
     case "30h":

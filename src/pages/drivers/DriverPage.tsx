@@ -48,6 +48,13 @@ interface FormState {
   telepon: string;
   nomorSim: string;
   status: DriverStatusEntity;
+  // Provisions the driver's mobile-app login. Read only on create: a driver is
+  // always a person, and a person here is always a user, so registering one
+  // now creates the other in the same step instead of leaving an account to be
+  // wired up separately from the Users page.
+  akunUsername: string;
+  akunEmail: string;
+  akunPassword: string;
 }
 
 const EMPTY: FormState = {
@@ -56,6 +63,9 @@ const EMPTY: FormState = {
   telepon: "",
   nomorSim: "",
   status: "Standby",
+  akunUsername: "",
+  akunEmail: "",
+  akunPassword: "",
 };
 
 export function DriverPage() {
@@ -109,6 +119,14 @@ export function DriverPage() {
     if (!editing.nama.trim()) next.nama = "Nama driver wajib diisi.";
     if (!editing.kode.trim()) next.kode = "Kode driver wajib diisi.";
     if (!editing.telepon.trim()) next.telepon = "Nomor telepon wajib diisi.";
+    // Only on create: an existing driver's login is managed from the Users
+    // page, not re-issued by editing the driver record.
+    if (!editing.id) {
+      if (!editing.akunUsername.trim()) next.akunUsername = "Username wajib diisi.";
+      if (!editing.akunPassword.trim()) next.akunPassword = "Kata sandi wajib diisi.";
+      else if (editing.akunPassword.length < 8)
+        next.akunPassword = "Kata sandi minimal 8 karakter.";
+    }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     saveMutation.mutate(editing);
@@ -214,6 +232,9 @@ export function DriverPage() {
                 telepon: row.telepon,
                 nomorSim: row.nomorSim,
                 status: row.status,
+                akunUsername: "",
+                akunEmail: "",
+                akunPassword: "",
               })
             }
           >
@@ -387,6 +408,67 @@ export function DriverPage() {
                     <option value="Cuti">Cuti — tidak dapat dipilih</option>
                   </SelectInput>
                 </Field>
+
+                {/*
+                  Create-only: a driver is always a person, and a person here
+                  is always a user, so registering one provisions their
+                  mobile-app login in the same step. An existing driver's
+                  account is managed from the Users page instead.
+                */}
+                {!editing.id && (
+                  <div className="sm:col-span-2 space-y-4 rounded-lg border border-line bg-panel-sunk p-4">
+                    <p className="text-xs text-ink-muted">
+                      Akun login aplikasi mobile untuk driver ini akan dibuat sekaligus.
+                    </p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <Field
+                        label="Username"
+                        htmlFor="d-akun-username"
+                        error={errors.akunUsername}
+                        required
+                      >
+                        <TextInput
+                          id="d-akun-username"
+                          mono
+                          value={editing.akunUsername}
+                          invalid={!!errors.akunUsername}
+                          onChange={(e) =>
+                            setEditing({ ...editing, akunUsername: e.target.value })
+                          }
+                        />
+                      </Field>
+
+                      <Field label="Email" htmlFor="d-akun-email">
+                        <TextInput
+                          id="d-akun-email"
+                          type="email"
+                          value={editing.akunEmail}
+                          onChange={(e) =>
+                            setEditing({ ...editing, akunEmail: e.target.value })
+                          }
+                        />
+                      </Field>
+
+                      <Field
+                        label="Kata sandi"
+                        htmlFor="d-akun-password"
+                        error={errors.akunPassword}
+                        required
+                        className="sm:col-span-2"
+                      >
+                        <TextInput
+                          id="d-akun-password"
+                          type="password"
+                          value={editing.akunPassword}
+                          invalid={!!errors.akunPassword}
+                          onChange={(e) =>
+                            setEditing({ ...editing, akunPassword: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

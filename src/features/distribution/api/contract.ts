@@ -35,6 +35,11 @@ export interface TripAssignment {
   vehicleId: string;
   tripNo: number;
   stops: { outletId: string; sequenceNo: number }[];
+  /**
+   * When this run leaves the pool, "HH:MM". Optional -- a board can be saved
+   * and dispatched with no schedule at all, same as before this existed.
+   */
+  berangkat?: string;
 }
 
 /** What a stop can be loaded with. */
@@ -82,6 +87,7 @@ export interface DistributionApi {
    * `docs/technical-gaps.md`.
    */
   createPlan(input: { tanggal: string; saId: string }): Promise<DistributionPlan>;
+  createSourcePlan(input: { batchId: string; tanggal: string; notes?: string }): Promise<DistributionPlan>;
 
   /**
    * Saves the plan's stops.
@@ -91,7 +97,7 @@ export interface DistributionApi {
    * another planner committed in between — so the caller must pass what it
    * read, not what it wishes were true.
    */
-  saveDraft(planId: string, rows: PlanRow[], version: number): Promise<void>;
+  saveDraft(planId: string, rows: PlanRow[], version: number): Promise<DistributionPlan>;
   confirmPlan(planId: string, version: number): Promise<DistributionPlan>;
   cancelDistributionPlan(planId: string, version: number): Promise<void>;
 
@@ -141,8 +147,12 @@ export interface DistributionApi {
    * stops ride on, and the service keeps them in different tables with different
    * permissions. Saving the stops and forgetting the crew is what left the
    * console able to plan a day and unable to dispatch it.
+   *
+   * `version` is the plan version returned by the immediately preceding draft
+   * save. The service refuses stale or non-draft assignments before replacing
+   * any existing runs.
    */
-  applyAssignment(planId: string, trips: TripAssignment[]): Promise<void>;
+  applyAssignment(planId: string, trips: TripAssignment[], version: number): Promise<void>;
 
   /**
    * Sends one already-assigned run out — D3 A-Step 2/3. The moment a plan's

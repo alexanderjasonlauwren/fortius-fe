@@ -4,7 +4,7 @@ import { deleteUser, saveUser } from "@/mocks/rules";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import type { UserEntity, UserStatusEntity } from "@/mocks/types";
 import type { UserRole } from "@/types/auth";
-import type { UsersApi } from "./contract";
+import type { UserFilters, UsersApi } from "./contract";
 
 /** What each role may do, shown on the access page so it is not a mystery. */
 // Keyed on the full role union so anything holding a UserRole can label it.
@@ -48,6 +48,24 @@ export async function getUsers(filters?: {
       return true;
     })
     .sort((a, b) => a.nama.localeCompare(b.nama));
+}
+
+const MOCK_ROLE_CODES: Record<UserRole, string> = {
+  admin: "tenant_admin",
+  manager: "ops_manager",
+  finance: "finance_officer",
+  staff: "warehouse_staff",
+  viewer: "auditor_viewer",
+  driver: "driver",
+};
+
+export async function getUsersWithAccess(filters?: UserFilters): Promise<UserEntity[]> {
+  const users = await getUsers(filters);
+  return users.map((user) => ({
+    ...user,
+    roleCodes: user.roleCodes ?? [MOCK_ROLE_CODES[user.role]],
+    roleNames: user.roleNames ?? [ROLE_LABEL[user.role]],
+  }));
 }
 
 export async function createOrUpdateUser(input: Partial<UserEntity> & { id?: string }) {
@@ -98,5 +116,5 @@ export async function getAuditTrail(filters?: {
 // The mock satisfies the same contract as the HTTP adapter. This assertion is
 // what makes the two interchangeable rather than merely similarly named — it
 // caught createOrUpdateUser returning different shapes from each side.
-const _contract: UsersApi = { getUsers, createOrUpdateUser, removeUser };
+const _contract: UsersApi = { getUsers, getUsersWithAccess, createOrUpdateUser, removeUser };
 void _contract;

@@ -12,6 +12,9 @@ import * as httpApi from "./userApi.http";
 import * as mockApi from "./userApi.mock";
 
 export const getUsers = usesApi ? httpApi.getUsers : mockApi.getUsers;
+export const getUsersWithAccess = usesApi
+  ? httpApi.getUsersWithAccess
+  : mockApi.getUsersWithAccess;
 export const createOrUpdateUser = usesApi ? httpApi.createOrUpdateUser : mockApi.createOrUpdateUser;
 export const removeUser = usesApi ? httpApi.removeUser : mockApi.removeUser;
 

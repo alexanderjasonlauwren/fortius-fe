@@ -190,13 +190,6 @@ export function MonitoringPage() {
         </div>
       </Panel>
 
-      {/* Breaches sit between the map and the documents: they are about where
-          the truck went, which is what the map above shows, and they are read
-          before anyone works through the rows below. */}
-      <CanAccess permission={PERMISSIONS.GEOFENCE_ALERTS_VIEW}>
-        <GeofenceAlertPanel />
-      </CanAccess>
-
       <Panel>
         <PanelHeader
           title="Surat jalan"
@@ -239,6 +232,12 @@ export function MonitoringPage() {
           onPrint={(row) => printMutation.mutate(row.id)}
         />
       </Panel>
+
+      {/* Surat jalan is what this tenant actually works from day to day;
+          breaches are read after, not before, it. */}
+      <CanAccess permission={PERMISSIONS.GEOFENCE_ALERTS_VIEW}>
+        <GeofenceAlertPanel />
+      </CanAccess>
 
       {/* Completing a drop */}
       <Dialog open={!!completing} onOpenChange={(open) => !open && setCompleting(null)}>

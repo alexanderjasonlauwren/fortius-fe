@@ -167,6 +167,7 @@ export function scopedDb(override?: Partial<ActiveScope>): Database {
     receipts: db.receipts.filter(keep),
     orders: db.orders.filter(keep),
     journals: db.journals.filter(keep),
+    transportationClaims: db.transportationClaims.filter(keep),
     // Daily targets and import batches have no scope of their own; they follow
     // their agreement, the same way plan rows follow their plan.
     saDailyTargets: db.saDailyTargets.filter((t) =>
@@ -175,6 +176,8 @@ export function scopedDb(override?: Partial<ActiveScope>): Database {
     saImportBatches: db.saImportBatches.filter((b) =>
       db.scheduleAgreements.filter(keep).some((s) => s.id === b.saId),
     ),
+    sim3lonSourceSnapshots: db.sim3lonSourceSnapshots.filter(keep),
+    sim3lonPlanSources: db.sim3lonPlanSources.filter(keep),
     // planRows have no scope of their own; they follow their plan.
     planRows: db.planRows.filter((r) =>
       db.plans.filter(keep).some((p) => p.id === r.planId),

@@ -8,6 +8,7 @@ import { getUnreadCount } from "@/features/notification/api/notificationApi";
 import { useRevealActiveGroup, useSidebarStore } from "@/hooks/useSidebar";
 import { APP_NAME, APP_SUBTITLE } from "@/utils/constants";
 import { BOTTOM_NAV, navGroupsFor, type NavItem } from "./nav";
+import { useIntakePolicy } from "@/features/distribution/hooks/useIntakePolicy";
 
 interface SidebarProps {
   onClose?: () => void;
@@ -51,7 +52,8 @@ export function Sidebar({ onClose }: SidebarProps) {
   const location = useLocation();
   const logout = useAuthStore((state) => state.logout);
   const permissions = useAuthStore((state) => state.user?.permissions);
-  const navGroups = navGroupsFor(permissions);
+  const policy = useIntakePolicy();
+  const navGroups = navGroupsFor(permissions, policy.isSuccess ? policy.data : undefined);
 
   const collapsed = useSidebarStore((s) => s.collapsed);
   const openGroups = useSidebarStore((s) => s.openGroups);

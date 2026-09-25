@@ -111,13 +111,22 @@ async function outletsById(): Promise<Map<string, OutletView>> {
   return new Map(outlets.map((o) => [o.id, o]));
 }
 
+/**
+ * `window.to` is inclusive, but the server's `date` filter compares `lte`
+ * literally against midnight UTC of that day -- against `created_at`, a
+ * timestamp, that excludes almost all of `window.to` itself (verified live:
+ * a delivery at 16:52 UTC matched `gte` its own day but not `lte` it). The
+ * exclusive `lt` bound one day later is the only one that reads "through the
+ * end of `window.to`" correctly.
+ */
 async function fetchDeliveries(window: { from: string; to: string }): Promise<DeliveryResponse[]> {
+  const exclusiveEnd = isoDate(addDays(new Date(`${window.to}T00:00:00Z`), 1));
   const page = await getList<DeliveryResponse>("/deliveries", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "created_at", direction: "desc" }],
     filters: [
       { field: "date", operator: "gte" as const, value: window.from },
-      { field: "date", operator: "lte" as const, value: window.to },
+      { field: "date", operator: "lt" as const, value: exclusiveEnd },
     ],
   });
   return page.items;
@@ -214,11 +223,18 @@ async function getTopOutlet(range: ReportRange, limit = 8): Promise<TopOutletRow
   ]);
   const invoicesInWindow = invoices.filter((i) => inWindow(i.issued_at, window));
 
+  // unit is dispatched_qty, not delivered_qty: nilai below comes from the
+  // invoice each delivery raises at DISPATCH (see invoice.CreateFromDelivery
+  // and delivery.raiseInvoice's own docs on why revenue moved off
+  // Complete()), so pairing it with what was actually confirmed received
+  // would show a real rupiah figure beside a unit count that stays 0 for
+  // every stop nobody has separately filed a driver confirmation for --
+  // which by design is most of them now.
   const totals = new Map<string, { unit: number; suratJalan: number; nilai: number }>();
   for (const d of deliveries) {
     if (!d.outlet_id) continue;
     const row = totals.get(d.outlet_id) ?? { unit: 0, suratJalan: 0, nilai: 0 };
-    row.unit += d.delivered_qty;
+    row.unit += d.dispatched_qty;
     row.suratJalan += 1;
     totals.set(d.outlet_id, row);
   }

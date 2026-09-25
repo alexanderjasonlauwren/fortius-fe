@@ -13,6 +13,8 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const getList = vi.fn();
 const getOne = vi.fn();
 const send = vi.fn();
+const scopeState = vi.hoisted(() => ({ key: ["tenant", "branch"] }));
+vi.mock("@/mocks/scope", () => ({ scopeKey: () => scopeState.key }));
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
@@ -21,7 +23,22 @@ vi.mock("@/lib/api", () => ({
   upload: vi.fn(),
 }));
 
-const { distributionApiHttp } = await import("./distributionApi.http");
+const printDocument = vi.fn();
+vi.mock("@/lib/export", () => ({
+  printDocument: (...args: unknown[]) => printDocument(...args),
+}));
+
+const getOutletList = vi.fn();
+vi.mock("@/features/outlet/api/outletApi", () => ({
+  getOutletList: (...args: unknown[]) => getOutletList(...args),
+}));
+
+const getSettings = vi.fn();
+vi.mock("@/features/settings/api/settingsApi", () => ({
+  getSettings: (...args: unknown[]) => getSettings(...args),
+}));
+
+const { distributionApiHttp, printRouteSheet } = await import("./distributionApi.http");
 
 const PLAN_ID = "11111111-1111-4111-8111-111111111111";
 const SA_ID = "22222222-2222-4222-8222-222222222222";
@@ -71,6 +88,9 @@ beforeEach(() => {
   getList.mockReset();
   getOne.mockReset();
   send.mockReset();
+  printDocument.mockReset();
+  getOutletList.mockReset();
+  getSettings.mockReset();
 });
 
 describe("plan mapping", () => {
@@ -149,6 +169,17 @@ describe("plan mapping", () => {
     await distributionApiHttp.createPlan({ tanggal: "2026-09-05", saId: SA_ID });
 
     expect(send.mock.calls[0][2].agreement_id).toBe(SA_ID);
+  });
+
+  it("creates a source-backed plan through the batch endpoint", async () => {
+    send.mockResolvedValue(order());
+
+    await distributionApiHttp.createSourcePlan({ batchId: "batch-1", tanggal: "2026-09-05", notes: "pagi" });
+
+    expect(send).toHaveBeenCalledWith("post", "/sim3lon-imports/batch-1/plans", {
+      operational_date: "2026-09-05",
+      notes: "pagi",
+    });
   });
 
   it("names the agreement when every stop draws on the same one", async () => {
@@ -322,6 +353,29 @@ describe("stop mapping", () => {
   });
 
   /**
+   * A dispatched line settles through its own invoice now, not through the
+   * old Alokasikan link -- so payment_state stays "unpaid" forever (nobody
+   * funds it that way anymore) while invoice_payment_status is what actually
+   * moved to "paid" the moment SettleFromSIM3LON ran. Reading only
+   * payment_state/payment_status here is exactly the bug that showed a
+   * dispatched, already-invoiced stop as "Belum dialokasikan" on the plan
+   * board.
+   */
+  it("shows Lunas from the dispatch-time invoice even though the old Alokasikan link is still unpaid", async () => {
+    getOne
+      .mockResolvedValueOnce(
+        order({
+          items: [item({ payment_state: "unpaid", invoice_payment_status: "paid" })],
+        }),
+      )
+      .mockRejectedValueOnce(new Error("no board yet"));
+
+    const rows = await distributionApiHttp.getPlanDetail(PLAN_ID);
+
+    expect(rows[0].statusBayar).toBe("Lunas");
+  });
+
+  /**
    * The crew comes from the dispatch board, and its absence is not an error.
    *
    * A plan nobody has assigned yet has no board. Failing the read would render
@@ -366,6 +420,67 @@ describe("stop mapping", () => {
     expect(rows[0].driverId).toBe("d1");
     expect(rows[0].driver).toBe("Slamet");
     expect(rows[0].tripNo).toBe(2);
+  });
+
+  /**
+   * The board is read back the way it will be driven, not alphabetically --
+   * `suggest()` used to be thrown away the moment a board was saved, because
+   * this mapping sorted by outlet name regardless of what the optimizer or a
+   * dispatcher's manual reorder had put in `sequence_no`.
+   */
+  it("orders rows by trip and sequence, not by name", async () => {
+    getOne
+      .mockResolvedValueOnce(
+        order({
+          items: [
+            item({ outlet_id: OUTLET_A, outlet_name: "Pangkalan Zeta" }),
+            item({ id: "second", outlet_id: OUTLET_B, outlet_name: "Pangkalan Ahmad" }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce({
+        trips: [
+          {
+            trip_no: 1,
+            driver_id: "d1",
+            driver_code: "DRV-001",
+            driver_name: "Slamet",
+            vehicle_id: "v1",
+            plate: "H 1234 AB",
+            stops: [
+              { sequence_no: 1, outlet_id: OUTLET_A, outlet_code: "PKL-001", outlet_name: "Pangkalan Zeta", qty: 30, funded: true },
+              { sequence_no: 2, outlet_id: OUTLET_B, outlet_code: "PKL-002", outlet_name: "Pangkalan Ahmad", qty: 30, funded: true },
+            ],
+            load_qty: 60,
+            capacity_qty: 100,
+            at_risk_qty: 0,
+            distance_m: 4200,
+          },
+        ],
+        unroutable: [],
+        summary: { distance_m: 4200, trips: 1, outlets: 2 },
+      });
+
+    const rows = await distributionApiHttp.getPlanDetail(PLAN_ID);
+
+    expect(rows.map((r) => r.outlet)).toEqual(["Pangkalan Zeta", "Pangkalan Ahmad"]);
+    expect(rows[0].urutan).toBe(1);
+    expect(rows[1].urutan).toBe(2);
+  });
+
+  /**
+   * `sequence_no` is a stop's position within its run, not a trip number --
+   * confusing the two used to send an outlet with `sequence_no` 3 onto "Trip
+   * 3" it had never been assigned to.
+   */
+  it("does not read a stop position as a trip number", async () => {
+    getOne
+      .mockResolvedValueOnce(order({ items: [item({ sequence_no: 3 })] }))
+      .mockRejectedValueOnce(new Error("no board yet"));
+
+    const rows = await distributionApiHttp.getPlanDetail(PLAN_ID);
+
+    expect(rows[0].tripNo).toBeNull();
   });
 });
 
@@ -413,7 +528,7 @@ describe("saving", () => {
    */
   it("sends one line per product, each carrying the agreement", async () => {
     getOne.mockResolvedValue(order());
-    send.mockResolvedValue({});
+    send.mockResolvedValue(order({ version: 6 }));
 
     await distributionApiHttp.saveDraft(
       PLAN_ID,
@@ -437,6 +552,13 @@ describe("saving", () => {
     expect(body.items).toHaveLength(2);
     expect(body.items.every((i: { agreement_id: string }) => i.agreement_id === SA_ID)).toBe(true);
   });
+  it("refuses a save if tenant switches during its internal plan read", async () => {
+    scopeState.key = ["tenant", "branch"];
+    getOne.mockImplementation(async () => { scopeState.key = ["other", "branch"]; return order(); });
+    await expect(distributionApiHttp.saveDraft(PLAN_ID, [], 4)).rejects.toThrow("Tenant berubah");
+    expect(send).not.toHaveBeenCalled();
+    scopeState.key = ["tenant", "branch"];
+  });
 
   /**
    * An empty line is dropped rather than sent as a zero.
@@ -447,7 +569,7 @@ describe("saving", () => {
    */
   it("drops lines with no product or no quantity", async () => {
     getOne.mockResolvedValue(order());
-    send.mockResolvedValue({});
+    send.mockResolvedValue(order({ version: 6 }));
 
     await distributionApiHttp.saveDraft(
       PLAN_ID,
@@ -518,11 +640,12 @@ describe("committing the board", () => {
           { outletId: OUTLET_B, sequenceNo: 2 },
         ],
       },
-    ]);
+    ], 7);
 
     const [method, path, body] = send.mock.calls[0];
     expect(method).toBe("put");
     expect(path).toBe(`/distribution/orders/${PLAN_ID}/assignment`);
+    expect(body.version).toBe(7);
     expect(body.trips[0]).toEqual({
       driver_id: "d1",
       vehicle_id: "v1",
@@ -594,6 +717,51 @@ describe("committing the board", () => {
     expect(rows[0].tripId).toBe("trip-1");
     expect(rows[0].tripStatus).toBe("dispatched");
   });
+
+  /**
+   * The board's own ETA estimate reaches the planning screen's Jam column,
+   * rather than the column staying "—" forever now that the service can
+   * actually compute one. See distributionApi.http.ts's own note on why "—"
+   * used to be the only honest answer.
+   */
+  it("shows the board's ETA in the Jam column", async () => {
+    getOne.mockResolvedValueOnce(order()).mockResolvedValueOnce({
+      trips: [
+        {
+          trip_no: 1, driver_id: "d1", driver_code: "DRV-001", driver_name: "Slamet",
+          vehicle_id: "v1", plate: "H 1234 AB", planned_departure_time: "07:00",
+          stops: [{ sequence_no: 1, outlet_id: OUTLET_A, outlet_code: "PKL-001", outlet_name: "Ahmad", qty: 30, funded: true, eta: "07:15" }],
+          load_qty: 30, capacity_qty: 240, at_risk_qty: 0, distance_m: 0,
+        },
+      ],
+      unroutable: [],
+      summary: { distance_m: 0, trips: 1, outlets: 1 },
+    });
+
+    const rows = await distributionApiHttp.getPlanDetail(PLAN_ID);
+
+    expect(rows[0].jamPengiriman).toBe("07:15");
+    expect(rows[0].berangkat).toBe("07:00");
+  });
+
+  /**
+   * A trip's departure is sent only when the draft actually has one -- a
+   * board built before any of this existed, or one nobody has suggested for,
+   * commits exactly the request it always did.
+   */
+  it("sends the planned departure time only when the trip has one", async () => {
+    send.mockResolvedValue({});
+
+    await distributionApiHttp.applyAssignment(PLAN_ID, [
+      {
+        driverId: "d1", vehicleId: "v1", tripNo: 1,
+        stops: [{ outletId: OUTLET_A, sequenceNo: 1 }],
+        berangkat: "07:00",
+      },
+    ], 7);
+
+    expect(send.mock.calls[0][2].trips[0].planned_departure_time).toBe("07:00");
+  });
 });
 
 describe("dispatching a trip", () => {
@@ -654,6 +822,83 @@ describe("the suggestion", () => {
     expect(suggestion.trips[0].muatanBerisiko).toBe(20);
     expect(suggestion.unroutable[0].alasan).toBe("Di luar jangkauan");
     expect(suggestion.dasar).toMatch(/12,5 km/);
+  });
+
+  /**
+   * The service's proposal carries a schedule the mock cannot (see
+   * suggestAssignment.ts's own DASAR_KAPASITAS note) -- each stop's estimated
+   * arrival and the run's estimated departure both need to survive the
+   * mapping, and the finish time belongs in the planner's own explanation.
+   */
+  it("carries the service's schedule onto the proposal", async () => {
+    send.mockResolvedValue({
+      trips: [
+        {
+          trip_no: 1, driver_id: "d1", driver_code: "DRV-001", driver_name: "Slamet",
+          vehicle_id: "v1", plate: "H 1234 AB", planned_departure_time: "07:00",
+          stops: [
+            { sequence_no: 1, outlet_id: OUTLET_A, outlet_code: "PKL-001", outlet_name: "Ahmad", qty: 30, funded: true, eta: "07:15" },
+          ],
+          load_qty: 30, capacity_qty: 100, at_risk_qty: 0, distance_m: 4000,
+        },
+      ],
+      unroutable: [],
+      summary: { distance_m: 4000, trips: 1, outlets: 1, finish_eta: "07:45" },
+    });
+
+    const suggestion = await distributionApiHttp.suggestAssignment(PLAN_ID);
+
+    expect(suggestion.trips[0].berangkat).toBe("07:00");
+    expect(suggestion.trips[0].stops[0].eta).toBe("07:15");
+    expect(suggestion.dasar).toMatch(/07:45/);
+  });
+
+  /**
+   * A dispatcher reading "± 15 km" should know whether that is a real road
+   * distance or the usual haversine estimate -- the note only appears for the
+   * former, since the latter is what every suggestion has always been and
+   * flagging the ordinary case would just be noise.
+   */
+  it("notes when the distance is a road distance, not haversine", async () => {
+    send.mockResolvedValue({
+      trips: [
+        {
+          trip_no: 1, driver_id: "d1", driver_code: "DRV-001", driver_name: "Slamet",
+          vehicle_id: "v1", plate: "H 1234 AB",
+          stops: [
+            { sequence_no: 1, outlet_id: OUTLET_A, outlet_code: "PKL-001", outlet_name: "Ahmad", qty: 30, funded: true },
+          ],
+          load_qty: 30, capacity_qty: 100, at_risk_qty: 0, distance_m: 4000,
+        },
+      ],
+      unroutable: [],
+      summary: { distance_m: 4000, trips: 1, outlets: 1, distance_source: "road" },
+    });
+
+    const suggestion = await distributionApiHttp.suggestAssignment(PLAN_ID);
+
+    expect(suggestion.dasar).toMatch(/jarak jalan/);
+  });
+
+  it("stays silent about the source when it is the ordinary straight-line estimate", async () => {
+    send.mockResolvedValue({
+      trips: [
+        {
+          trip_no: 1, driver_id: "d1", driver_code: "DRV-001", driver_name: "Slamet",
+          vehicle_id: "v1", plate: "H 1234 AB",
+          stops: [
+            { sequence_no: 1, outlet_id: OUTLET_A, outlet_code: "PKL-001", outlet_name: "Ahmad", qty: 30, funded: true },
+          ],
+          load_qty: 30, capacity_qty: 100, at_risk_qty: 0, distance_m: 4000,
+        },
+      ],
+      unroutable: [],
+      summary: { distance_m: 4000, trips: 1, outlets: 1, distance_source: "straight" },
+    });
+
+    const suggestion = await distributionApiHttp.suggestAssignment(PLAN_ID);
+
+    expect(suggestion.dasar).not.toMatch(/jarak jalan/);
   });
 });
 
@@ -749,5 +994,49 @@ describe("the SA's own outlet plan for a date", () => {
 
     expect(rows).toEqual([]);
     expect(getOne).not.toHaveBeenCalled();
+  });
+});
+
+describe("printRouteSheet", () => {
+  beforeEach(() => {
+    getOne.mockImplementation((path: string) =>
+      Promise.resolve(path.endsWith("/trips") ? { trips: [], unroutable: [], summary: {} } : order()),
+    );
+    getSettings.mockResolvedValue({ namaPerusahaan: "PT Bimbo Salatiga", nomorAgen: "12345" });
+    getOutletList.mockResolvedValue([
+      { id: OUTLET_A, alamat: "Jl. Merdeka 12", kecamatan: "Sidorejo" },
+    ]);
+  });
+
+  /**
+   * The address gap this used to stay mock-only for is closed by
+   * `getOutletList()` -- a real, already-implemented endpoint. The stop's
+   * address in the printed sheet must be the outlet's real one, not a dash.
+   */
+  it("resolves each stop's address from the outlet list", async () => {
+    await printRouteSheet(PLAN_ID);
+
+    const [, html] = printDocument.mock.calls[0];
+    expect(html).toContain("Jl. Merdeka 12, Kec. Sidorejo");
+  });
+
+  /** The clock-time gap is real, not closed -- no column anywhere carries
+   *  it, so the sheet must say so rather than invent one. */
+  it("still shows no invented delivery time", async () => {
+    await printRouteSheet(PLAN_ID);
+
+    const [, html] = printDocument.mock.calls[0];
+    expect(html).toContain('<td class="code">—</td>');
+  });
+
+  /** An outlet missing from the list (a fetch race, a soft-deleted row)
+   *  prints a dash rather than throwing the whole sheet away. */
+  it("falls back to a dash when an outlet is not in the list", async () => {
+    getOutletList.mockResolvedValue([]);
+
+    await printRouteSheet(PLAN_ID);
+
+    const [, html] = printDocument.mock.calls[0];
+    expect(html).toContain("<td>—</td>");
   });
 });

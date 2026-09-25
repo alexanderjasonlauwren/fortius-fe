@@ -12,6 +12,8 @@ import { SADetailPage } from "./pages/sa/SADetailPage";
 import { DistributionPage } from "./pages/distribution/DistributionPage";
 import { MonitoringPage } from "./pages/monitoring/MonitoringPage";
 import { TransportationClaimListPage } from "./pages/transportation/TransportationClaimListPage";
+import { TransportationClaimDocumentPage } from "./pages/transportation/TransportationClaimDocumentPage";
+import { TransportationRecapPage } from "./pages/transportation/TransportationRecapPage";
 import { ExpensePage } from "./pages/expenses/ExpensePage";
 import { SopirPage } from "./pages/sopir/SopirPage";
 import { OcrPage } from "./pages/ocr/OcrPage";
@@ -103,6 +105,16 @@ const router = createBrowserRouter([
       { path: "transportation-claims", element: (
         <RequirePermission permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
           <TransportationClaimListPage />
+        </RequirePermission>
+      ) },
+      { path: "transportation-claims/recap", element: (
+        <RequirePermission permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
+          <TransportationRecapPage />
+        </RequirePermission>
+      ) },
+      { path: "transportation-claims/:id", element: (
+        <RequirePermission permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
+          <TransportationClaimDocumentPage />
         </RequirePermission>
       ) },
       { path: "expenses", element: (

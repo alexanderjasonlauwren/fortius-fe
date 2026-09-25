@@ -102,13 +102,19 @@ beforeEach(() => {
 });
 
 describe("getKpiSummary", () => {
+  it.each([undefined, false])("never requests manual-order totals when intake is external or unknown (%s)", async (includeOrders) => {
+    mockDeliveries({ [TODAY]: [], [YESTERDAY]: [] });
+    const kpi = await dashboardApiHttp.getKpiSummary(includeOrders);
+    expect(kpi.openOrders).toBe(0);
+    expect(getOrderTotals).not.toHaveBeenCalled();
+  });
   it("composes every figure from the real feature APIs, not a second computation", async () => {
     mockDeliveries({
       [TODAY]: [delivery(), delivery({ delivery_status: "failed", dispatched_qty: 50, delivered_qty: 0 })],
       [YESTERDAY]: [delivery({ delivered_qty: 60 })],
     });
 
-    const kpi = await dashboardApiHttp.getKpiSummary();
+    const kpi = await dashboardApiHttp.getKpiSummary(true);
 
     expect(kpi.dailyDistributed).toBe(80);
     expect(kpi.dailyTarget).toBe(150);
@@ -134,7 +140,7 @@ describe("getKpiSummary", () => {
       agreement({ id: "expired", periodeBerakhir: "2020-01-01", totalKuota: 9999, sisaKuota: 9999 }),
     ]);
 
-    const kpi = await dashboardApiHttp.getKpiSummary();
+    const kpi = await dashboardApiHttp.getKpiSummary(true);
 
     expect(kpi.monthlyQuotaTotal).toBe(1000);
     expect(kpi.monthlyQuotaRemaining).toBe(500);

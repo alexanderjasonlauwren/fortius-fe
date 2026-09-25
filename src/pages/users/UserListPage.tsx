@@ -6,11 +6,12 @@ import {
   createOrUpdateUser,
   exportUsers,
   getAuditTrail,
-  getUsers,
+  getUsersWithAccess,
   removeUser,
   ROLE_LABEL,
   ROLE_SUMMARY,
 } from "@/features/users/api/userApi";
+import { describeRoles } from "@/features/rbac/access";
 import { getDrivers } from "@/features/drivers/api/driverApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -63,7 +64,7 @@ export function UserListPage() {
 
   const list = useQuery({
     queryKey: [...scopeKey(), "users", search, role],
-    queryFn: () => getUsers({ search, role }),
+    queryFn: () => getUsersWithAccess({ search, role }),
   });
   const audit = useQuery({
     queryKey: [...scopeKey(), "audit-trail"],
@@ -140,9 +141,13 @@ export function UserListPage() {
       header: "Peran",
       render: (row) => (
         <>
-          <span className="block text-xs font-medium text-ink">{ROLE_LABEL[row.role]}</span>
+          <span className="block text-xs font-medium text-ink">
+            {describeRoles(row.roleNames)}
+          </span>
           <span className="block max-w-[18rem] text-2xs leading-snug text-ink-muted">
-            {ROLE_SUMMARY[row.role]}
+            {row.roleNames?.length
+              ? row.cabang || "Cakupan akses belum ditentukan."
+              : "Belum ada akses yang diberikan."}
           </span>
         </>
       ),

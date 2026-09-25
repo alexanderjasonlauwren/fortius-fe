@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import type { BankNameEntity, OutletStatus } from "@/mocks/types";
 import { outletLabel, outletLabelTitle, unitLabel } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
+import { LocationPicker } from "@/features/outlet/components/LocationPicker";
+import { isWithinIndonesia, parseCoordinatePaste } from "@/features/outlet/lib/parseCoordinates";
 
 const BANKS: BankNameEntity[] = ["BCA", "BNI", "Mandiri", "BRI", "BSI"];
 
@@ -59,8 +61,13 @@ const EMPTY: FormState = {
   termin: 7,
   batasKredit: 0,
   blokirOtomatis: true,
-  lat: -7.3305,
-  lng: 110.5084,
+  // 0, 0 is not a real point anyone delivers to -- it is this form's sentinel
+  // for "no pin yet" (see LocationPicker and outletApi.http.ts's write path).
+  // A brand-new outlet starts unplaced rather than defaulting to the pool's
+  // own city centre, which used to let an outlet nobody had actually pinned
+  // sit on the route optimizer's map as if it had been.
+  lat: 0,
+  lng: 0,
 };
 
 export function OutletFormPage() {
@@ -69,6 +76,8 @@ export function OutletFormPage() {
   const isEdit = !!id;
 
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+  const [coordPaste, setCoordPaste] = useState("");
+  const [coordPasteError, setCoordPasteError] = useState<string | undefined>();
 
   const detail = useQuery({
     queryKey: [...scopeKey(), "outlet-detail", id],
@@ -129,6 +138,28 @@ export function OutletFormPage() {
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
     setErrors((e) => ({ ...e, [key]: undefined }));
+  };
+
+  /**
+   * Reads "Tempel koordinat" -- the shape Google Maps' own "Copy
+   * coordinates" puts on the clipboard -- rather than asking someone to
+   * split it across two number fields by hand.
+   */
+  const applyCoordPaste = () => {
+    if (!coordPaste.trim()) return;
+    const parsed = parseCoordinatePaste(coordPaste);
+    if (!parsed) {
+      setCoordPasteError("Format harus “lintang, bujur”, mis. -7.3305, 110.5084.");
+      return;
+    }
+    if (!isWithinIndonesia(parsed.lat, parsed.lng)) {
+      setCoordPasteError("Koordinat ini berada di luar Indonesia -- periksa urutan lintang/bujur.");
+      return;
+    }
+    set("lat", parsed.lat);
+    set("lng", parsed.lng);
+    setCoordPaste("");
+    setCoordPasteError(undefined);
   };
 
   const submit = (e: React.FormEvent) => {
@@ -405,14 +436,24 @@ export function OutletFormPage() {
                 />
               </Field>
 
-              <Field label="Lintang" htmlFor="lat">
+              {/*
+                0 in either field means "no pin yet" (see EMPTY above and
+                outletApi.http.ts's write path), so it is shown as an empty
+                box rather than a coordinate off the coast of Africa that
+                looks like a real, if odd, answer.
+              */}
+              <Field
+                label="Lintang"
+                htmlFor="lat"
+                hint={form.lat === 0 && form.lng === 0 ? "Belum dipetakan — pangkalan ini tidak bisa masuk rute otomatis." : undefined}
+              >
                 <TextInput
                   id="lat"
                   type="number"
                   step="0.00001"
                   mono
-                  value={form.lat}
-                  onChange={(e) => set("lat", Number(e.target.value))}
+                  value={form.lat === 0 && form.lng === 0 ? "" : form.lat}
+                  onChange={(e) => set("lat", e.target.value === "" ? 0 : Number(e.target.value))}
                 />
               </Field>
 
@@ -422,10 +463,50 @@ export function OutletFormPage() {
                   type="number"
                   step="0.00001"
                   mono
-                  value={form.lng}
-                  onChange={(e) => set("lng", Number(e.target.value))}
+                  value={form.lat === 0 && form.lng === 0 ? "" : form.lng}
+                  onChange={(e) => set("lng", e.target.value === "" ? 0 : Number(e.target.value))}
                 />
               </Field>
+
+              <Field
+                label="Tempel koordinat"
+                htmlFor="coord-paste"
+                error={coordPasteError}
+                hint="Format dari “Salin koordinat” Google Maps: lintang, bujur."
+                className="sm:col-span-2"
+              >
+                <div className="flex gap-2">
+                  <TextInput
+                    id="coord-paste"
+                    mono
+                    placeholder="-7.3305, 110.5084"
+                    value={coordPaste}
+                    invalid={!!coordPasteError}
+                    onChange={(e) => {
+                      setCoordPaste(e.target.value);
+                      setCoordPasteError(undefined);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        applyCoordPaste();
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" onClick={applyCoordPaste}>
+                    Terapkan
+                  </Button>
+                </div>
+              </Field>
+
+              <LocationPicker
+                lat={form.lat}
+                lng={form.lng}
+                onChange={(lat, lng) => {
+                  set("lat", lat);
+                  set("lng", lng);
+                }}
+              />
             </PanelBody>
           </Panel>
         </div>

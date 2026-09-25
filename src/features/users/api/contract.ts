@@ -21,6 +21,7 @@ export interface UserFilters {
 
 export interface UsersApi {
   getUsers(filters?: UserFilters): Promise<UserEntity[]>;
+  getUsersWithAccess(filters?: UserFilters): Promise<UserEntity[]>;
   createOrUpdateUser(input: Partial<UserEntity> & { id?: string }): Promise<UserEntity>;
   removeUser(id: string): Promise<void>;
 }

@@ -7,7 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { CornerDownLeft, Search, Store, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDb } from "@/mocks/db";
-import { ALL_NAV_ITEMS, mayOpen } from "./nav";
+import { ALL_NAV_ITEMS, mayOpen, isAvailableForIntake } from "./nav";
+import { useIntakePolicy } from "@/features/distribution/hooks/useIntakePolicy";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { outletLabel, outletLabelTitle } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
@@ -65,11 +66,13 @@ export function CommandPalette({
   });
 
   const held = useAuthStore((s) => s.user?.permissions) ?? EMPTY_PERMISSIONS;
+  const policy = useIntakePolicy();
+  const intakeMode = policy.isSuccess ? policy.data : undefined;
 
   const entries = useMemo<Entry[]>(() => {
     // Filtered like the sidebar: ⌘K offering a page that answers a refusal
     // panel is the same broken promise, just faster to reach.
-    const nav: Entry[] = ALL_NAV_ITEMS.filter((i) => mayOpen(i, held)).map((i) => ({
+    const nav: Entry[] = ALL_NAV_ITEMS.filter((i) => mayOpen(i, held) && isAvailableForIntake(i, intakeMode)).map((i) => ({
       id: `nav-${i.href}`,
       label: i.name,
       hint: i.hint,
@@ -97,7 +100,7 @@ export function CommandPalette({
     }));
 
     return [...nav, ...outlet, ...drivers];
-  }, [records.data, held]);
+  }, [records.data, held, intakeMode]);
 
   // Each opening starts clean. Reset during render rather than in an effect,
   // so the palette never paints one frame carrying the previous search.

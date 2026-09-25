@@ -1,10 +1,12 @@
 import { scopeKey } from "@/mocks/scope";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { BarChart3, Calculator, Eye, FileText, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import {
   createClaim,
   deleteClaim,
+  generateLines,
   getClaims,
   updateClaim,
   updateClaimStatus,
@@ -30,18 +32,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { formatDateId, formatRupiah } from "@/lib/format";
+import { formatRupiah } from "@/lib/format";
 import type { ClaimStatus } from "@/types/domain";
 
 interface FormState {
   id?: string;
   version?: number;
-  handoverReference: string;
+  period: string; // YYYY-MM, only used on create -- immutable once the claim exists
   handoverDate: string;
-  claimedAmount: number;
+  handoverReference: string;
 }
 
-const EMPTY: FormState = { handoverReference: "", handoverDate: "", claimedAmount: 0 };
+const EMPTY: FormState = { period: "", handoverDate: "", handoverReference: "" };
+
+/** "Oktober 2026" from an ISO period_start date -- Indonesian month name, matching every
+ * other date the console renders (formatDateId's own MONTH_SHORT is not exported). */
+function periodLabel(periodStart: string): string {
+  const d = new Date(periodStart);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+}
 
 interface StatusFormState {
   id: string;
@@ -49,23 +59,22 @@ interface StatusFormState {
   claimStatus: ClaimStatus;
   principalInvoiceNumber: string;
   statusNote: string;
+  settledAt: string;
+  settledAmount: string;
+  settlementMode: "cash" | "bank";
   labelForTitle: string;
+  /** The claim's own claimedAmount -- settledAmount must match it exactly. */
+  expectedAmount: number;
 }
 
 /**
- * The BAST ledger -- D3's own A-Step 1, the flow document's own words: "the
- * smallest useful version is manual: record the BAST, record the invoice
- * number, record the status the agent read off iVendor."
- *
- * Deliberately does not offer linking deliveries to a claim from this
- * screen yet: the API accepts `delivery_ids` at creation
- * (`transportationApi.http.ts`'s own `CreateClaimInput`), but a picker for
- * "which deliveries does this BAST cover" is a second, larger piece of UI
- * the flow document's own minimal version does not require -- a claim
- * recorded with no deliveries attached is exactly the manual-first case
- * this step exists to serve.
+ * The BAST ledger -- D3's own A-Step 1/5/6/7. A claim is opened empty for a
+ * calendar month; "Buat lini" derives its lines and its amount from actual
+ * deliveries in that period, priced against the tariff covering each one's
+ * own date. Nothing here is typed by hand once a claim exists past draft.
  */
 export function TransportationClaimListPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ClaimStatus | "Semua">("Semua");
   const [editing, setEditing] = useState<FormState | null>(null);
@@ -84,18 +93,25 @@ export function TransportationClaimListPage() {
         ? updateClaim({
             id: values.id,
             version: values.version!,
-            handoverReference: values.handoverReference,
+            handoverReference: values.handoverReference || undefined,
             handoverDate: values.handoverDate,
-            claimedAmount: values.claimedAmount,
           })
         : createClaim({
-            handoverReference: values.handoverReference,
+            period: values.period,
             handoverDate: values.handoverDate,
-            claimedAmount: values.claimedAmount,
+            handoverReference: values.handoverReference || undefined,
           }),
     errorTitle: "BAST tidak tersimpan",
     success: (c) => ({ title: `${c.claimNumber} tersimpan` }),
     onDone: () => setEditing(null),
+  });
+
+  const generateMutation = useDeskMutation({
+    mutationFn: (id: string) => generateLines(id),
+    errorTitle: "Lini klaim tidak dapat dibuat",
+    success: (c) => ({
+      title: `${c.claimNumber}: ${c.totalQty} tabung senilai ${formatRupiah(c.claimedAmount)}`,
+    }),
   });
 
   const statusMutation = useDeskMutation({
@@ -106,6 +122,12 @@ export function TransportationClaimListPage() {
         claimStatus: values.claimStatus,
         principalInvoiceNumber: values.principalInvoiceNumber || undefined,
         statusNote: values.statusNote || undefined,
+        settledAt: values.claimStatus === "paid" ? values.settledAt || undefined : undefined,
+        settledAmount:
+          values.claimStatus === "paid" && values.settledAmount
+            ? Number(values.settledAmount)
+            : undefined,
+        settlementMode: values.claimStatus === "paid" ? values.settlementMode : undefined,
       }),
     errorTitle: "Status tidak tersimpan",
     success: (c) => ({ title: `Status ${c.claimNumber} diperbarui` }),
@@ -131,7 +153,11 @@ export function TransportationClaimListPage() {
       claimStatus: row.claimStatus,
       principalInvoiceNumber: row.principalInvoiceNumber ?? "",
       statusNote: "",
+      settledAt: row.settledAt ?? "",
+      settledAmount: row.settledAmount ? String(row.settledAmount) : String(row.claimedAmount || ""),
+      settlementMode: row.settlementMode ?? "bank",
       labelForTitle: row.claimNumber,
+      expectedAmount: row.claimedAmount,
     });
   };
 
@@ -139,9 +165,8 @@ export function TransportationClaimListPage() {
     e.preventDefault();
     if (!editing) return;
     const next: typeof errors = {};
-    if (!editing.handoverReference.trim()) next.handoverReference = "Nomor BAST wajib diisi.";
+    if (!editing.id && !editing.period) next.period = "Periode wajib diisi.";
     if (!editing.handoverDate) next.handoverDate = "Tanggal serah terima wajib diisi.";
-    if (editing.claimedAmount <= 0) next.claimedAmount = "Nilai klaim harus lebih dari nol.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     saveMutation.mutate(editing);
@@ -156,16 +181,27 @@ export function TransportationClaimListPage() {
       render: (row) => (
         <>
           <span className="data block text-xs text-ink">{row.claimNumber}</span>
-          <span className="block text-2xs text-ink-muted">BAST {row.handoverReference}</span>
+          <span className="block text-2xs text-ink-muted">
+            {row.handoverReference ? `BAST ${row.handoverReference}` : "Belum ada nomor BAST"}
+          </span>
         </>
       ),
       sortValue: (row) => row.claimNumber,
     },
     {
-      key: "handoverDate",
-      header: "Tanggal Serah Terima",
-      render: (row) => <span className="data text-xs text-ink">{formatDateId(row.handoverDate)}</span>,
-      sortValue: (row) => row.handoverDate,
+      key: "period",
+      header: "Periode",
+      render: (row) => (
+        <span className="data text-xs text-ink">{row.periodStart ? periodLabel(row.periodStart) : "—"}</span>
+      ),
+      sortValue: (row) => row.periodStart ?? "",
+    },
+    {
+      key: "totalQty",
+      header: "Tabung",
+      align: "right",
+      render: (row) => <span className="data text-xs text-ink">{row.totalQty.toLocaleString("id-ID")}</span>,
+      sortValue: (row) => row.totalQty,
     },
     {
       key: "claimedAmount",
@@ -204,6 +240,30 @@ export function TransportationClaimListPage() {
       header: "",
       render: (row) => (
         <div className="flex justify-end gap-1">
+          <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Lihat Berita Acara ${row.claimNumber}`}
+              onClick={() => navigate(`/transportation-claims/${row.id}`)}
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </Button>
+          </CanAccess>
+          {row.claimStatus === "draft" && (
+            <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Buat lini ${row.claimNumber}`}
+                title="Buat/perbarui lini dari pengiriman pada periode ini"
+                disabled={generateMutation.isPending}
+                onClick={() => generateMutation.mutate(row.id)}
+              >
+                <Calculator className="h-3.5 w-3.5" />
+              </Button>
+            </CanAccess>
+          )}
           <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
             <Button
               variant="ghost"
@@ -221,9 +281,9 @@ export function TransportationClaimListPage() {
                 openEditor({
                   id: row.id,
                   version: row.version,
-                  handoverReference: row.handoverReference,
+                  period: row.periodStart?.slice(0, 7) ?? "",
+                  handoverReference: row.handoverReference ?? "",
                   handoverDate: row.handoverDate,
-                  claimedAmount: row.claimedAmount,
                 })
               }
             >
@@ -257,14 +317,24 @@ export function TransportationClaimListPage() {
       <PageHeader
         eyebrow="Operasi harian"
         title="Klaim Transportasi (BAST)"
-        description="Catat setiap BAST yang diserahkan ke prinsipal, dan perbarui statusnya begitu iVendor menjawab."
+        description="Buka klaim untuk satu periode, lalu buat lininya dari pengiriman yang sudah selesai -- nilai klaim dihitung otomatis, tidak diketik manual."
         actions={
-          <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_CREATE}>
-            <Button onClick={() => openEditor(EMPTY)}>
-              <Plus className="h-3.5 w-3.5" />
-              Catat BAST baru
-            </Button>
-          </CanAccess>
+          <div className="flex gap-2">
+            <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
+              <Button variant="outline" asChild>
+                <Link to="/transportation-claims/recap">
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  Rekap bulanan
+                </Link>
+              </Button>
+            </CanAccess>
+            <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_CREATE}>
+              <Button onClick={() => openEditor(EMPTY)}>
+                <Plus className="h-3.5 w-3.5" />
+                Buka klaim baru
+              </Button>
+            </CanAccess>
+          </div>
         }
         meta={
           <span className="text-xs text-ink-muted">
@@ -306,11 +376,11 @@ export function TransportationClaimListPage() {
           defaultSortKey="handoverDate"
           emptyIcon={FileText}
           emptyMessage="Belum ada klaim BAST"
-          emptyDescription="Catat BAST pertama begitu diserahkan ke prinsipal."
+          emptyDescription="Buka klaim pertama untuk periode yang sudah berjalan."
           emptyAction={
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_CREATE}>
               <Button size="sm" onClick={() => openEditor(EMPTY)}>
-                Catat BAST baru
+                Buka klaim baru
               </Button>
             </CanAccess>
           }
@@ -318,35 +388,32 @@ export function TransportationClaimListPage() {
         />
       </Panel>
 
-      {/* Create / edit the claim's own paperwork fields. */}
+      {/* Open a draft, or edit its own paperwork fields once it exists. */}
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-lg">
           <form onSubmit={submit}>
             <DialogHeader>
-              <DialogTitle>{editing?.id ? "Ubah BAST" : "Catat BAST baru"}</DialogTitle>
+              <DialogTitle>{editing?.id ? "Ubah BAST" : "Buka klaim baru"}</DialogTitle>
               <DialogDescription>
-                Nomor klaim diterbitkan otomatis. Nomor BAST adalah nomor pada dokumen serah
-                terima itu sendiri.
+                {editing?.id
+                  ? "Nomor BAST adalah nomor pada dokumen serah terima itu sendiri -- kosongkan jika belum diterbitkan."
+                  : "Nomor klaim diterbitkan otomatis. Setelah dibuka, gunakan “Buat lini” pada baris klaim untuk menghitung nilainya dari pengiriman pada periode ini."}
               </DialogDescription>
             </DialogHeader>
 
             {editing && (
               <div className="grid grid-cols-1 gap-4 py-4">
-                <Field
-                  label="Nomor BAST"
-                  htmlFor="tc-ref"
-                  error={errors.handoverReference}
-                  required
-                >
-                  <TextInput
-                    id="tc-ref"
-                    mono
-                    placeholder="BAST/123/2026"
-                    value={editing.handoverReference}
-                    invalid={!!errors.handoverReference}
-                    onChange={(e) => setEditing({ ...editing, handoverReference: e.target.value })}
-                  />
-                </Field>
+                {!editing.id && (
+                  <Field label="Periode" htmlFor="tc-period" error={errors.period} required>
+                    <TextInput
+                      id="tc-period"
+                      type="month"
+                      value={editing.period}
+                      invalid={!!errors.period}
+                      onChange={(e) => setEditing({ ...editing, period: e.target.value })}
+                    />
+                  </Field>
+                )}
 
                 <Field
                   label="Tanggal serah terima"
@@ -364,22 +431,16 @@ export function TransportationClaimListPage() {
                 </Field>
 
                 <Field
-                  label="Nilai klaim"
-                  htmlFor="tc-amount"
-                  error={errors.claimedAmount}
-                  required
+                  label="Nomor BAST"
+                  htmlFor="tc-ref"
+                  hint="Nomor pada dokumen fisik/hasil pindai -- kosongkan jika belum ada."
                 >
                   <TextInput
-                    id="tc-amount"
-                    type="number"
-                    min={1}
-                    step="any"
+                    id="tc-ref"
                     mono
-                    value={editing.claimedAmount}
-                    invalid={!!errors.claimedAmount}
-                    onChange={(e) =>
-                      setEditing({ ...editing, claimedAmount: Number(e.target.value) })
-                    }
+                    placeholder="BAST/123/2026"
+                    value={editing.handoverReference}
+                    onChange={(e) => setEditing({ ...editing, handoverReference: e.target.value })}
                   />
                 </Field>
               </div>
@@ -456,6 +517,57 @@ export function TransportationClaimListPage() {
                     }
                   />
                 </Field>
+
+                {/* Only relevant on the transition to "paid" -- all three are
+                    required together, and settledAmount must match the
+                    claim's own claimedAmount exactly (mirrors the backend's
+                    own UpdateStatusRequest rule: a short payment or a
+                    withholding is not yet handled). */}
+                {statusEditing.claimStatus === "paid" && (
+                  <>
+                    <Field label="Tanggal pelunasan" htmlFor="tc-settled-at" required>
+                      <TextInput
+                        id="tc-settled-at"
+                        type="date"
+                        value={statusEditing.settledAt}
+                        onChange={(e) =>
+                          setStatusEditing({ ...statusEditing, settledAt: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label="Jumlah pelunasan"
+                      htmlFor="tc-settled-amount"
+                      hint={`Harus sama dengan nilai klaim: ${formatRupiah(statusEditing.expectedAmount)}.`}
+                      required
+                    >
+                      <TextInput
+                        id="tc-settled-amount"
+                        type="number"
+                        mono
+                        value={statusEditing.settledAmount}
+                        onChange={(e) =>
+                          setStatusEditing({ ...statusEditing, settledAmount: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Metode pembayaran" htmlFor="tc-settlement-mode" required>
+                      <SelectInput
+                        id="tc-settlement-mode"
+                        value={statusEditing.settlementMode}
+                        onChange={(e) =>
+                          setStatusEditing({
+                            ...statusEditing,
+                            settlementMode: e.target.value as "cash" | "bank",
+                          })
+                        }
+                      >
+                        <option value="bank">Bank</option>
+                        <option value="cash">Tunai</option>
+                      </SelectInput>
+                    </Field>
+                  </>
+                )}
               </div>
             )}
 

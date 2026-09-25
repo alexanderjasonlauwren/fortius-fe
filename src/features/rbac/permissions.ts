@@ -27,6 +27,7 @@ export const PERMISSIONS = {
   USERS_CREATE: "iam.create.users",
   USERS_EDIT: "iam.update.users",
   USERS_DELETE: "iam.delete.users",
+  USER_ROLES_VIEW: "iam.read.user_roles",
 
   // Products. `masterdata` spans products, outlets, drivers, vehicles and
   // units — grouped for the person granting access, not by schema.
@@ -121,6 +122,11 @@ export const PERMISSIONS = {
    */
   DELIVERIES_OVERRIDE: "distribution.override.deliveries",
 
+  // What a driver files against a drop they are standing at -- a photo and a
+  // signature, distinct from EXECUTE which is the delivery row's own status.
+  DELIVERY_PROOFS_VIEW: "distribution.read.delivery_proofs",
+  DELIVERY_PROOFS_CREATE: "distribution.create.delivery_proofs",
+
   // Drivers. Assigning one to a run edits the plan, not the driver, which is
   // why ASSIGN and MANAGE point at different resources.
   DRIVERS_VIEW: "masterdata.read.drivers",
@@ -163,6 +169,17 @@ export const PERMISSIONS = {
   // read -- warehouse_staff, finance_officer, auditor_viewer -- must not be
   // shown the page, or they meet a 403 the nav promised would work.
   GPS_TRACKS_VIEW: "distribution.read.gps_tracks",
+  // Filing a position is the driver's own device pinging in, distinct from
+  // reading the board above -- see the backend catalogue's own note on
+  // distribution.create.gps_tracks.
+  GPS_TRACKS_CREATE: "distribution.create.gps_tracks",
+
+  // Stock movements: read is the warehouse board, create is what a driver or
+  // warehouse_staff files when stock leaves or returns with a run. No console
+  // page reads this yet -- kept for usesDriverConsole (layouts/nav.ts) to
+  // recognise the driver role's own grant without a bare string literal.
+  STOCK_MOVEMENTS_VIEW: "inventory.read.stock_movements",
+  STOCK_MOVEMENTS_CREATE: "inventory.create.stock_movements",
 
   // Geofencing. Rules are the fences themselves; alerts are the breaches
   // recorded against them, and acknowledging one is an update to the alert.
@@ -176,6 +193,11 @@ export const PERMISSIONS = {
   // Settings edits the tenant, which is what the settings page writes.
   SETTINGS_VIEW: "iam.read.tenants",
   SETTINGS_EDIT: "iam.update.tenants",
+
+  // The bell icon. Ungated in the nav (BOTTOM_NAV) since every seeded role
+  // holds it -- kept as a real constant for usesDriverConsole (layouts/nav.ts)
+  // rather than a bare string literal there.
+  NOTIFICATIONS_VIEW: "notification.read.notifications",
 
   // ---------------------------------------------------------------------
   // Console-only, because the backend has no code for them yet.

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { MapContainer, TileLayer, Circle, Polygon, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Button } from "@/components/ui/button";
+import { tileAttribution, tileUrl } from "@/lib/mapTiles";
 import type { GeofenceShapeEntity, LatLng } from "../api/geofenceApi";
 
 /**
@@ -13,15 +14,10 @@ import type { GeofenceShapeEntity, LatLng } from "../api/geofenceApi";
  * draws two shapes. The deployment is on-premise and every asset has to be
  * bundled, so a dependency earns its place here more than usual.
  *
- * Tiles come from the same configuration the distribution map reads, so an
- * air-gapped install points both at its own tile server with one variable and
- * neither reaches the public internet. See DistribusiMap.tsx.
+ * Tiles come from the same configuration every map in the console reads, so
+ * an air-gapped install points all of them at its own tile server with one
+ * variable and none reach the public internet. See `lib/mapTiles.ts`.
  */
-const tileUrl =
-  import.meta.env.VITE_MAP_TILE_URL || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const tileAttribution =
-  import.meta.env.VITE_MAP_TILE_ATTRIBUTION ||
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 /** A vertex handle, numbered so the ring's order is visible while drawing. */
 function vertexIcon(order: number) {

@@ -144,6 +144,12 @@ describe("getTransactions", () => {
     expect(tx.statusBayar).toBe(expected);
   });
 
+  /**
+   * The upper bound is `lt` the day after `to`, not `lte` `to` itself:
+   * `date` filters `created_at`, a timestamp, and the server compares `lte`
+   * literally against midnight UTC -- `lte` `to` would exclude almost all of
+   * that day (verified live against the running service).
+   */
   it("sends outlet_id/driver_id/date as server-side filters", async () => {
     getList.mockResolvedValue({ items: [] });
     await transactionApiHttp.getTransactions({
@@ -157,7 +163,7 @@ describe("getTransactions", () => {
     expect(params.filters).toEqual(
       expect.arrayContaining([
         { field: "date", operator: "gte", value: "2026-09-01" },
-        { field: "date", operator: "lte", value: "2026-09-30" },
+        { field: "date", operator: "lt", value: "2026-10-01" },
         { field: "outlet_id", operator: "eq", value: OUTLET_ID },
         { field: "driver_id", operator: "eq", value: DRIVER_ID },
       ]),

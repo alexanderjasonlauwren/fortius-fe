@@ -418,3 +418,112 @@ describe("the import summary", () => {
     expect(summary).toBeNull();
   });
 });
+
+describe("SIM3LON reconciliation", () => {
+  const batchId = "22222222-2222-4222-8222-222222222222";
+  const predecessorId = "11111111-1111-4111-8111-111111111111";
+  const planId = "33333333-3333-4333-8333-333333333333";
+
+  it("maps the three-way preview and reads it from the candidate batch route", async () => {
+    getOne.mockResolvedValue({
+      candidate_batch_id: batchId,
+      expected_predecessor_batch_id: predecessorId,
+      source_created_at: "2026-09-20T01:02:03Z",
+      review_ready: true,
+      expected_plan_versions: [{ plan_id: planId, version: 7, status: "draft" }],
+      changes: [{
+        plan_id: planId,
+        outlet_id: "44444444-4444-4444-8444-444444444444",
+        product_id: "55555555-5555-4555-8555-555555555555",
+        operational_date: "2026-09-21",
+        baseline_qty: 100,
+        current_qty: 100,
+        proposed_qty: 80,
+        classification: "decrease",
+        non_draft_discrepancy: false,
+        crew_assignment_affected: true,
+      }],
+      blockers: [],
+    });
+
+    const preview = await saApiHttp.getSIM3LONReconciliation(batchId);
+
+    expect(getOne).toHaveBeenCalledWith(`/sim3lon-imports/${batchId}/reconciliation-preview`);
+    expect(preview).toMatchObject({
+      candidateBatchId: batchId,
+      expectedPredecessorBatchId: predecessorId,
+      sourceCreatedAt: "2026-09-20T01:02:03Z",
+      reviewReady: true,
+      expectedPlanVersions: [{ planId, version: 7, status: "draft" }],
+      changes: [{
+        planId,
+        baselineQty: 100,
+        currentQty: 100,
+        proposedQty: 80,
+        classification: "decrease",
+        crewAssignmentAffected: true,
+      }],
+    });
+  });
+
+  it("keeps a first import predecessor explicitly null", async () => {
+    getOne.mockResolvedValue({
+      candidate_batch_id: batchId,
+      expected_predecessor_batch_id: null,
+      source_created_at: "2026-09-20T01:02:03Z",
+      review_ready: true,
+      expected_plan_versions: [],
+      changes: [],
+      blockers: [],
+    });
+
+    const preview = await saApiHttp.getSIM3LONReconciliation(batchId);
+
+    expect(preview.expectedPredecessorBatchId).toBeNull();
+  });
+
+  it("posts only the accepted predecessor and optimistic-lock set", async () => {
+    send.mockResolvedValue({
+      id: batchId,
+      status: "applied",
+      base_schedule_agreement_id: "66666666-6666-4666-8666-666666666666",
+      outlet_targets_written: 12,
+      daily_targets_written: 30,
+    });
+
+    await saApiHttp.applySIM3LON(batchId, {
+      expectedPredecessorBatchId: predecessorId,
+      acceptedPlans: [{ planId, expectedVersion: 7 }],
+    });
+
+    expect(send).toHaveBeenCalledWith(
+      "post",
+      `/sim3lon-imports/${batchId}/apply`,
+      {
+        expected_predecessor_batch_id: predecessorId,
+        accepted_plans: [{ plan_id: planId, expected_version: 7 }],
+      },
+    );
+  });
+
+  it("sends an explicit null predecessor for first-import acceptance", async () => {
+    send.mockResolvedValue({
+      id: batchId,
+      status: "applied",
+      base_schedule_agreement_id: "66666666-6666-4666-8666-666666666666",
+      outlet_targets_written: 12,
+      daily_targets_written: 30,
+    });
+
+    await saApiHttp.applySIM3LON(batchId, {
+      expectedPredecessorBatchId: null,
+      acceptedPlans: [],
+    });
+
+    expect(send).toHaveBeenCalledWith(
+      "post",
+      `/sim3lon-imports/${batchId}/apply`,
+      { expected_predecessor_batch_id: null, accepted_plans: [] },
+    );
+  });
+});

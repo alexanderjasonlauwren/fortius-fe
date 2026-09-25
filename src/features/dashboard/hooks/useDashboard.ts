@@ -1,5 +1,8 @@
 import { scopeKey } from "@/mocks/scope";
 import { useQuery } from "@tanstack/react-query";
+import { useIntakePolicy } from "@/features/distribution/hooks/useIntakePolicy";
+import { useAuthStore } from "@/features/auth/store/authStore";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import {
   getDispatchRail,
   getKpiSummary,
@@ -10,7 +13,13 @@ import {
 } from "../api/dashboardApi";
 
 export function useDashboard() {
-  const kpi = useQuery({ queryKey: [...scopeKey(), "kpi"], queryFn: getKpiSummary });
+  const intakePolicy = useIntakePolicy();
+  const canReadOrders = useAuthStore((state) => state.hasPermission(PERMISSIONS.ORDERS_VIEW));
+  const showManualOrders = intakePolicy.allowsManualIntake && canReadOrders;
+  const kpi = useQuery({
+    queryKey: [...scopeKey(), "kpi", showManualOrders],
+    queryFn: () => getKpiSummary(showManualOrders),
+  });
   const rail = useQuery({ queryKey: [...scopeKey(), "dispatch-rail"], queryFn: getDispatchRail });
   const monthlyChart = useQuery({
     queryKey: [...scopeKey(), "monthly-chart"],
@@ -27,6 +36,7 @@ export function useDashboard() {
   const audit = useQuery({ queryKey: [...scopeKey(), "recent-audit"], queryFn: () => getRecentAudit(6) });
 
   return {
+    showManualOrders,
     kpi: kpi.data,
     rail: rail.data,
     monthlyChart: monthlyChart.data ?? [],

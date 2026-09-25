@@ -1,5 +1,6 @@
 import { scopeKey } from "@/mocks/scope";
-import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { reportRangeFromParam } from "@/features/reports/api/contract";
 import { useQuery } from "@tanstack/react-query";
 import {
   Area,
@@ -47,13 +48,19 @@ import {
 } from "@/lib/format";
 import { outletLabelTitle, unitLabel, unitLabelTitle } from "@/lib/lexicon";
 
-const RANGES: ReportRange[] = ["7h", "30h", "bulan-ini", "bulan-lalu"];
+const RANGES: ReportRange[] = ["hari-ini", "7h", "30h", "bulan-ini", "bulan-lalu"];
 
 type DriverRow = Awaited<ReturnType<typeof getDriverPerformance>>[number];
 type TopRow = Awaited<ReturnType<typeof getTopOutlet>>[number];
 
 export function ReportsPage() {
-  const [range, setRange] = useState<ReportRange>("30h");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = reportRangeFromParam(searchParams.get("range"));
+  const setRange = (value: ReportRange) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous);
+    next.set("range", value);
+    return next;
+  }, { replace: true });
   const { isDark } = useTheme();
   const t = chartTheme(isDark);
 
@@ -206,7 +213,7 @@ export function ReportsPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Keuangan"
-        title="Laporan"
+        title="Laporan Keuangan"
         description="Rekapitulasi distribusi dan pendapatan untuk periode yang dipilih, siap diunduh atau dicetak untuk arsip."
         actions={
           <>
@@ -383,7 +390,10 @@ export function ReportsPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Panel>
-          <PanelHeader title={`${outletLabelTitle()} teratas`} hint={`Menurut ${unitLabel()} diterima`} />
+          <PanelHeader
+            title={`${outletLabelTitle()} teratas`}
+            hint={`Menurut ${unitLabel()} yang diberangkatkan`}
+          />
           <DataTable
             columns={topColumns}
             data={top.data ?? []}

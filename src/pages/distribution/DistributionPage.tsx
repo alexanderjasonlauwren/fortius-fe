@@ -5,6 +5,7 @@ import { useDistributionPlan } from "@/features/distribution/hooks/useDistributi
 import { PlanListPanel } from "@/features/distribution/components/PlanListPanel";
 import { PlanDetailPanel } from "@/features/distribution/components/PlanDetailPanel";
 import { AllocationMatrixPanel } from "@/features/distribution/components/AllocationMatrixPanel";
+import { SourcePlanStatus } from "@/features/distribution/components/SourcePlanStatus";
 import { getUsers } from "@/features/users/api/userApi";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -42,6 +43,9 @@ function tomorrowIso() {
 
 export function DistributionPage() {
   const {
+    intakePolicy,
+    sourceReview,
+    fillSourceMutation,
     planList,
     planDetail,
     selectedPlan,
@@ -96,9 +100,12 @@ export function DistributionPage() {
 
   const total = planDetail.reduce((s, r) => s + r.jumlahUnit, 0);
   const drafts = planList.filter((p) => p.status === "Draft").length;
+  const sourceBlocked = !intakePolicy.allowsManualIntake && (!sourceReview.isSuccess || sourceReview.data.status !== "ready");
 
   const handleSaveDraft = (rows: PlanRow[]) => {
-    if (selectedPlanId) saveDraftMutation.mutate({ planId: selectedPlanId, rows });
+    if (selectedPlan) {
+      saveDraftMutation.mutate({ planId: selectedPlan.id, rows, version: selectedPlan.version });
+    }
   };
 
   const handleDispatchTrip = (tripId: string, rows: PlanRow[]) => {
@@ -130,13 +137,26 @@ export function DistributionPage() {
       <PageHeader
         eyebrow="Operasi harian"
         title="Perencanaan Distribusi"
-        description="Susun titik singgah dan armada untuk satu hari pengiriman. Konfirmasi menarik kuota dari Schedule Agreement dan menerbitkan surat jalan."
+        description="Tinjau alokasi dan tetapkan armada untuk satu hari pengiriman. Menyimpan titik singgah mereservasi kuota SA; surat jalan diterbitkan saat trip diberangkatkan."
         meta={
           <span className="text-xs text-ink-muted">
             {planList.length} rencana tercatat · {drafts} masih draf
           </span>
         }
       />
+
+      {selectedPlan?.saId ? <SourcePlanStatus
+        review={sourceReview.data}
+        isLoading={sourceReview.isLoading}
+        error={sourceReview.error}
+        fillError={fillSourceMutation.variables?.id === selectedPlan.id ? fillSourceMutation.error : null}
+        isFilling={fillSourceMutation.isPending && fillSourceMutation.variables?.id === selectedPlan.id}
+        canFill={selectedPlan.status === "Draft" && !isLoadingDetail && planDetail.length === 0}
+        onRetry={() => {
+          if (selectedPlan.status === "Draft" && !isLoadingDetail && planDetail.length === 0) fillSourceMutation.mutate(selectedPlan);
+          else void sourceReview.refetch();
+        }}
+      /> : null}
 
       <div className="flex w-fit rounded-lg border border-line bg-panel p-1">
         <Button
@@ -174,6 +194,8 @@ export function DistributionPage() {
 
           <div className="lg:col-span-9">
             <PlanDetailPanel
+              allowsManualDemand={intakePolicy.allowsManualIntake}
+              sourceBlocked={sourceBlocked || fillSourceMutation.isPending}
               plan={selectedPlan}
               rows={planDetail}
               isLoading={isLoadingDetail}
@@ -205,8 +227,8 @@ export function DistributionPage() {
           <DialogHeader>
             <DialogTitle>Buat rencana distribusi</DialogTitle>
             <DialogDescription>
-              Satu rencana mewakili satu hari pengiriman. Kuota baru berkurang saat
-              rencana dikonfirmasi, bukan saat dibuat.
+              Satu rencana mewakili satu hari pengiriman. Rencana kosong belum memakai
+              kuota; menyimpan titik singgah langsung mereservasi kuota SA.
             </DialogDescription>
           </DialogHeader>
 
@@ -270,16 +292,16 @@ export function DistributionPage() {
           selectedPlan && (
             <ul className="space-y-1.5">
               <li>
-                <span className="data">{formatNumber(total)}</span> {unitLabel()} ditarik dari{" "}
-                <span className="data">{selectedPlan.nomorSA}</span>, menyisakan{" "}
+                <span className="data">{formatNumber(total)}</span> {unitLabel()} sudah direservasi dari{" "}
+                <span className="data">{selectedPlan.nomorSA}</span>. Sisa kuota tersedia:{" "}
                 <span className="data">
-                  {formatNumber(Math.max(0, selectedPlan.sisaKuotaSA - total))}
+                  {formatNumber(selectedPlan.sisaKuotaSA)}
                 </span>
                 .
               </li>
               <li>
-                <span className="data">{planDetail.length}</span> surat jalan terbit
-                untuk {formatDateLong(selectedPlan.tanggal)}.
+                <span className="data">{planDetail.length}</span> titik singgah direncanakan
+                untuk {formatDateLong(selectedPlan.tanggal)}. Surat jalan terbit saat keberangkatan trip.
               </li>
               <li>Pemberhentian muncul di Monitoring Distribusi dan papan berangkat.</li>
             </ul>
@@ -289,6 +311,7 @@ export function DistributionPage() {
         isPending={confirmPlanMutation.isPending}
         onCancel={() => setConfirming(false)}
         onConfirm={() => {
+          if (sourceBlocked || fillSourceMutation.isPending) return;
           if (!selectedPlanId) return;
           confirmPlanMutation.mutate(selectedPlanId, {
             onSettled: () => setConfirming(false),
@@ -300,12 +323,12 @@ export function DistributionPage() {
         isOpen={cancelling}
         title={
           selectedPlan?.status === "Draft"
-            ? `Hapus ${selectedPlan?.kode ?? "draf"}?`
+            ? `Batalkan ${selectedPlan?.kode ?? "draf"}?`
             : `Batalkan ${selectedPlan?.kode ?? "rencana"}?`
         }
         message={
           selectedPlan?.status === "Draft"
-            ? "Draf ini belum dikonfirmasi, jadi belum ada kuota yang ditarik dari Schedule Agreement untuk dikembalikan."
+            ? "Draf dibatalkan tanpa menghapus histori. Reservasi kuota titik singgah yang belum berjalan dikembalikan ke Schedule Agreement."
             : "Surat jalan yang belum berjalan akan ditarik kembali dan kuota dikembalikan ke agreement."
         }
         details={
@@ -313,7 +336,7 @@ export function DistributionPage() {
             ? undefined
             : "Rencana yang sebagian armadanya sudah bergerak tidak dapat dibatalkan sekaligus — tutup surat jalan satu per satu di Monitoring Distribusi."
         }
-        confirmLabel={selectedPlan?.status === "Draft" ? "Hapus draf" : "Batalkan rencana"}
+        confirmLabel={selectedPlan?.status === "Draft" ? "Batalkan draf" : "Batalkan rencana"}
         isPending={cancelPlanMutation.isPending}
         onCancel={() => setCancelling(false)}
         onConfirm={() => {

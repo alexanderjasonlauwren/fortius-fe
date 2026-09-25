@@ -364,19 +364,16 @@ export function OutletDetailPage() {
             spineFor={(row) => spineFor(row.status)}
             emptyIcon={Truck}
             /*
-              An unreadable history is not an empty one.
-              `getOutletHistory` reads core.deliveries, which the service does
-              not expose -- so against the API the query fails and this table
-              would otherwise say "Belum ada pengiriman": an assertion that this
-              outlet has never been delivered to, made by a screen that cannot
-              see a single delivery.
+              An unreadable history is not an empty one: a failed fetch and
+              "never delivered to" are different facts, and the second should
+              never be asserted by a screen that could not check.
             */
             emptyMessage={
               history.isError ? "Riwayat belum tersedia" : "Belum ada pengiriman"
             }
             emptyDescription={
               history.isError
-                ? "Surat jalan dicatat oleh dispatch dan belum terbaca oleh konsol ini."
+                ? "Riwayat gagal dimuat. Coba muat ulang halaman ini."
                 : `Riwayat muncul setelah ${outletLabel()} ini masuk rencana distribusi yang dikonfirmasi.`
             }
             dense

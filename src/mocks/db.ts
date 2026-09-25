@@ -61,6 +61,13 @@ function migrate(db: Database): Database {
   db.deliveryEvents ??= [];
   db.saDailyTargets ??= [];
   db.saImportBatches ??= [];
+  db.sim3lonSourceSnapshots ??= [];
+  db.sim3lonPlanSources ??= [];
+  for (const sa of db.scheduleAgreements) sa.dialokasikan ??= sa.terpakai;
+  for (const source of db.sim3lonSourceSnapshots) {
+    source.createdAt ??= db.seededAt;
+  }
+  for (const plan of db.plans) plan.version ??= 1;
 
   const s = db.settings as Partial<Database["settings"]>;
   s.penomoran ??= { ...DEFAULT_NUMBERING };
@@ -157,10 +164,12 @@ export function latency(kind: RequestKind = "read"): Promise<void> {
 /** Thrown by mock APIs so the UI can render a real error path. */
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status = 400) {
+  code?: string;
+  constructor(message: string, status = 400, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 

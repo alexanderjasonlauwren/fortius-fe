@@ -1,6 +1,7 @@
 export type PlanStatus = "Draft" | "Terkonfirmasi" | "Selesai" | "Batal";
 
 export interface DistributionPlan {
+  branchId?: string;
   id: string;
   kode: string;
   /** ISO date. */
@@ -18,8 +19,8 @@ export interface DistributionPlan {
   dikonfirmasiOleh?: string;
   dikonfirmasiPada?: string;
   /**
-   * The optimistic-locking counter the caller must echo back to save, confirm
-   * or cancel.
+   * The optimistic-locking counter the caller must echo back to save, assign,
+   * confirm or cancel.
    *
    * Without it there is nothing to detect a concurrent edit against, and the
    * service refuses a write built on a stale value with 409 rather than
@@ -67,6 +68,11 @@ export interface PlanRow {
   piutangJatuhTempo: number;
   /** The depot cycle this stop belongs to. Null until it is assigned. */
   tripNo: number | null;
+  /**
+   * Position within its run, 1-based. Null when the stop has not been placed
+   * (unassigned, or just moved to another run) — such a stop goes last.
+   */
+  urutan?: number | null;
   /** Set when this stop would be refused on confirmation. */
   alasanBlokir?: string;
   /**
@@ -84,6 +90,14 @@ export interface PlanRow {
    * state — see `dispatchTrip`'s own header comment.
    */
   tripStatus?: string;
+  /**
+   * When this stop's run leaves the pool, "HH:MM" -- one value per trip,
+   * carried on every row of it the same way `vehicle` is. An estimate the
+   * service computes from distance and a fixed speed (see fortius-backend's
+   * `Timing`), not a promise; null until a departure has been set or
+   * suggested.
+   */
+  berangkat?: string | null;
 }
 
 /**
@@ -141,6 +155,12 @@ export interface SuggestedStop {
   urutan: number;
   /** False when no payment has arrived for this stop. Flagged, never hidden. */
   lunas: boolean;
+  /**
+   * Estimated arrival, "HH:MM". Absent from the mock, which has no
+   * coordinates to estimate travel time from -- see suggestAssignment.ts's
+   * own DASAR_KAPASITAS note.
+   */
+  eta?: string;
 }
 
 export interface SuggestedTrip {
@@ -156,6 +176,8 @@ export interface SuggestedTrip {
   /** Cylinders on this trip with no payment behind them yet. */
   muatanBerisiko: number;
   stops: SuggestedStop[];
+  /** Estimated departure, "HH:MM". Absent from the mock; see SuggestedStop.eta. */
+  berangkat?: string;
 }
 
 /** A stop the planner could not place, and why. Never a silent drop. */

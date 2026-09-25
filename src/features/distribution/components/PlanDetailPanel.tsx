@@ -2,6 +2,8 @@ import { Fragment, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Lock,
   Plus,
   Printer,
@@ -21,6 +23,7 @@ import { SelectInput, TextInput } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { usesApi } from "@/lib/dataSource";
 import { useToast } from "@/hooks/useToast";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
@@ -35,10 +38,13 @@ import type {
   VehicleOption,
 } from "../types";
 import { suggestAssignment } from "../api/distributionApi";
+import { applySuggestion, compareStops, moveStop } from "../lib/stopOrder";
 import { outletLabel, outletLabelTitle, unitLabel } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
 
 interface PlanDetailPanelProps {
+  allowsManualDemand?: boolean;
+  sourceBlocked?: boolean;
   plan?: DistributionPlan;
   rows: PlanRow[];
   isLoading: boolean;
@@ -99,6 +105,12 @@ interface TripGroup {
    */
   tripId: string | null;
   tripStatus?: string;
+  /**
+   * When this run leaves the pool, "HH:MM" -- an estimate, not something the
+   * board edits here. Every row on the trip carries the same value, so the
+   * first one answers for the group, same as `tripId`.
+   */
+  berangkat: string | null;
 }
 
 /**
@@ -142,6 +154,7 @@ function groupIntoTrips(
         rows: [],
         tripId: row.tripId ?? null,
         tripStatus: row.tripStatus,
+        berangkat: row.berangkat ?? null,
       };
       byKey.set(key, group);
     }
@@ -157,16 +170,23 @@ function groupIntoTrips(
   // pool dispatches it. The driver id breaks ties so a driver missing from the
   // options list still lands somewhere fixed rather than moving on each render.
   const rank = new Map(drivers.map((d, i) => [d.id, i]));
-  return [...byKey.values()].sort(
+  const groups = [...byKey.values()].sort(
     (a, b) =>
       (rank.get(a.driverId) ?? Number.MAX_SAFE_INTEGER) -
         (rank.get(b.driverId) ?? Number.MAX_SAFE_INTEGER) ||
       a.driverId.localeCompare(b.driverId) ||
       a.tripNo - b.tripNo,
   );
+  // Within a trip, stops are driven in `urutan` order -- the sequence the
+  // optimizer proposed or the dispatcher rearranged -- not the order rows
+  // happen to sit in the array.
+  for (const group of groups) group.rows.sort(compareStops);
+  return groups;
 }
 
 export function PlanDetailPanel({
+  allowsManualDemand = false,
+  sourceBlocked = false,
   plan,
   rows,
   isLoading,
@@ -296,35 +316,35 @@ export function PlanDetailPanel({
       setIsSuggesting(false);
     }
 
-    const placement = new Map<string, { driverId: string; driver: string; tripNo: number }>();
-    for (const trip of suggestion.trips) {
-      for (const stop of trip.stops) {
-        placement.set(stop.outletId, {
-          driverId: trip.driverId,
-          driver: trip.driver,
-          tripNo: trip.tripNo,
-        });
-      }
-    }
-
-    setDraft((prev) =>
-      prev.map((row) => {
-        const at = placement.get(row.outletId);
-        // A stop the planner could not place is cleared rather than left on
-        // whichever trip it happened to be on: the unroutable list below is
-        // then the whole truth about what is not being carried.
-        return at
-          ? { ...row, driverId: at.driverId, driver: at.driver, tripNo: at.tripNo }
-          : { ...row, driverId: null, driver: "Belum ditetapkan", tripNo: null };
-      }),
-    );
+    // Carries the optimizer's stop order and truck onto the draft, not only
+    // the driver and trip number -- see `applySuggestion`'s own header for why
+    // this used to be inline and what silently dropping the order used to
+    // cost.
+    setDraft((prev) => applySuggestion(prev, suggestion, vehicleOptions));
     setUnroutable(suggestion.unroutable);
     setDasar(suggestion.dasar);
     setDirty(true);
   };
 
   const patchRow = (id: string, patch: Partial<PlanRow>) => {
-    setDraft((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setDraft((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const next = { ...r, ...patch };
+        // Moving a stop to a different driver or trip invalidates its old
+        // position: two stops on the new run would otherwise collide on the
+        // same `urutan`, and the service treats a position as belonging to one
+        // outlet. `compareStops` sorts a null position last, so the moved stop
+        // simply lands at the end of its new run until someone reorders it.
+        if (patch.driverId !== undefined || patch.tripNo !== undefined) next.urutan = null;
+        return next;
+      }),
+    );
+    setDirty(true);
+  };
+
+  const move = (id: string, direction: -1 | 1) => {
+    setDraft((prev) => moveStop(prev, id, direction));
     setDirty(true);
   };
 
@@ -334,8 +354,10 @@ export function PlanDetailPanel({
    * Recomputed here on every edit so the quota and capacity warnings above the
    * table respond as the planner types, rather than after a save round trip.
    */
-  const patchLines = (id: string, lines: PlanRow["lines"]) =>
+  const patchLines = (id: string, lines: PlanRow["lines"]) => {
+    if (!allowsManualDemand) return;
     patchRow(id, { lines, jumlahUnit: lines.reduce((s, l) => s + l.jumlah, 0) });
+  };
 
   /**
    * Puts a truck on a run — every stop of it.
@@ -358,6 +380,7 @@ export function PlanDetailPanel({
   };
 
   const addRow = () => {
+    if (!allowsManualDemand) return;
     const used = new Set(draft.map((r) => r.outletId));
     const next = outletOptions.find((p) => !used.has(p.id));
     if (!next) return;
@@ -392,6 +415,7 @@ export function PlanDetailPanel({
   };
 
   const removeRow = (id: string) => {
+    if (!allowsManualDemand) return;
     setDraft((prev) => prev.filter((r) => r.id !== id));
     setDirty(true);
   };
@@ -439,6 +463,9 @@ export function PlanDetailPanel({
               driverId: bulkDriverId,
               driver: driver?.label ?? "Belum ditetapkan",
               tripNo,
+              // Same reasoning as `patchRow`: a bulk move onto a (possibly new)
+              // run cannot keep the old position without risking a collision.
+              urutan: null,
             }
           : r,
       ),
@@ -456,6 +483,7 @@ export function PlanDetailPanel({
   };
 
   const bulkRemove = () => {
+    if (!allowsManualDemand) return;
     if (selected.size === 0) return;
     setDraft((prev) => prev.filter((r) => !selected.has(r.id)));
     setDirty(true);
@@ -532,10 +560,12 @@ export function PlanDetailPanel({
                     size="sm"
                     onClick={onConfirm}
                     disabled={
-                      isConfirming || draft.length === 0 || dirty || adaHambatan
+                      isConfirming || sourceBlocked || draft.length === 0 || dirty || adaHambatan
                     }
                     title={
-                      dirty
+                      sourceBlocked
+                        ? "Sumber SIM3LON belum siap ditinjau; perbaiki sumber sebelum konfirmasi"
+                        : dirty
                         ? "Simpan draf terlebih dahulu"
                         : adaHambatan
                           ? "Selesaikan hambatan di atas sebelum konfirmasi"
@@ -546,15 +576,7 @@ export function PlanDetailPanel({
                     Konfirmasi
                   </Button>
                 </CanAccess>
-                {/*
-                  A draft draws no quota yet -- see the create-plan dialog's
-                  own copy, "kuota baru berkurang saat rencana dikonfirmasi" --
-                  so discarding one is not the same act as cancelling a
-                  confirmed plan, even though both call the same backend
-                  transition (routes.go: "both are cancelled, never erased").
-                  Styled apart from the primary draft-building actions since
-                  it is the one that ends the record instead of building it.
-                */}
+                {/* Cancelling preserves the record and releases eligible draft reservations. */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -604,16 +626,38 @@ export function PlanDetailPanel({
           <p className="text-xs text-ink-muted">{dasar}</p>
           {unroutable.length > 0 && (
             <ul className="mt-2 space-y-1">
-              {unroutable.map((u) => (
-                <li key={u.outletId} className="flex items-baseline gap-2 text-xs">
-                  <TriangleAlert className="h-3 w-3 shrink-0 translate-y-0.5 text-rust-ink" />
-                  <span className="text-ink">{u.outlet}</span>
-                  <span className="data text-2xs text-ink-muted">
-                    {formatNumber(u.jumlahUnit)} {unitLabel()}
-                  </span>
-                  <span className="text-ink-muted">— {u.alasan}</span>
-                </li>
-              ))}
+              {unroutable.map((u) => {
+                // The backend's own wording for a stop with no coordinates --
+                // see `ReasonNoLocation` in `usecase/dispatch/entities.go`.
+                // Matched by substring rather than exact equality: the point is
+                // to offer the fix for the one reason a person can act on from
+                // here, not to fail silently the day the copy is reworded.
+                const noCoordinates = u.alasan.toLowerCase().includes("coordinates");
+                return (
+                  <li key={u.outletId} className="flex items-baseline gap-2 text-xs">
+                    <TriangleAlert className="h-3 w-3 shrink-0 translate-y-0.5 text-rust-ink" />
+                    <span className="text-ink">{u.outlet}</span>
+                    <span className="data text-2xs text-ink-muted">
+                      {formatNumber(u.jumlahUnit)} {unitLabel()}
+                    </span>
+                    <span className="text-ink-muted">— {u.alasan}</span>
+                    {noCoordinates && (
+                      // The path segment is always the literal "outlet", not
+                      // this tenant's word for it: the router's routes are
+                      // built once at module load, before the tenant's
+                      // vocabulary hydrates, so `outletLabel()` here would
+                      // read a word the registered route never used. See
+                      // OutletListPage.tsx's own "/outlet/new" link.
+                      <Link
+                        to={`/outlet/${u.outletId}/edit`}
+                        className="text-signal-ink underline underline-offset-2"
+                      >
+                        Petakan {outletLabel()} ini
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -744,6 +788,7 @@ export function PlanDetailPanel({
             variant="ghost"
             className="hover:bg-rust-soft hover:text-rust-ink"
             onClick={bulkRemove}
+            disabled={!allowsManualDemand}
           >
             <Trash2 className="h-3.5 w-3.5" />
             Hapus
@@ -767,9 +812,9 @@ export function PlanDetailPanel({
           <EmptyState
             icon={Truck}
             title="Rencana ini belum punya titik singgah"
-            description={`Tambahkan ${outletLabel()} satu per satu, atau tarik pesanan yang sudah disetujui dari halaman Pesanan ${outletLabelTitle()}.`}
+            description={allowsManualDemand ? `Tambahkan ${outletLabel()} satu per satu, atau tarik pesanan yang sudah disetujui dari halaman Pesanan ${outletLabelTitle()}.` : "Tinjau alokasi SIM3LON untuk tanggal ini. Sumber gagal atau belum lengkap tidak boleh diganti dengan demand manual."}
             action={
-              editable && (
+              editable && allowsManualDemand && (
                 <div className="flex gap-2">
                   <Button size="sm" onClick={addRow}>
                     <Plus className="h-3.5 w-3.5" />
@@ -826,11 +871,12 @@ export function PlanDetailPanel({
                       !!trip.tripId && trip.tripId === dispatchingTripId
                     }
                   />
-                  {trip.rows.map((row) => (
+                  {trip.rows.map((row, i) => (
                     <StopRow
                       key={row.id}
                       row={row}
                       editable={editable}
+                      editableDemand={editable && allowsManualDemand}
                       over={trip.muatan > trip.kapasitas}
                       driverOptions={driverOptions}
                       productOptions={productOptions}
@@ -839,6 +885,10 @@ export function PlanDetailPanel({
                       removeRow={removeRow}
                       selected={selected.has(row.id)}
                       onToggleSelected={toggleSelected}
+                      position={i + 1}
+                      canMoveUp={i > 0}
+                      canMoveDown={i < trip.rows.length - 1}
+                      onMove={move}
                     />
                   ))}
                 </Fragment>
@@ -863,6 +913,7 @@ export function PlanDetailPanel({
                       key={row.id}
                       row={row}
                       editable={editable}
+                      editableDemand={editable && allowsManualDemand}
                       over={false}
                       driverOptions={driverOptions}
                       productOptions={productOptions}
@@ -881,7 +932,7 @@ export function PlanDetailPanel({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3">
-        {editable ? (
+        {editable && allowsManualDemand ? (
           <Button variant="outline" size="sm" onClick={addRow}>
             <Plus className="h-3.5 w-3.5" />
             Tambah {outletLabel()}
@@ -889,9 +940,11 @@ export function PlanDetailPanel({
         ) : (
           <p className="flex items-center gap-2 text-xs text-ink-muted">
             <Lock className="h-3.5 w-3.5" />
-            {plan.status === "Batal"
+            {editable
+              ? "Alokasi mengikuti SIM3LON; kuantitas tidak diedit manual. Atur armada dan rute sebelum konfirmasi."
+              : plan.status === "Batal"
               ? "Rencana dibatalkan. Kuota sudah dikembalikan ke agreement."
-              : `Dikonfirmasi oleh ${plan.dikonfirmasiOleh ?? "—"}. Surat jalan sudah terbit dan tidak dapat diubah di sini.`}
+              : `Dikonfirmasi oleh ${plan.dikonfirmasiOleh ?? "—"}. Titik singgah tidak dapat diubah di sini; surat jalan diterbitkan saat trip diberangkatkan.`}
           </p>
         )}
         {dirty && editable && (
@@ -1076,6 +1129,7 @@ function Blocker({ children }: { children: React.ReactNode }) {
 function StopRow({
   row,
   editable,
+  editableDemand,
   over,
   driverOptions,
   productOptions,
@@ -1084,9 +1138,14 @@ function StopRow({
   removeRow,
   selected,
   onToggleSelected,
+  position,
+  canMoveUp,
+  canMoveDown,
+  onMove,
 }: {
   row: PlanRow;
   editable: boolean;
+  editableDemand: boolean;
   /** True when the trip this row sits on is over its truck's capacity. */
   over: boolean;
   driverOptions: DriverOption[];
@@ -1096,6 +1155,11 @@ function StopRow({
   removeRow: (id: string) => void;
   selected?: boolean;
   onToggleSelected?: (id: string, checked: boolean) => void;
+  /** This stop's place in its run, 1-based. Absent on the unassigned list. */
+  position?: number;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMove?: (id: string, direction: -1 | 1) => void;
 }) {
   const driver = driverOptions.find((d) => d.id === row.driverId);
 
@@ -1111,14 +1175,47 @@ function StopRow({
           </td>
         )}
         <td className="px-5 py-2.5">
-          <span className="block text-sm font-medium text-ink">
-            {row.outlet}
-          </span>
-          <span className="block text-xs text-ink-muted">{row.alamat}</span>
+          <div className="flex items-start gap-2">
+            {position != null && (
+              <span className="data mt-0.5 flex h-5 min-w-5 shrink-0 items-center justify-center rounded bg-panel-sunk px-1 text-2xs font-semibold text-ink-muted">
+                {position}
+              </span>
+            )}
+            {editable && onMove && (
+              <div className="mt-0.5 flex shrink-0 flex-col">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Naikkan ${row.outlet}`}
+                  disabled={!canMoveUp}
+                  onClick={() => onMove(row.id, -1)}
+                  className="h-4 w-4"
+                >
+                  <ChevronUp className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Turunkan ${row.outlet}`}
+                  disabled={!canMoveDown}
+                  onClick={() => onMove(row.id, 1)}
+                  className="h-4 w-4"
+                >
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+            <div>
+              <span className="block text-sm font-medium text-ink">
+                {row.outlet}
+              </span>
+              <span className="block text-xs text-ink-muted">{row.alamat}</span>
+            </div>
+          </div>
         </td>
 
         <td className="px-3 py-2.5">
-          {editable ? (
+          {editable && !usesApi ? (
             <TextInput
               type="time"
               mono
@@ -1128,13 +1225,21 @@ function StopRow({
                 patchRow(row.id, { jamPengiriman: e.target.value })
               }
             />
+          ) : editable ? (
+            // The service plans a delivery date, not a clock time to type in
+            // -- this cell shows the board's own ETA estimate (or "—" before
+            // one exists) rather than an input nothing here persists. See
+            // distributionApi.http.ts's own note on jamPengiriman.
+            <span className="data text-sm text-ink-muted">
+              {row.jamPengiriman === "—" ? "—" : `± ${row.jamPengiriman}`}
+            </span>
           ) : (
             <span className="data text-sm text-ink">{row.jamPengiriman}</span>
           )}
         </td>
 
         <td className="px-3 py-2.5">
-          {editable ? (
+          {editableDemand ? (
             <LoadEditor
               row={row}
               products={productOptions}
@@ -1227,7 +1332,7 @@ function StopRow({
 
         {editable && (
           <td className="px-3 py-2.5">
-            <Button
+            {editableDemand ? <Button
               variant="ghost"
               size="icon-xs"
               aria-label={`Hapus ${row.outlet} dari rencana`}
@@ -1235,7 +1340,7 @@ function StopRow({
               className="hover:bg-rust-soft hover:text-rust-ink"
             >
               <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            </Button> : null}
           </td>
         )}
       </tr>
@@ -1287,6 +1392,13 @@ function TripHeader({
           </span>
           {trip.driver?.sublabel && (
             <span className="data text-2xs text-ink-muted">{trip.driver.sublabel}</span>
+          )}
+          {/* An estimate, not something set here -- see PlanRow.berangkat's
+              own doc comment on where it comes from. */}
+          {trip.berangkat && (
+            <span className="data text-2xs text-ink-muted">
+              Berangkat ± {trip.berangkat}
+            </span>
           )}
 
           {/*

@@ -159,8 +159,15 @@ function toWire(input: Partial<OutletEntity>, forUpdate: boolean) {
   put("address", input.alamat);
   put("district", input.kecamatan);
   put("city", input.kota);
-  put("latitude", input.lat);
-  put("longitude", input.lng);
+  // 0,0 is this form's sentinel for "no pin yet" (see LocationPicker and
+  // EMPTY.lat/lng), not a real point -- sending it would write a geography
+  // point off the coast of Africa that the route optimizer would then treat
+  // as this outlet's actual location. Both are omitted together, since the
+  // service's own `required_with` rejects one without the other anyway.
+  if (!(input.lat === 0 && input.lng === 0)) {
+    put("latitude", input.lat);
+    put("longitude", input.lng);
+  }
   put("payment_terms_days", input.termin);
   put("credit_limit", input.batasKredit);
   put("auto_block_on_overdue", input.blokirOtomatis);
@@ -231,6 +238,64 @@ async function removeOutlet(id: string): Promise<void> {
 async function getKecamatanOptions(): Promise<string[]> {
   const rows = await fetchAll();
   return [...new Set(rows.map((r) => r.district).filter((d): d is string => !!d))].sort();
+}
+
+/** Mirrors the fields of delivery's own DeliveryResponse this adapter needs. */
+interface HistoryDeliveryResponse {
+  id: string;
+  delivery_number: string;
+  driver_name?: string;
+  dispatched_qty: number;
+  delivered_qty: number;
+  delivery_status: string;
+  created_at: string;
+}
+
+/**
+ * The mock's `Selesai | Tertunda` was two states over five real ones.
+ * Mirrors `dashboardApi.http.ts`'s own `toDeliveryStatus` — `delivered`/
+ * `partial` read as done, `on_route` as under way, `failed` as stuck, and
+ * `pending`/`cancelled` fall back to queued.
+ */
+function toDeliveryStatus(status: string): "Antrian" | "Proses" | "Selesai" | "Tertunda" {
+  switch (status) {
+    case "delivered":
+    case "partial":
+      return "Selesai";
+    case "on_route":
+      return "Proses";
+    case "failed":
+      return "Tertunda";
+    default:
+      return "Antrian";
+  }
+}
+
+/**
+ * An outlet's recent surat jalan, against `GET /deliveries` (added for
+ * `reportApi.http.ts`), filtered by `outlet_id` and sorted newest first.
+ *
+ * `jam` stays `""` rather than an invented value: no column anywhere in the
+ * schema carries a stop's planned clock time (`sopirApi.http.ts`'s own
+ * `jamRencana` reads the same way) -- `tanggal` alone still sorts and reads
+ * correctly.
+ */
+export async function getOutletHistory(id: string, limit = 10) {
+  const page = await getList<HistoryDeliveryResponse>("/deliveries", {
+    pageSize: limit,
+    sort: [{ field: "created_at", direction: "desc" }],
+    filters: [{ field: "outlet_id", operator: "eq" as const, value: id }],
+  });
+  return page.items.map((d) => ({
+    id: d.id,
+    kode: d.delivery_number,
+    tanggal: d.created_at,
+    jam: "",
+    driver: d.driver_name ?? "—",
+    target: d.dispatched_qty,
+    realisasi: d.delivered_qty,
+    status: toDeliveryStatus(d.delivery_status),
+  }));
 }
 
 async function exportOutlet(): Promise<number> {

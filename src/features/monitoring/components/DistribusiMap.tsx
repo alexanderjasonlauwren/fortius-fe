@@ -13,6 +13,7 @@ import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { cn, getInitials } from "@/lib/utils";
 import { fleetColor } from "@/lib/chart";
+import { tileAttribution, tileUrl } from "@/lib/mapTiles";
 import { useTheme } from "@/hooks/useTheme";
 import { STATUS_HEX, getStatusVariant } from "@/lib/status";
 import type { DriverCard, MonitoringAssignment, MonitoringRow } from "../types";
@@ -38,16 +39,6 @@ L.Icon.Default.mergeOptions({
 type Coord = [number, number];
 
 type RouteMap = Record<string, Coord[]>;
-
-// The public OSM default is fine for the mock build — a static demo already
-// living on the internet. An on-premise deployment with no route out sets
-// both to its own tile server; hardcoding OSM's attribution on someone
-// else's tiles would be a licensing claim this console has no basis for.
-const tileUrl =
-  import.meta.env.VITE_MAP_TILE_URL || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const tileAttribution =
-  import.meta.env.VITE_MAP_TILE_ATTRIBUTION ||
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 /** Map marks read from the same status palette as badges and row spines. */
 function colorForVariant(variant: ReturnType<typeof getStatusVariant>) {

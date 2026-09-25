@@ -16,7 +16,7 @@ import type {
 } from "../types";
 
 export interface DashboardApi {
-  getKpiSummary(): Promise<KpiSummary>;
+  getKpiSummary(includeManualOrders?: boolean): Promise<KpiSummary>;
   getMonthlyChart(): Promise<MonthlyChartPoint[]>;
   getOutletShares(): Promise<OutletShare[]>;
   getRecentActivities(): Promise<RecentActivity[]>;

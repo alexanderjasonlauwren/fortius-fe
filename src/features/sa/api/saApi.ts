@@ -23,6 +23,7 @@ export const getSupplierOptions = api.getSupplierOptions.bind(api);
 export const parseImport = api.parseImport.bind(api);
 export const applyImport = api.applyImport.bind(api);
 export const previewSIM3LON = api.previewSIM3LON.bind(api);
+export const getSIM3LONReconciliation = api.getSIM3LONReconciliation.bind(api);
 export const applySIM3LON = api.applySIM3LON.bind(api);
 
 /**

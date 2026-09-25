@@ -8,6 +8,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { useDashboard } from "@/features/dashboard/hooks/useDashboard";
+import { useFinanceSummary } from "@/features/dashboard/hooks/useFinanceSummary";
+import { FinanceSummary } from "@/features/dashboard/components/FinanceSummary";
 import { DispatchRail } from "@/features/dashboard/components/DispatchRail";
 import { MonthlyBarChart } from "@/features/dashboard/components/MonthlyBarChart";
 import { WilayahShareChart } from "@/features/dashboard/components/WilayahShareChart";
@@ -70,7 +72,9 @@ const activityColumns: Column<RecentActivity>[] = [
 ];
 
 export function DashboardPage() {
+  const finance = useFinanceSummary();
   const {
+    showManualOrders,
     kpi,
     rail,
     monthlyChart,
@@ -111,7 +115,7 @@ export function DashboardPage() {
           actions={
             <>
               <RailLegend />
-              <Button variant="ghost" size="sm" onClick={refetch}>
+              <Button variant="ghost" size="sm" onClick={() => { refetch(); finance.refetch(); }}>
                 <RefreshCw className="h-3.5 w-3.5" />
                 Muat ulang
               </Button>
@@ -140,7 +144,7 @@ export function DashboardPage() {
       </Panel>
 
       {/* ── Four numbers that decide what to do next ── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2", showManualOrders ? "xl:grid-cols-4" : "xl:grid-cols-3")}>
         <StatTile
           label="Terkirim hari ini"
           value={kpi ? formatNumber(kpi.dailyDistributed) : undefined}
@@ -184,7 +188,7 @@ export function DashboardPage() {
           icon={Package}
         />
 
-        <StatTile
+        {showManualOrders ? <StatTile
           label="Pesanan menunggu"
           value={kpi ? formatNumber(kpi.openOrders) : undefined}
           unit={kpi?.openOrders === 1 ? "pesanan" : "pesanan"}
@@ -193,7 +197,7 @@ export function DashboardPage() {
           href="/orders"
           icon={ClipboardList}
           tone={kpi && kpi.openOrders > 0 ? "signal" : undefined}
-        />
+        /> : null}
 
         <StatTile
           label="Pembayaran belum diverifikasi"
@@ -213,6 +217,8 @@ export function DashboardPage() {
           tone={kpi && kpi.pendingPayments > 0 ? "signal" : undefined}
         />
       </div>
+
+      <FinanceSummary summary={finance} />
 
       {kpi && kpi.lateDeliveries > 0 && (
         <Panel spine="text-rust" className="flex items-center gap-3 px-5 py-3.5">

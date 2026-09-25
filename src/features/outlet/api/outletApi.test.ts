@@ -21,7 +21,7 @@ vi.mock("@/lib/api", () => ({
 }));
 vi.mock("@/lib/export", () => ({ exportCsv: vi.fn(), timestampSuffix: () => "x" }));
 
-const { outletApiHttp } = await import("./outletApi.http");
+const { outletApiHttp, getOutletHistory } = await import("./outletApi.http");
 
 const ID = "11111111-1111-4111-8111-111111111111";
 
@@ -172,6 +172,42 @@ describe("filtering", () => {
   });
 });
 
+describe("getOutletHistory", () => {
+  /** The history is this outlet's own deliveries, newest first, capped at the
+   *  caller's limit -- not filtered client-side out of a bigger page. */
+  it("filters by outlet, sorts newest first and caps at the limit", async () => {
+    getList.mockResolvedValue({ items: [], pagination: {} });
+
+    await getOutletHistory(ID, 5);
+
+    const [path, params] = getList.mock.calls[0];
+    expect(path).toBe("/deliveries");
+    expect(params.pageSize).toBe(5);
+    expect(params.sort).toEqual([{ field: "created_at", direction: "desc" }]);
+    expect(params.filters).toEqual([{ field: "outlet_id", operator: "eq", value: ID }]);
+  });
+
+  /** The real five-state lifecycle folds onto the console's four words --
+   *  `delivered`/`partial` read as done, `failed` as stuck, `on_route` as
+   *  under way, and anything else (pending, cancelled) as still queued. */
+  it("maps the real delivery lifecycle onto the console's four words", async () => {
+    getList.mockResolvedValue({
+      items: [
+        { id: "1", delivery_number: "SJ-1", dispatched_qty: 10, delivered_qty: 10, delivery_status: "delivered", created_at: "2026-09-01T00:00:00Z" },
+        { id: "2", delivery_number: "SJ-2", dispatched_qty: 10, delivered_qty: 5, delivery_status: "partial", created_at: "2026-09-02T00:00:00Z" },
+        { id: "3", delivery_number: "SJ-3", dispatched_qty: 10, delivered_qty: 0, delivery_status: "on_route", created_at: "2026-09-03T00:00:00Z" },
+        { id: "4", delivery_number: "SJ-4", dispatched_qty: 10, delivered_qty: 0, delivery_status: "failed", created_at: "2026-09-04T00:00:00Z" },
+        { id: "5", delivery_number: "SJ-5", dispatched_qty: 10, delivered_qty: 0, delivery_status: "pending", created_at: "2026-09-05T00:00:00Z" },
+      ],
+      pagination: {},
+    });
+
+    const rows = await getOutletHistory(ID);
+
+    expect(rows.map((r) => r.status)).toEqual(["Selesai", "Selesai", "Proses", "Tertunda", "Antrian"]);
+  });
+});
+
 describe("writing", () => {
   /**
    * An update carries the version the caller last read.
@@ -260,5 +296,36 @@ describe("writing", () => {
     send.mockResolvedValue(wire());
     await outletApiHttp.createOrUpdateOutlet({ nama: "Baru", status: "Aktif" });
     expect(send.mock.calls[0][2]).not.toHaveProperty("status");
+  });
+
+  /**
+   * 0, 0 is the outlet form's own sentinel for "no pin yet" (see
+   * `OutletFormPage`'s `EMPTY`), not a real point -- sending it would write a
+   * geography point off the coast of Africa that the route optimizer would
+   * then treat as this outlet's actual location.
+   */
+  it("does not send 0,0 as a location", async () => {
+    send.mockResolvedValue(wire());
+
+    await outletApiHttp.createOrUpdateOutlet({ nama: "Baru", kode: "PKL-009", lat: 0, lng: 0 });
+
+    const body = send.mock.calls[0][2];
+    expect(body).not.toHaveProperty("latitude");
+    expect(body).not.toHaveProperty("longitude");
+  });
+
+  it("sends a real location", async () => {
+    send.mockResolvedValue(wire());
+
+    await outletApiHttp.createOrUpdateOutlet({
+      nama: "Baru",
+      kode: "PKL-009",
+      lat: -7.3305,
+      lng: 110.5084,
+    });
+
+    const body = send.mock.calls[0][2];
+    expect(body.latitude).toBe(-7.3305);
+    expect(body.longitude).toBe(110.5084);
   });
 });

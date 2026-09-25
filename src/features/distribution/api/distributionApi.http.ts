@@ -31,7 +31,13 @@
  * the run rather than of one line.
  */
 import { getList, getOne, send } from "@/lib/api";
+import { printDocument } from "@/lib/export";
+import { outletLabelTitle, unitLabelTitle } from "@/lib/lexicon";
+import { scopeKey } from "@/mocks/scope";
 import { scheduleOneOrder } from "@/features/orders/api/orderApi.http";
+import { getOutletList } from "@/features/outlet/api/outletApi";
+import { getSettings } from "@/features/settings/api/settingsApi";
+import { compareStops } from "../lib/stopOrder";
 import type {
   AssignmentSuggestion,
   DistributionMonthGrid,
@@ -74,6 +80,11 @@ interface OrderItemResponse {
   payment_method: string;
   payment_state: string;
   payment_status?: string;
+  // The invoice this line's own delivery raised at dispatch, settled
+  // automatically -- see statusBayarFor. Distinct from payment_state/
+  // payment_status above, which track the older, optional Alokasikan link
+  // that most lines now never acquire.
+  invoice_payment_status?: string;
   item_status: string;
   notes?: string;
 }
@@ -118,11 +129,17 @@ interface TripResponse {
     outlet_name: string;
     qty: number;
     funded: boolean;
+    /** Estimated arrival, "HH:MM". Absent when the trip has no departure yet,
+     *  or this stop's outlet has no coordinates. */
+    eta?: string;
   }[];
   load_qty: number;
   capacity_qty: number;
   at_risk_qty: number;
   distance_m: number;
+  /** Estimated departure, "HH:MM". Absent until a dispatcher or a suggestion
+   *  sets one. */
+  planned_departure_time?: string;
 }
 
 interface BoardResponse {
@@ -134,7 +151,19 @@ interface BoardResponse {
     qty: number;
     reason: string;
   }[];
-  summary: { distance_m: number; trips: number; outlets: number };
+  summary: {
+    distance_m: number;
+    trips: number;
+    outlets: number;
+    /** When the last truck is expected back, "HH:MM". Absent with no trips. */
+    finish_eta?: string;
+    /** "road" when an OSRM instance measured this suggestion's distances,
+     *  "straight" when it fell back to haversine (no router configured, or it
+     *  was unreachable). Absent on an older backend that predates this field —
+     *  treat that the same as "straight", which was the only thing it could
+     *  have been. */
+    distance_source?: "road" | "straight";
+  };
 }
 
 interface OutletResponse {
@@ -289,6 +318,7 @@ function toPlanView(order: OrderResponse): DistributionPlan {
     derived.id !== "" ? derived : { id: order.agreement_id ?? "", number: order.agreement_number ?? derived.number };
   return {
     id: order.id,
+    branchId: order.branch_id,
     kode: order.order_number,
     tanggal: order.planned_delivery_date,
     totalUnit: order.total_qty,
@@ -312,8 +342,20 @@ function toPlanView(order: OrderResponse): DistributionPlan {
 }
 
 /** Lunas/Belum Lunas/Kredit for one line -- see toPlanRows for how several
- *  of these fold into one stop-level status. */
-function statusBayarFor(paymentState?: string, paymentStatus?: string): PlanRow["statusBayar"] {
+ *  of these fold into one stop-level status.
+ *
+ *  invoicePaymentStatus is checked first: it is the invoice the line's own
+ *  delivery raised at dispatch and settled automatically (SIM3LON already
+ *  confirms the outlet paid), which is now the normal path for every new
+ *  dispatch. paymentState/paymentStatus are the older, optional Alokasikan
+ *  link -- still checked as a fallback for a line funded that way instead,
+ *  but no longer how a freshly dispatched line becomes Lunas. */
+function statusBayarFor(
+  paymentState?: string,
+  paymentStatus?: string,
+  invoicePaymentStatus?: string,
+): PlanRow["statusBayar"] {
+  if (invoicePaymentStatus === "paid") return "Lunas";
   if (paymentState === "credit") return "Kredit";
   if (paymentState === "paid" && paymentStatus === "verified") return "Lunas";
   return "Belum Lunas";
@@ -338,6 +380,9 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
       tripNo: number;
       tripId: string | null;
       tripStatus?: string;
+      urutan: number;
+      eta?: string;
+      berangkat?: string;
     }
   >();
   for (const trip of board?.trips ?? []) {
@@ -350,6 +395,9 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
         tripNo: trip.trip_no,
         tripId: trip.id ?? null,
         tripStatus: trip.trip_status,
+        urutan: stop.sequence_no,
+        eta: stop.eta,
+        berangkat: trip.planned_departure_time,
       });
     }
   }
@@ -374,13 +422,20 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
       driver: crew?.driver ?? "Belum ditetapkan",
       vehicleId: crew?.vehicleId ?? null,
       vehicle: crew?.vehicle ?? "Belum ditetapkan",
-      // The service plans a delivery date, not a time of day. A clock here
-      // would be a field only the demo fills.
-      jamPengiriman: "—",
-      tripNo: crew?.tripNo ?? item.sequence_no ?? null,
+      // The service plans a delivery date, not a time of day -- this is an
+      // estimate from the board's own schedule, when it has one, and "—"
+      // otherwise rather than a clock only the demo fills.
+      jamPengiriman: crew?.eta ?? "—",
+      // `item.sequence_no` is a stop's POSITION within its run, not a trip
+      // number -- confusing the two used to send an outlet with sequence_no 3
+      // onto "Trip 3" it had never been assigned to. A row with no board entry
+      // has no trip at all.
+      tripNo: crew?.tripNo ?? null,
+      urutan: crew?.urutan ?? null,
       tripId: crew?.tripId ?? null,
       tripStatus: crew?.tripStatus,
-      statusBayar: statusBayarFor(item.payment_state, item.payment_status),
+      berangkat: crew?.berangkat ?? null,
+      statusBayar: statusBayarFor(item.payment_state, item.payment_status, item.invoice_payment_status),
       sisaKuotaOutlet: 0,
       piutang: 0,
       piutangJatuhTempo: 0,
@@ -393,7 +448,7 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
     // without the rest. Otherwise "Kredit" only holds when every line agrees;
     // a stop mixing a credit line with a verified-paid one is fully covered,
     // not on account, so it reads Lunas rather than either extreme alone.
-    const lineStatus = statusBayarFor(item.payment_state, item.payment_status);
+    const lineStatus = statusBayarFor(item.payment_state, item.payment_status, item.invoice_payment_status);
     if (lineStatus === "Belum Lunas" || row.statusBayar === "Belum Lunas") {
       row.statusBayar = "Belum Lunas";
     } else if (lineStatus !== row.statusBayar) {
@@ -402,7 +457,10 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
     byOutlet.set(outletId, row);
   }
 
-  return [...byOutlet.values()].sort((a, b) => a.outlet.localeCompare(b.outlet));
+  // By run and position, not alphabetically -- an assigned board is read the
+  // way it will be driven, and only a stop with no trip yet falls back to its
+  // name (`compareStops`' own tie-break).
+  return [...byOutlet.values()].sort(compareStops);
 }
 
 /* ── the adapter ───────────────────────────────────────────────────────── */
@@ -514,6 +572,14 @@ async function createPlan(input: { tanggal: string; saId: string }): Promise<Dis
   return toPlanView(created);
 }
 
+async function createSourcePlan(input: { batchId: string; tanggal: string; notes?: string }): Promise<DistributionPlan> {
+  const created = await send<OrderResponse>("post", `/sim3lon-imports/${input.batchId}/plans`, {
+    operational_date: input.tanggal,
+    notes: input.notes,
+  });
+  return toPlanView(created);
+}
+
 /**
  * Saves the plan's stops, flattening each one back into a line per product.
  *
@@ -522,8 +588,12 @@ async function createPlan(input: { tanggal: string; saId: string }): Promise<Dis
  * than from the row — the day the screen lets a planner pick an agreement per
  * stop, this is the line that changes and nothing else.
  */
-async function saveDraft(planId: string, rows: PlanRow[], version: number): Promise<void> {
+async function saveDraft(planId: string, rows: PlanRow[], version: number): Promise<DistributionPlan> {
+  const originScope = scopeKey().join("|");
   const plan = await getPlan(planId);
+  if (scopeKey().join("|") !== originScope) {
+    throw new Error("Tenant berubah saat memuat rencana. Buka rencana pada tenant yang sesuai sebelum menyimpan.");
+  }
   const agreementId = plan.saId;
   if (!agreementId) {
     throw new Error(
@@ -543,7 +613,7 @@ async function saveDraft(planId: string, rows: PlanRow[], version: number): Prom
       })),
   );
 
-  await send("put", `/distribution/orders/${planId}`, { version, items });
+  return toPlanView(await send<OrderResponse>("put", `/distribution/orders/${planId}`, { version, items }));
 }
 
 async function confirmPlan(planId: string, version: number): Promise<DistributionPlan> {
@@ -742,8 +812,9 @@ async function getVehicleOptions(): Promise<VehicleOption[]> {
  * board is edited as a whole and applied as a whole, and a partial apply would
  * leave stops on runs that no longer exist.
  */
-async function applyAssignment(planId: string, trips: TripAssignment[]): Promise<void> {
+async function applyAssignment(planId: string, trips: TripAssignment[], version: number): Promise<void> {
   await send("put", `/distribution/orders/${planId}/assignment`, {
+    version,
     trips: trips.map((trip) => ({
       driver_id: trip.driverId,
       vehicle_id: trip.vehicleId,
@@ -752,6 +823,9 @@ async function applyAssignment(planId: string, trips: TripAssignment[]): Promise
         outlet_id: stop.outletId,
         sequence_no: stop.sequenceNo,
       })),
+      // Omitted rather than sent empty: the service's own field is optional,
+      // and a run can be committed with no schedule at all.
+      ...(trip.berangkat ? { planned_departure_time: trip.berangkat } : {}),
     })),
   });
 }
@@ -834,8 +908,10 @@ async function suggestAssignment(planId: string): Promise<AssignmentSuggestion> 
         jumlahUnit: stop.qty,
         urutan: stop.sequence_no,
         lunas: stop.funded,
+        eta: stop.eta,
       }),
     ),
+    berangkat: trip.planned_departure_time,
   }));
 
   const unroutable: UnroutableStop[] = board.unroutable.map((stop) => ({
@@ -848,13 +924,88 @@ async function suggestAssignment(planId: string): Promise<AssignmentSuggestion> 
   const km = (board.summary.distance_m / 1000).toLocaleString("id-ID", {
     maximumFractionDigits: 1,
   });
+  const selesai = board.summary.finish_eta ? ` — selesai ± ${board.summary.finish_eta}` : "";
+  // Silent when straight-line, which has been the only source this ever had
+  // until an on-prem router existed — flagging the ordinary case would just be
+  // noise. Road distance is the exception worth telling a dispatcher about,
+  // since "± 15 km" reads as a much firmer promise than the haversine estimate
+  // it usually is.
+  const jarak = board.summary.distance_source === "road" ? " (jarak jalan)" : "";
   return {
     trips,
     unroutable,
     dasar:
       `Dikelompokkan per kapasitas armada dan diurutkan menurut jarak antar ` +
-      `${"titik singgah"} — total ± ${km} km untuk ${board.summary.trips} trip.`,
+      `${"titik singgah"} — total ± ${km} km${jarak} untuk ${board.summary.trips} trip${selesai}.`,
   };
+}
+
+/**
+ * Prints the route sheet handed to drivers at the depot.
+ *
+ * The module header's own gap — no address, no clock time on the order-item
+ * response — is only half true now. `getOutletList()` (already real) supplies
+ * the address; the clock time still does not exist anywhere in the schema
+ * (`toPlanRows`'s own `jamPengiriman: "—"` already says so for the live
+ * planning screen), so the sheet shows the same placeholder the screen does
+ * rather than inventing one.
+ */
+export async function printRouteSheet(planId: string): Promise<void> {
+  const [plan, rows, settings, outlets] = await Promise.all([
+    getPlan(planId),
+    getPlanDetail(planId),
+    getSettings(),
+    getOutletList(),
+  ]);
+  const outletById = new Map(outlets.map((o) => [o.id, o]));
+  const total = rows.reduce((s, r) => s + r.jumlahUnit, 0);
+  const fmt = (n: number) => n.toLocaleString("id-ID");
+  // By run and stop position -- the order a driver actually drives it in, not
+  // merely grouped by trip number with whatever order the rows arrived in.
+  const ordered = [...rows].sort(compareStops);
+
+  printDocument(
+    `${plan.kode} — Lembar Rute`,
+    `
+    <p class="eyebrow">${settings.namaPerusahaan} · Agen ${settings.nomorAgen}</p>
+    <h1>Lembar Rute Distribusi</h1>
+    <hr class="rule" />
+    <div class="meta">
+      <div>Kode rencana<strong class="code">${plan.kode}</strong></div>
+      <div>Tanggal<strong>${new Date(plan.tanggal).toLocaleDateString("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</strong></div>
+      <div>Status<strong>${plan.status}</strong></div>
+      <div>Titik singgah<strong>${ordered.length}</strong></div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Jam</th><th>${outletLabelTitle()}</th><th>Alamat</th><th>Driver / Armada</th>
+          <th style="text-align:right">${unitLabelTitle()}</th><th style="width:90px">Diterima</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${ordered
+          .map((r) => {
+            const pkl = outletById.get(r.outletId);
+            return `<tr>
+              <td class="code">${r.urutan ?? "—"}</td>
+              <td class="code">${r.jamPengiriman}</td>
+              <td>${r.outlet}</td>
+              <td>${pkl ? `${pkl.alamat}, Kec. ${pkl.kecamatan}` : "—"}</td>
+              <td>${r.driverId ? `${r.driver}<br /><span class="code">${r.vehicle}</span>` : "Belum ditetapkan"}</td>
+              <td class="num">${fmt(r.jumlahUnit)}</td>
+              <td></td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+      <tfoot><tr><td colspan="5">Total muatan</td><td class="num">${fmt(total)}</td><td></td></tr></tfoot>
+    </table>
+    <div class="sign">
+      <div>Petugas gudang<span></span></div>
+      <div>Koordinator distribusi<span>${plan.dikonfirmasiOleh ?? ""}</span></div>
+    </div>`,
+  );
 }
 
 export const distributionApiHttp: DistributionApi = {
@@ -864,6 +1015,7 @@ export const distributionApiHttp: DistributionApi = {
   getMonthlyGrid,
   getPaymentBoard,
   createPlan,
+  createSourcePlan,
   saveDraft,
   confirmPlan,
   cancelDistributionPlan,

@@ -38,7 +38,7 @@ import { getVehicles } from "@/features/vehicles/api/vehicleApi";
 import { getAgingReport, getPayments } from "@/features/finance/api/financeApi";
 import { getOrderTotals } from "@/features/orders/api/orderApi";
 import { getSAList } from "@/features/sa/api/saApi";
-import { isoDate, startOfToday } from "@/mocks/seed";
+import { addDays, isoDate, startOfToday } from "@/mocks/seed";
 import type { DispatchLane, DispatchRail, DispatchStop, KpiSummary, MonthlyChartPoint, OutletShare, RecentActivity } from "../types";
 import type { DashboardApi } from "./contract";
 
@@ -79,19 +79,28 @@ function toDeliveryStatus(status: string): "Antrian" | "Proses" | "Selesai" | "T
   }
 }
 
+/**
+ * `to` is inclusive, but the server's `date` filter compares `lte` literally
+ * against midnight UTC of that day -- `lte` on `created_at`, a timestamp,
+ * would exclude almost all of `to` itself (verified live: a delivery at
+ * 16:52 UTC matched `gte` its own day but not `lte` it). The exclusive `lt`
+ * bound one day later is the only one that reads "through the end of `to`"
+ * correctly.
+ */
 async function fetchDeliveries(from: string, to: string): Promise<DeliveryResponse[]> {
+  const exclusiveEnd = isoDate(addDays(new Date(`${to}T00:00:00Z`), 1));
   const page = await getList<DeliveryResponse>("/deliveries", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "created_at", direction: "desc" }],
     filters: [
       { field: "date", operator: "gte" as const, value: from },
-      { field: "date", operator: "lte" as const, value: to },
+      { field: "date", operator: "lt" as const, value: exclusiveEnd },
     ],
   });
   return page.items;
 }
 
-async function getKpiSummary(): Promise<KpiSummary> {
+async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
   const today = toIso(startOfToday());
   const yesterday = toIso(new Date(startOfToday().getTime() - 86_400_000));
 
@@ -103,7 +112,7 @@ async function getKpiSummary(): Promise<KpiSummary> {
       getSAList(),
       getPayments("Menunggu Verifikasi"),
       getAgingReport(),
-      getOrderTotals(),
+      includeManualOrders ? getOrderTotals() : Promise.resolve({ baru: 0 }),
     ]);
 
   // Mirrors mocks/selectors.ts's own monthlyQuota(): live agreements are

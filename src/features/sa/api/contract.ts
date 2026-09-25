@@ -14,7 +14,9 @@ import type {
   SAImportBatch,
   SAImportSummary,
   SIM3LONApplied,
+  SIM3LONApplyReview,
   SIM3LONPreview,
+  SIM3LONReconciliationPreview,
   ScheduleAgreement,
   SAFilterParams,
   UploadSAPayload,
@@ -52,5 +54,6 @@ export interface ScheduleAgreementApi {
   /** Writes the targets a reviewed batch describes. */
   applyImport(batchId: string): Promise<SAImportApplied>;
   previewSIM3LON(file: File, supplierName: string, productId: string): Promise<SIM3LONPreview>;
-  applySIM3LON(batchId: string): Promise<SIM3LONApplied>;
+  getSIM3LONReconciliation(batchId: string): Promise<SIM3LONReconciliationPreview>;
+  applySIM3LON(batchId: string, review?: SIM3LONApplyReview): Promise<SIM3LONApplied>;
 }

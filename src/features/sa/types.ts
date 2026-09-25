@@ -182,3 +182,52 @@ export interface SIM3LONApplied {
   outletTargetsWritten: number;
   dailyTargetsWritten: number;
 }
+
+export type SIM3LONChangeClassification =
+  | "increase"
+  | "decrease"
+  | "zero"
+  | "removed"
+  | "unchanged"
+  | "local_conflict";
+
+export interface SIM3LONReconciliationPlanVersion {
+  planId: string;
+  version: number;
+  status: string;
+}
+
+export interface SIM3LONReconciliationChange {
+  planId?: string;
+  outletId: string;
+  productId: string;
+  operationalDate: string;
+  baselineQty: number;
+  currentQty: number | null;
+  proposedQty: number;
+  classification: SIM3LONChangeClassification;
+  nonDraftDiscrepancy: boolean;
+  crewAssignmentAffected: boolean;
+}
+
+export interface SIM3LONReconciliationBlocker {
+  code: string;
+  message: string;
+  planId?: string;
+  registrationCode?: string;
+}
+
+export interface SIM3LONReconciliationPreview {
+  candidateBatchId: string;
+  expectedPredecessorBatchId: string | null;
+  sourceCreatedAt: string;
+  reviewReady: boolean;
+  expectedPlanVersions: SIM3LONReconciliationPlanVersion[];
+  changes: SIM3LONReconciliationChange[];
+  blockers: SIM3LONReconciliationBlocker[];
+}
+
+export interface SIM3LONApplyReview {
+  expectedPredecessorBatchId: string | null;
+  acceptedPlans: Array<{ planId: string; expectedVersion: number }>;
+}

@@ -46,10 +46,26 @@ export interface DriverFilters {
   status?: DriverStatusEntity | "Semua";
 }
 
+/**
+ * The create/update payload.
+ *
+ * `akunUsername`/`akunEmail`/`akunPassword` provision a mobile-app login in the
+ * same request that creates the driver — a driver is always a person, and a
+ * person here is always a user. They are read only on create: a login, once
+ * provisioned, is managed from the Users page like any other account, not
+ * re-issued by editing the driver record.
+ */
+export interface DriverWriteInput extends Partial<DriverEntity> {
+  id?: string;
+  akunUsername?: string;
+  akunEmail?: string;
+  akunPassword?: string;
+}
+
 export interface DriverApi {
   getDrivers(filters?: DriverFilters): Promise<DriverView[]>;
   getDriverDetail(id: string): Promise<DriverView>;
-  createOrUpdateDriver(input: Partial<DriverEntity> & { id?: string }): Promise<DriverView>;
+  createOrUpdateDriver(input: DriverWriteInput): Promise<DriverView>;
   removeDriver(id: string): Promise<void>;
   exportDrivers(): Promise<number>;
 }

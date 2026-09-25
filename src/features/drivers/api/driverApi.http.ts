@@ -18,8 +18,9 @@
  */
 import { getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
-import type { DriverEntity, DriverStatusEntity } from "@/mocks/types";
-import type { DriverApi, DriverFilters, DriverView } from "./contract";
+import { addDays, isoDate, startOfToday } from "@/mocks/seed";
+import type { DriverStatusEntity } from "@/mocks/types";
+import type { DriverApi, DriverFilters, DriverView, DriverWriteInput } from "./contract";
 
 /** Mirrors the backend's DriverResponse. */
 interface DriverResponse {
@@ -74,6 +75,7 @@ function toView(row: DriverResponse): DriverView {
     // see, so a client-side tenant is a second opinion that can only be wrong.
     tenantId: "",
     branchId: row.branch_id,
+    userId: row.user_id,
     kode: row.code,
     nama: row.full_name,
     telepon: row.phone,
@@ -101,7 +103,7 @@ function toView(row: DriverResponse): DriverView {
  * there, so a malformed one is a 422 naming the field rather than a row saved
  * with a number nobody can ring.
  */
-function toWire(input: Partial<DriverEntity>, forUpdate: boolean) {
+function toWire(input: DriverWriteInput, forUpdate: boolean) {
   const body: Record<string, unknown> = {};
   const put = (key: string, value: unknown) => {
     if (value !== undefined) body[key] = value;
@@ -118,7 +120,17 @@ function toWire(input: Partial<DriverEntity>, forUpdate: boolean) {
   // No plate, model or capacity. There are no columns for them, and the request
   // types do not declare them -- binding refuses an unrecognised field, so
   // sending one is a 422 rather than a value quietly dropped.
-  void forUpdate;
+
+  // The account is create-only: the service accepts it only alongside a new
+  // driver row, and re-sending it on update would ask to provision a second
+  // login for someone who already has one.
+  if (!forUpdate && input.akunUsername?.trim()) {
+    body.account = {
+      username: input.akunUsername.trim(),
+      email: input.akunEmail?.trim() || undefined,
+      password: input.akunPassword,
+    };
+  }
   return body;
 }
 
@@ -148,9 +160,7 @@ async function getDriverDetail(id: string): Promise<DriverView> {
   return toView(await getOne<DriverResponse>(`/drivers/${id}`));
 }
 
-async function createOrUpdateDriver(
-  input: Partial<DriverEntity> & { id?: string },
-): Promise<DriverView> {
+async function createOrUpdateDriver(input: DriverWriteInput): Promise<DriverView> {
   if (!input.id) {
     return toView(await send<DriverResponse>("post", "/drivers", toWire(input, false)));
   }
@@ -168,6 +178,78 @@ async function createOrUpdateDriver(
 
 async function removeDriver(id: string): Promise<void> {
   await send("delete", `/drivers/${id}`);
+}
+
+/** Mirrors the fields of delivery's own DeliveryResponse this adapter needs. */
+interface ScheduleDeliveryResponse {
+  id: string;
+  delivery_number: string;
+  outlet_name?: string;
+  dispatched_qty: number;
+  delivered_qty: number;
+  delivery_status: string;
+}
+
+/**
+ * The mock's `Selesai | Tertunda` was two states over five real ones.
+ * Mirrors `dashboardApi.http.ts`'s own `toDeliveryStatus` — `delivered`/
+ * `partial` read as done, `on_route` as under way, `failed` as stuck, and
+ * `pending`/`cancelled` fall back to queued rather than being forced into a
+ * bucket that would misdescribe them.
+ */
+function toDeliveryStatus(status: string): "Antrian" | "Proses" | "Selesai" | "Tertunda" {
+  switch (status) {
+    case "delivered":
+    case "partial":
+      return "Selesai";
+    case "on_route":
+      return "Proses";
+    case "failed":
+      return "Tertunda";
+    default:
+      return "Antrian";
+  }
+}
+
+/**
+ * Today's stop list for one truck, against `GET /deliveries`.
+ *
+ * `jam` and `kecamatan` stay placeholders (`""` and `"—"`) rather than
+ * invented values: no column anywhere in the schema carries a stop's planned
+ * clock time (`sopirApi.http.ts`'s own `jamRencana` reads the same way), and
+ * `DeliveryResponse` carries an outlet's name but not its district. Sorting
+ * therefore falls back to creation order rather than a clock the service
+ * does not keep.
+ *
+ * The upper bound is `lt` tomorrow, not `lte` today: `date` filters
+ * `created_at`, a timestamp, and the server compares `lte` literally against
+ * midnight UTC of the given day -- `lte` today excludes almost the entire day
+ * (verified live: a delivery at 16:52 UTC on the 17th matched `gte 2026-09-17`
+ * but not `lte 2026-09-17`). A half-open range is the only bound that reads
+ * "all of today" correctly against a column with a time component.
+ */
+export async function getDriverSchedule(id: string) {
+  const today = isoDate(startOfToday());
+  const tomorrow = isoDate(addDays(startOfToday(), 1));
+  const page = await getList<ScheduleDeliveryResponse>("/deliveries", {
+    pageSize: PAGE_SIZE,
+    sort: [{ field: "created_at" }],
+    filters: [
+      { field: "driver_id", operator: "eq" as const, value: id },
+      { field: "date", operator: "gte" as const, value: today },
+      { field: "date", operator: "lt" as const, value: tomorrow },
+    ],
+  });
+  return page.items.map((d) => ({
+    id: d.id,
+    kode: d.delivery_number,
+    jam: "",
+    outlet: d.outlet_name ?? "—",
+    kecamatan: "—",
+    target: d.dispatched_qty,
+    realisasi: d.delivered_qty,
+    status: toDeliveryStatus(d.delivery_status),
+  }));
 }
 
 async function exportDrivers(): Promise<number> {

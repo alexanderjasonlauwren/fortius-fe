@@ -175,6 +175,14 @@ export interface DriverEntity extends Scoped {
   nomorSim: string;
   status: DriverStatusEntity;
   bergabungPada: string;
+  /**
+   * The mobile-app login this driver signs into, when they have one. A driver
+   * is always a person, and a person here is always a user — so this is set on
+   * every driver created through the registration form, which now provisions
+   * the login in the same step rather than leaving it to be wired up later
+   * from the Users page.
+   */
+  userId?: ID;
 }
 
 export type VehicleStatusEntity = "Aktif" | "Perawatan" | "Nonaktif";
@@ -255,6 +263,8 @@ export interface SAEntity extends Scoped {
   periodeMulai: string; // ISO date
   periodeBerakhir: string; // ISO date
   totalKuota: number;
+  /** Quota reserved by draft and confirmed plan rows. */
+  dialokasikan: number;
   terpakai: number;
   status: SAStatusEntity;
   catatan?: string;
@@ -316,10 +326,34 @@ export interface SAImportBatchEntity {
   barisDitulis: number;
 }
 
+/** Immutable outlet/day rows behind one applied SIM3LON monthly batch. */
+export interface SIM3LONSourceSnapshotEntity extends Scoped {
+  batchId: ID;
+  saId: ID;
+  productId: ID;
+  periodMonth: string;
+  status: "parsed" | "applied";
+  complete: boolean;
+  createdAt: string;
+  fileName?: string;
+  checksum?: string;
+  supplierName?: string;
+  rows: { date: string; outletId: ID; qty: number }[];
+}
+
+/** Mock parity for integration.sim3lon_plan_sources. */
+export interface SIM3LONPlanSourceEntity extends Scoped {
+  planId: ID;
+  batchId: ID;
+  productId: ID;
+  operationalDate: string;
+}
+
 export type PlanStatusEntity = "Draft" | "Terkonfirmasi" | "Selesai" | "Batal";
 
 export interface PlanEntity extends Scoped {
   id: ID;
+  version: number;
   kode: string;
   tanggal: string; // ISO date
   saId: ID;
@@ -361,6 +395,12 @@ export interface PlanRowEntity {
    * reads as trip 1, which is what it was.
    */
   tripNo?: number | null;
+  /**
+   * Position within its run, 1-based. Optional for the same reason as
+   * `tripNo` -- a board saved before ordering was tracked has none, and such a
+   * stop sorts last rather than first.
+   */
+  urutan?: number | null;
 }
 
 /* ── transaction lines ─────────────────────────────────────────────────── */
@@ -485,11 +525,12 @@ export interface DeliveryEventEntity extends Scoped {
 }
 
 /**
- * A claim for the transportation fee -- the smallest useful version of
- * tracking a BAST: record it, record what iVendor said, done. See D3's own
- * plan, A-Step 1, for why the schema underneath calls this a "transportation
- * claim" and a "handover reference" while every screen reading this type
- * says "BAST".
+ * A claim for the transportation fee -- a BAST covering one calendar month.
+ * Opened empty for a period; its lines and its amount are DERIVED from
+ * actual deliveries in that period (see the transportation feature's own
+ * `generateLines`), not typed by hand. See D3's own plan, A-Step 1/5, for
+ * why the schema underneath calls this a "transportation claim" and a
+ * "handover reference" while every screen reading this type says "BAST".
  */
 export type ClaimStatus =
   | "draft"
@@ -502,14 +543,25 @@ export type ClaimStatus =
 export interface TransportationClaimEntity extends Scoped {
   id: ID;
   claimNumber: string;
-  handoverReference: string;
+  /** Absent until the BAST paper is actually handed over. */
+  handoverReference?: string;
   handoverDate: string; // ISO date
+  /** The calendar month this claim covers -- both absent only for a claim predating this field. */
+  periodStart?: string;
+  periodEnd?: string;
+  /** Written by `generateLines`; all three are zero on a draft nothing has been generated for yet. */
   claimedAmount: number;
+  totalQty: number;
+  totalWeightKg: number;
   principalInvoiceNumber?: string;
   claimStatus: ClaimStatus;
   statusNote?: string;
   statusUpdatedAt?: string;
-  /** Deliveries this BAST was raised for -- optional, see this feature's own contract. */
+  /** Settlement facts -- present only once claimStatus is "paid". */
+  settledAt?: string;
+  settledAmount?: number;
+  settlementMode?: "cash" | "bank";
+  /** Which deliveries this claim's generated lines actually cover. */
   deliveryIds: ID[];
   version: number;
   createdAt: string;
@@ -772,6 +824,10 @@ export interface UserEntity {
   nama: string;
   email: string;
   role: "admin" | "manager" | "finance" | "staff" | "viewer" | "driver";
+  /** Stable backend role codes used by access filters. */
+  roleCodes?: string[];
+  /** Tenant-owned role names shown verbatim. */
+  roleNames?: string[];
   telepon: string;
   /**
    * The fleet record this account drives, for `driver` accounts.
@@ -953,6 +1009,8 @@ export interface LexiconEntity {
 }
 
 export interface SettingsEntity {
+  /** Absent inherits; only the effective manual policy permits order intake. */
+  orderIntakeMode?: "manual" | "external_schedule";
   namaPerusahaan: string;
   nomorAgen: string;
   alamat: string;
@@ -1064,6 +1122,8 @@ export interface Database {
   saDailyTargets: SADailyTargetEntity[];
   /** Uploads awaiting a decision, and the applied ones they became. */
   saImportBatches: SAImportBatchEntity[];
+  sim3lonSourceSnapshots: SIM3LONSourceSnapshotEntity[];
+  sim3lonPlanSources: SIM3LONPlanSourceEntity[];
   plans: PlanEntity[];
   planRows: PlanRowEntity[];
   deliveries: DeliveryEntity[];

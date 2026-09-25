@@ -1,18 +1,17 @@
 import { scopeKey } from "@/mocks/scope";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
-import { useToast } from "@/hooks/useToast";
 import {
   addApprovedOrders,
   cancelDistributionPlan,
   confirmPlan,
   createPlan,
+  createSourcePlan,
   dispatchTrip,
   getActiveSaOptions,
   getDriverOptions,
   getOutletOptions,
   getProductOptions,
-  getSAOutletPlan,
   getSAProductOptions,
   getVehicleOptions,
   applyAssignment,
@@ -23,13 +22,19 @@ import {
   saveDraft,
 } from "../api/distributionApi";
 import type { CreditOverrideInput } from "../api/contract";
-import type { DistributionPlan, PlanOption, PlanRow } from "../types";
+import type { DistributionPlan, PlanRow } from "../types";
+import { compareStops } from "../lib/stopOrder";
 import { outletLabel, unitLabel } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
+import { useIntakePolicy } from "./useIntakePolicy";
+import { getSourcePlanReview } from "../api/sourcePlanReview";
+import { sourcePlanMessage } from "../api/sourcePlanReview.contract";
+import { sourceRowsForEmptyDraft } from "../api/fillSourcePlan";
 
 export function useDistributionPlan() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const intakePolicy = useIntakePolicy();
+  const actingScope = scopeKey();
 
   const planList = useQuery({ queryKey: [...scopeKey(), "plan-list"], queryFn: getPlanList });
 
@@ -68,6 +73,36 @@ export function useDistributionPlan() {
     queryKey: [...scopeKey(), "plan-detail", selectedPlanId],
     queryFn: () => getPlanDetail(selectedPlanId!),
     enabled: !!selectedPlanId,
+  });
+
+  const sourceReview = useQuery({
+    queryKey: [...scopeKey(), "source-plan-review", selectedPlanQuery.data?.saId, selectedPlanQuery.data?.tanggal],
+    queryFn: () => getSourcePlanReview(selectedPlanQuery.data!.saId, selectedPlanQuery.data!.tanggal),
+    enabled: !!selectedPlanQuery.data?.saId,
+  });
+
+  const fillSourceMutation = useDeskMutation({
+    mutationFn: async (plan: DistributionPlan) => {
+      const assertScope = () => {
+        if (scopeKey().join("|") !== actingScope.join("|")) throw new Error("Tenant berubah. Buka rencana pada tenant yang sesuai untuk mencoba kembali.");
+      };
+      assertScope();
+      const [review, currentPlan, currentRows] = await Promise.all([
+        queryClient.fetchQuery({ queryKey: [...actingScope, "source-plan-review", plan.saId, plan.tanggal], queryFn: () => getSourcePlanReview(plan.saId, plan.tanggal) }),
+        getPlan(plan.id), getPlanDetail(plan.id),
+      ]);
+      assertScope();
+      if (currentPlan.saId !== plan.saId || currentPlan.tanggal !== plan.tanggal) {
+        throw new Error("SA atau tanggal rencana berubah. Buka ulang rencana dan tinjau sumber yang sesuai.");
+      }
+      const rows = sourceRowsForEmptyDraft(currentPlan, currentRows, review, outletOptions.data ?? []);
+      if (rows.length > 0) await saveDraft(plan.id, rows, currentPlan.version);
+      return { review, count: rows.length };
+    },
+    errorTitle: "Alokasi SIM3LON belum diisi",
+    success: ({ review, count }) => count > 0
+      ? { title: `${count} pangkalan diisi dari SIM3LON`, description: "Menyimpan titik singgah mereservasi kuota SA. Tetapkan armada sebelum konfirmasi." }
+      : { title: "Sumber belum dapat mengisi rencana", description: sourcePlanMessage(review), tone: "warning" },
   });
 
   const outletOptions = useQuery({
@@ -127,11 +162,15 @@ export function useDistributionPlan() {
    * looking at anyway.
    */
   const saveDraftMutation = useDeskMutation({
-    mutationFn: async ({ planId, rows }: { planId: string; rows: PlanRow[] }) => {
-      await saveDraft(planId, rows, version());
+    mutationFn: async ({ planId, rows, version }: { planId: string; rows: PlanRow[]; version: number }) => {
+      const savedPlan = await saveDraft(planId, rows, version);
 
       const trips = toTripAssignments(rows);
-      if (trips.length > 0) await applyAssignment(planId, trips);
+      // The stop save advances the plan version. Use the exact version that
+      // write returned, tied to this mutation's plan, rather than reading the
+      // currently selected plan after an await and potentially assigning a
+      // different plan's version.
+      if (trips.length > 0) await applyAssignment(planId, trips, savedPlan.version);
       return { trips: trips.length };
     },
     errorTitle: "Draf tidak tersimpan",
@@ -174,26 +213,58 @@ export function useDistributionPlan() {
   });
 
   const createPlanMutation = useDeskMutation({
-    mutationFn: createPlan,
+    mutationFn: async (input: Parameters<typeof createPlan>[0]) => {
+      // Capture scope when the operator starts the write. React Query may call
+      // the latest onSuccess options after a rerender, so a render-time scope
+      // comparison can accidentally compare tenant B with tenant B even though
+      // the request was issued in tenant A.
+      const originScope = scopeKey();
+      const assertOriginScope = () => {
+        if (scopeKey().join("|") !== originScope.join("|")) {
+          throw new Error("Tenant berubah. Buat rencana kembali pada tenant yang sesuai.");
+        }
+      };
+      if (intakePolicy.data === "manual") {
+        const plan = await createPlan(input);
+        return { plan, originScope, sourceBacked: false };
+      }
+      if (intakePolicy.data !== "external_schedule") {
+        throw new Error("Kebijakan sumber rencana belum tersedia. Muat ulang sebelum membuat rencana.");
+      }
+      const review = await queryClient.fetchQuery({
+        queryKey: [...originScope, "source-plan-review", input.saId, input.tanggal],
+        queryFn: () => getSourcePlanReview(input.saId, input.tanggal),
+      });
+      assertOriginScope();
+      if (review.status !== "ready" || review.date !== input.tanggal || !review.batchId ||
+          !review.branchId || !review.productId || review.periodMonth !== input.tanggal.slice(0, 7) ||
+          review.rows.length === 0 || review.unresolvedRegistrationCodes.length > 0) {
+        throw new Error(sourcePlanMessage(review));
+      }
+      const plan = await createSourcePlan({ batchId: review.batchId, tanggal: input.tanggal });
+      assertOriginScope();
+      return { plan, originScope, sourceBacked: true };
+    },
     errorTitle: "Rencana tidak dibuat",
-    success: (plan) => ({
+    success: ({ plan, sourceBacked }) => ({
       title: `Rencana ${plan.kode} dibuat`,
-      description: `Tambahkan ${outletLabel()} dan tetapkan driver sebelum konfirmasi.`,
+      description: sourceBacked
+        ? "Rencana, alokasi pangkalan, reservasi kuota, dan sumber SIM3LON dibuat sebagai satu transaksi."
+        : "Rencana dibuat. Alokasi dapat ditambahkan pada draf.",
     }),
-    onDone: (plan) => {
+    onDone: ({ plan, originScope, sourceBacked }) => {
+      if (scopeKey().join("|") !== originScope.join("|")) return;
       setSelectedPlanId(plan.id);
-      void fillFromSAPlan(plan, outletOptions.data ?? [], queryClient, toast);
+      if (!sourceBacked && plan.saId) fillSourceMutation.mutate(plan);
     },
   });
 
   const cancelPlanMutation = useDeskMutation({
     mutationFn: (planId: string) => cancelDistributionPlan(planId, version()),
     errorTitle: "Pembatalan gagal",
-    // A draft never drew quota -- see the create-plan dialog's own copy --
-    // so "kuota dikembalikan" would describe a return that never happened.
     success: () =>
       selectedPlanQuery.data?.status === "Draft"
-        ? { title: "Draf dihapus" }
+        ? { title: "Draf dibatalkan", description: "Reservasi kuota titik singgah yang belum berjalan dikembalikan ke SA." }
         : {
             title: "Rencana dibatalkan",
             description: "Kuota dikembalikan ke Schedule Agreement.",
@@ -201,8 +272,10 @@ export function useDistributionPlan() {
   });
 
   const addOrdersMutation = useDeskMutation({
-    mutationFn: ({ planId, orderIds }: { planId: string; orderIds: string[] }) =>
-      addApprovedOrders(planId, orderIds),
+    mutationFn: async ({ planId, orderIds }: { planId: string; orderIds: string[] }) => {
+      if (!intakePolicy.allowsManualIntake) throw new Error("Intake manual tidak tersedia; gunakan alokasi SIM3LON.");
+      return addApprovedOrders(planId, orderIds);
+    },
     errorTitle: "Pesanan tidak dapat dijadwalkan",
     success: (count) => ({ title: `${count} pesanan masuk ke rencana` }),
   });
@@ -215,6 +288,9 @@ export function useDistributionPlan() {
   const selectedPlan = selectedPlanQuery.data;
 
   return {
+    intakePolicy,
+    sourceReview,
+    fillSourceMutation,
     planList: planList.data ?? [],
     planDetail: planDetail.data ?? [],
     selectedPlan,
@@ -241,71 +317,6 @@ export function useDistributionPlan() {
 }
 
 /**
- * Pre-fills a freshly created plan from its SA's own SIM3LON planning table --
- * the pangkalan x tanggal -> jumlah tabung data the checker used to build a
- * day's plan by hand (flow doc §6.1/§16, docs/flow-gap-analysis.md D6).
- *
- * A plan with no such data (an SA typed by hand, or a date its import never
- * covered) is left empty, same as before -- the planner adds stops with
- * "Tambah pangkalan" as always.
- */
-async function fillFromSAPlan(
-  plan: DistributionPlan,
-  outlets: PlanOption[],
-  queryClient: ReturnType<typeof useQueryClient>,
-  toast: ReturnType<typeof useToast>["toast"],
-): Promise<void> {
-  if (!plan.saId) return;
-  let planned;
-  try {
-    planned = await getSAOutletPlan(plan.saId, plan.tanggal);
-  } catch {
-    // Not fatal: the plan was created fine, it just starts empty. The
-    // planner can still add stops by hand.
-    return;
-  }
-  if (planned.length === 0) return;
-
-  const byId = new Map(outlets.map((o) => [o.id, o]));
-  const rows: PlanRow[] = planned.map((p, i) => ({
-    id: `sa-plan-${i}`,
-    outletId: p.outletId,
-    outlet: p.outlet,
-    alamat: byId.get(p.outletId)?.sublabel ?? "",
-    lines: [{ productId: p.productId, jumlah: p.jumlah }],
-    jumlahUnit: p.jumlah,
-    driverId: null,
-    driver: "Belum ditetapkan",
-    vehicleId: null,
-    vehicle: "Belum ditetapkan",
-    jamPengiriman: "07:00",
-    statusBayar: "Lunas",
-    sisaKuotaOutlet: 0,
-    piutang: 0,
-    piutangJatuhTempo: 0,
-    tripNo: null,
-  }));
-
-  try {
-    await saveDraft(plan.id, rows, plan.version);
-    await queryClient.invalidateQueries({ queryKey: [...scopeKey(), "plan-detail", plan.id] });
-    await queryClient.invalidateQueries({ queryKey: [...scopeKey(), "plan", plan.id] });
-    await queryClient.invalidateQueries({ queryKey: [...scopeKey(), "plan-list"] });
-    toast({
-      title: `${rows.length} pangkalan diisi otomatis`,
-      description: "Diambil dari rencana SIM3LON agreement ini untuk tanggal yang dipilih.",
-      tone: "success",
-    });
-  } catch {
-    toast({
-      title: "Tidak bisa mengisi otomatis dari SA",
-      description: `Tambahkan ${outletLabel()} secara manual.`,
-      tone: "error",
-    });
-  }
-}
-
-/**
  * Turns the board's stops into the runs the service commits.
  *
  * Grouped by `(driver, trip)`, which is what a run is. The stop order is the
@@ -317,10 +328,20 @@ async function fillFromSAPlan(
  * service refuses the whole board over one invalid run, and losing a colleague's
  * saved stops because one row was incomplete is the worse failure.
  */
-function toTripAssignments(rows: PlanRow[]) {
-  const byRun = new Map<string, { driverId: string; vehicleId: string; tripNo: number; stops: { outletId: string; sequenceNo: number }[] }>();
+export function toTripAssignments(rows: PlanRow[]) {
+  const byRun = new Map<
+    string,
+    { driverId: string; vehicleId: string; tripNo: number; stops: { outletId: string; sequenceNo: number }[]; berangkat?: string }
+  >();
 
-  for (const row of rows) {
+  // Sorted once, up front, so each run's stops are pushed in the order the
+  // optimizer proposed or the dispatcher rearranged (`urutan`) rather than in
+  // whatever order the rows happen to sit in the draft array -- which used to
+  // be alphabetical by outlet name, since that is how the board itself is
+  // sorted for display.
+  const ordered = [...rows].sort(compareStops);
+
+  for (const row of ordered) {
     if (!row.driverId || !row.vehicleId) continue;
     const tripNo = row.tripNo ?? 1;
     const key = `${row.driverId}#${tripNo}`;
@@ -329,6 +350,10 @@ function toTripAssignments(rows: PlanRow[]) {
       vehicleId: row.vehicleId,
       tripNo,
       stops: [],
+      // Every row on a run carries the same departure -- it is a property of
+      // the trip, stamped onto each of its rows the same way `vehicle` is --
+      // so the first row seen for this run is as good a source as any.
+      berangkat: row.berangkat ?? undefined,
     };
     run.stops.push({ outletId: row.outletId, sequenceNo: run.stops.length + 1 });
     byRun.set(key, run);

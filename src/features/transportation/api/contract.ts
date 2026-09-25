@@ -1,11 +1,13 @@
 /**
  * What every transportation-claim adapter must provide.
  *
- * D3's own A-Step 1: the smallest useful version of tracking a BAST --
- * record the handover, record the claimed amount, record what iVendor
- * answered. The schema and this contract both call it a "transportation
- * claim" and a "handover reference"; every screen reading this type says
- * "BAST" -- see the plan's own decision 7 for why the words split there.
+ * D3's own A-Step 5/7: a claim now covers a calendar month and its lines are
+ * DERIVED from actual deliveries in that period -- priced against whichever
+ * transport-fee tariff covered each one's own date -- not typed by hand and
+ * not linked one at a time. The schema and this contract both call it a
+ * "transportation claim" and a "handover reference"; every screen reading
+ * this type says "BAST" -- see the plan's own decision 7 for why the words
+ * split there.
  */
 import type { ClaimStatus, ID, TransportationClaimEntity } from "@/types/domain";
 
@@ -35,12 +37,13 @@ export interface ClaimFilters {
   claimStatus?: ClaimStatus | "Semua";
 }
 
+/** Opens an empty draft for one billing period. No amount, no lines: generateLines derives both. */
 export interface CreateClaimInput {
-  handoverReference: string;
+  branchId?: ID;
+  /** YYYY-MM. The claim covers the whole calendar month. */
+  period: string;
   handoverDate: string;
-  claimedAmount: number;
-  /** Optional -- see this contract's own header on why a claim may carry none. */
-  deliveryIds?: ID[];
+  handoverReference?: string;
 }
 
 export interface UpdateClaimInput {
@@ -48,15 +51,145 @@ export interface UpdateClaimInput {
   version: number;
   handoverReference?: string;
   handoverDate?: string;
-  claimedAmount?: number;
 }
 
+/**
+ * Records what the agent read off iVendor. settledAt/settledAmount/settlementMode
+ * are read only when claimStatus is "paid" -- all three are required together
+ * on that one transition, and settledAmount must match the claim's own
+ * claimedAmount (a short payment or a withholding is not yet handled -- see
+ * the backend's own UpdateStatusRequest doc).
+ */
 export interface UpdateClaimStatusInput {
   id: ID;
   version: number;
   claimStatus: ClaimStatus;
   principalInvoiceNumber?: string;
   statusNote?: string;
+  settledAt?: string;
+  settledAmount?: number;
+  settlementMode?: "cash" | "bank";
+}
+
+/* ── the Berita Acara document ───────────────────────────────────────────── */
+
+export interface BeritaAcaraHeader {
+  claimNumber: string;
+  handoverReference?: string;
+  handoverDate: string;
+  periodStart: string;
+  periodEnd: string;
+  tenantLegalName: string;
+  tenantAddress?: string;
+  branchName: string;
+  claimStatus: ClaimStatus;
+  principalInvoiceNumber?: string;
+}
+
+/** One truck load -- the mitigation for a spreadsheet row (~560 tabung, one LO) not lining up
+ * 1:1 with a delivery row (~20-40 tabung, one outlet drop): grouping by (date, trip, product)
+ * collapses back to roughly the original document's own row count. tripNumber is absent when
+ * the underlying plan carried no trip -- the group still appears, keyed on date and product alone. */
+export interface BeritaAcaraGroup {
+  deliveryDate: string;
+  tripNumber?: number;
+  productCode: string;
+  productName: string;
+  outletCount: number;
+  qty: number;
+  weightKg: number;
+  ratePerKg: number;
+  amount: number;
+}
+
+export interface BeritaAcaraLine {
+  no: number;
+  deliveryDate: string;
+  deliveryNumber: string;
+  outletCode: string;
+  outletName: string;
+  productCode: string;
+  qty: number;
+  weightKg: number;
+  ratePerKg: number;
+  amount: number;
+  /** True when the delivery's own delivered quantity has changed since this line was generated. */
+  hasDrift: boolean;
+  currentDeliveredQty?: number;
+}
+
+export interface FooterRate {
+  ratePerKg: number;
+  qty: number;
+  weightKg: number;
+  amount: number;
+}
+
+/** amount is claimedAmount itself (round(SUM(weight_kg) x rate, 2) per rate group, computed by
+ * the backend) -- not a re-sum of the already-rounded line amounts. roundingDifference is the
+ * (usually tiny) gap between the two, surfaced rather than silently reconciled. */
+export interface BeritaAcaraFooter {
+  lineCount: number;
+  groupCount: number;
+  totalQty: number;
+  totalWeightKg: number;
+  rates: FooterRate[];
+  amount: number;
+  sumOfLineAmounts: number;
+  roundingDifference: number;
+  driftedLineCount: number;
+}
+
+export interface Signatory {
+  companyName: string;
+  name?: string;
+  title?: string;
+  city?: string;
+}
+
+export interface BeritaAcaraDocument {
+  header: BeritaAcaraHeader;
+  groups: BeritaAcaraGroup[];
+  lines: BeritaAcaraLine[];
+  footer: BeritaAcaraFooter;
+  signatory: Signatory;
+}
+
+/* ── the monthly recap ───────────────────────────────────────────────────── */
+
+export interface RecapFilters {
+  /** YYYY-MM, inclusive. Both default to a six-month trailing window ending this month. */
+  from?: string;
+  to?: string;
+  branchId?: ID;
+}
+
+export interface RecapRow {
+  month: string; // YYYY-MM
+  claimCount: number;
+  totalQty: number;
+  totalWeightKg: number;
+  claimedAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  /** Absent for a month with nothing settled yet -- "no data" and "settled same day" differ. */
+  avgDaysToSettle?: number;
+}
+
+export interface RecapTotals {
+  claimCount: number;
+  totalQty: number;
+  totalWeightKg: number;
+  claimedAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+}
+
+export interface RecapReport {
+  from: string;
+  to: string;
+  rows: RecapRow[];
+  totals: RecapTotals;
 }
 
 export interface TransportationClaimApi {
@@ -65,4 +198,8 @@ export interface TransportationClaimApi {
   updateClaim(input: UpdateClaimInput): Promise<ClaimView>;
   updateClaimStatus(input: UpdateClaimStatusInput): Promise<ClaimView>;
   deleteClaim(id: ID): Promise<void>;
+  /** (Re)derives a draft's lines from deliveries in its own period and recomputes its amount. */
+  generateLines(id: ID): Promise<ClaimView>;
+  getDocument(id: ID): Promise<BeritaAcaraDocument>;
+  getRecap(filters?: RecapFilters): Promise<RecapReport>;
 }

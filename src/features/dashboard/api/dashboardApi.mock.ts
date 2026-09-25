@@ -23,7 +23,7 @@ import type { DashboardApi } from "./contract";
 const toMinutes = (hhmm: string) =>
   Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
 
-async function getKpiSummary(): Promise<KpiSummary> {
+async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
   await latency("read");
   const db = scopedDb();
   const today = todayIso();
@@ -53,7 +53,7 @@ async function getKpiSummary(): Promise<KpiSummary> {
       .filter((i) => i.status === "Jatuh Tempo")
       .reduce((s, i) => s + (i.total - i.terbayar - i.kredit), 0),
     previousDayDistributed: distributedOn(yesterday),
-    openOrders: db.orders.filter((o) => o.status === "Baru").length,
+    openOrders: includeManualOrders ? db.orders.filter((o) => o.status === "Baru").length : 0,
     lateDeliveries: db.deliveries.filter(
       (d) => d.tanggal === today && d.status === "Tertunda",
     ).length,

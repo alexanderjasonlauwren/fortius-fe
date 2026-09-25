@@ -12,7 +12,7 @@ import { exportCsv, timestampSuffix } from "@/lib/export";
 import { addDays, isoDate, startOfToday } from "@/mocks/seed";
 import { todayIso } from "@/mocks/selectors";
 import type { DriverEntity } from "@/mocks/types";
-import type { DriverApi, DriverFilters, DriverView } from "./contract";
+import type { DriverApi, DriverFilters, DriverView, DriverWriteInput } from "./contract";
 import { unitLabelTitle } from "@/lib/lexicon";
 
 function toView(d: DriverEntity): DriverView {
@@ -95,7 +95,7 @@ export async function getDriverSchedule(id: string) {
     }));
 }
 
-async function createOrUpdateDriver(input: Partial<DriverEntity> & { id?: string }) {
+async function createOrUpdateDriver(input: DriverWriteInput) {
   await latency("write");
   return toView(saveDriver(input));
 }
