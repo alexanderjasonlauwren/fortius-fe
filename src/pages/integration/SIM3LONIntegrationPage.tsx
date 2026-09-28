@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader, PanelBody, Skeleton } from "@/components/common/Panel";
 import { SegmentedControl } from "@/components/common/Field";
+import { Button } from "@/components/ui/button";
 import { useSim3lonSnapshot } from "@/features/sim3lonlive/hooks/useSim3lonSnapshot";
 import {
   SECTION_ORDER,
+  isEmptySnapshot,
   isErrorSection,
   type Section,
 } from "@/features/sim3lonlive/api/contract";
@@ -38,6 +40,9 @@ export function SIM3LONIntegrationPage() {
   const { snapshot, sync } = useSim3lonSnapshot();
   const [active, setActive] = useState<string>(SECTION_ORDER[0].key);
 
+  const data = snapshot.data;
+  const empty = data ? isEmptySnapshot(data) : false;
+
   return (
     <div>
       <PageHeader
@@ -68,12 +73,53 @@ export function SIM3LONIntegrationPage() {
         </Panel>
       )}
 
-      {snapshot.data && (
+      {/* Empty snapshot: a sync is (auto-)running, has failed, or can be started. */}
+      {data && empty && (
+        <Panel>
+          <PanelBody className="flex flex-col items-center gap-3 py-12 text-center">
+            {sync.isPending ? (
+              <>
+                <Loader2 className="size-6 animate-spin text-ink-muted" />
+                <p className="font-semibold text-ink">Menarik data dari SIM3LON…</p>
+                <p className="max-w-md text-sm text-ink-muted">
+                  Sedang masuk ke platform SIM3LON dan mengambil data. Ini bisa
+                  memakan waktu hingga satu menit pada pengambilan pertama.
+                </p>
+              </>
+            ) : sync.isError ? (
+              <>
+                <AlertTriangle className="size-6 text-red-500" />
+                <p className="font-semibold text-ink">Gagal menarik data SIM3LON</p>
+                <p className="max-w-md text-sm text-ink-muted">
+                  {(sync.error as Error)?.message ?? "Terjadi kesalahan."}
+                </p>
+                <Button variant="outline" size="sm" onClick={() => sync.mutate()}>
+                  <RefreshCw className="size-4" />
+                  Coba lagi
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-ink">Belum ada data</p>
+                <p className="max-w-md text-sm text-ink-muted">
+                  Data belum pernah ditarik untuk periode ini.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => sync.mutate()}>
+                  <RefreshCw className="size-4" />
+                  Sinkronkan sekarang
+                </Button>
+              </>
+            )}
+          </PanelBody>
+        </Panel>
+      )}
+
+      {data && !empty && (
         <>
           <ConnectionStatusBanner
-            wilayah={snapshot.data.wilayah.name}
-            period={snapshot.data.period}
-            syncedAt={snapshot.data.syncedAt}
+            wilayah={data.wilayah?.name ?? "—"}
+            period={data.period}
+            syncedAt={data.syncedAt ?? ""}
             syncing={sync.isPending}
             onSync={() => sync.mutate()}
           />
@@ -82,14 +128,14 @@ export function SIM3LONIntegrationPage() {
             className="mb-4"
             value={active}
             onChange={setActive}
-            options={SECTION_ORDER.filter((s) => snapshot.data!.sections[s.key]).map((s) => {
-              const section = snapshot.data!.sections[s.key];
+            options={SECTION_ORDER.filter((s) => data.sections[s.key]).map((s) => {
+              const section = data.sections[s.key];
               return { value: s.key, label: s.label, count: sectionCount(section) };
             })}
           />
 
           {(() => {
-            const section = snapshot.data.sections[active];
+            const section = data.sections[active] ?? data.sections[SECTION_ORDER[0].key];
             if (!section) return null;
             return (
               <Panel>

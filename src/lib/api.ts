@@ -312,9 +312,19 @@ export async function send<T>(
   method: "post" | "put" | "patch" | "delete",
   path: string,
   body?: unknown,
+  // Per-call timeout override. Omitted, the instance default (10s) applies.
+  // A few endpoints legitimately run long -- e.g. a SIM3LON sync drives a
+  // headless browser through a login and several page loads -- and must not be
+  // aborted at the default that suits an ordinary write.
+  options?: { timeout?: number },
 ): Promise<T> {
   try {
-    const response = await apiClient.request<Envelope<T>>({ method, url: path, data: body });
+    const response = await apiClient.request<Envelope<T>>({
+      method,
+      url: path,
+      data: body,
+      timeout: options?.timeout,
+    });
     return response.data.data;
   } catch (error) {
     throw toApiError(error);

@@ -80,11 +80,18 @@ export function isErrorSection(s: Section): s is ErrorSection {
 }
 
 export interface Sim3lonSnapshot {
-  syncedAt: string;
+  /** null until the first sync — the "nothing pulled yet" state. */
+  syncedAt: string | null;
   period: string;
-  wilayah: Wilayah;
-  /** Keyed by section id: perencanaan, penyaluran, penerimaan-agen, ... */
+  /** null until the first sync. */
+  wilayah: Wilayah | null;
+  /** Keyed by section id: perencanaan, penyaluran, penerimaan-agen, ... Empty until synced. */
   sections: Record<string, Section>;
+}
+
+/** A snapshot the backend returns before any sync has populated it. */
+export function isEmptySnapshot(s: Sim3lonSnapshot): boolean {
+  return !s.syncedAt || Object.keys(s.sections).length === 0;
 }
 
 export interface Sim3lonLiveApi {
