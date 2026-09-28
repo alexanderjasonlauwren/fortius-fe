@@ -28,6 +28,9 @@ const review: SIM3LONReconciliationPreview = {
   expectedPredecessorBatchId: "batch-predecessor",
   sourceCreatedAt: "2026-09-20T01:02:03Z",
   reviewReady: true,
+  planningStartDate: null,
+  openingBalanceDelta: 0,
+  varianceCount: 0,
   expectedPlanVersions: [
     { planId: "draft-changed", version: 7, status: "draft" },
     { planId: "draft-unchanged", version: 3, status: "draft" },

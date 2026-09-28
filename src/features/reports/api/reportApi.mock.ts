@@ -1,6 +1,7 @@
 import { crewedArmada } from "@/mocks/fleet";
 import { scopedDb } from "@/mocks/scope";
 import { latency } from "@/mocks/db";
+import type { Database } from "@/mocks/types";
 import { exportCsv, printDocument, timestampSuffix } from "@/lib/export";
 import { addDays, isoDate } from "@/mocks/seed";
 import { outletLabelTitle, unitLabel, unitLabelTitle } from "@/lib/lexicon";
@@ -15,6 +16,36 @@ import {
   type TopOutletRow,
 } from "./contract";
 
+/**
+ * Mock parity for GET /sim3lon-opening-revenue: applied SIM3LON days before
+ * each branch's planning start date, priced at the product's sell price. The
+ * backend reads the posted rows; the mock has no ledger, so it derives the
+ * same figure from the source it would have posted.
+ */
+function openingRevenue(db: Database, window: { from: string; to: string }) {
+  const latest = new Map<string, Database["sim3lonSourceSnapshots"][number]>();
+  for (const source of db.sim3lonSourceSnapshots) {
+    if (source.status !== "applied") continue;
+    const key = `${source.branchId}|${source.productId}|${source.periodMonth}`;
+    const current = latest.get(key);
+    if (!current || source.createdAt > current.createdAt) latest.set(key, source);
+  }
+  const days = new Map<string, { date: string; qty: number; total: number }>();
+  for (const source of latest.values()) {
+    const cutover = db.branches.find((branch) => branch.id === source.branchId)?.planningStartDate;
+    const price = db.products.find((product) => product.id === source.productId)?.hargaJual ?? 0;
+    if (!cutover) continue;
+    for (const row of source.rows) {
+      if (row.date >= cutover || row.date < window.from || row.date > window.to) continue;
+      const day = days.get(row.date) ?? { date: row.date, qty: 0, total: 0 };
+      day.qty += row.qty;
+      day.total += row.qty * price;
+      days.set(row.date, day);
+    }
+  }
+  return [...days.values()].sort((left, right) => left.date.localeCompare(right.date));
+}
+
 async function getReportSummary(range: ReportRange): Promise<ReportSummary> {
   await latency("read");
   const db = scopedDb();
@@ -26,6 +57,7 @@ async function getReportSummary(range: ReportRange): Promise<ReportSummary> {
   const payments = db.payments.filter(
     (p) => p.tanggal >= window.from && p.tanggal <= window.to,
   );
+  const opening = openingRevenue(db, window);
   const invoices = db.invoices.filter(
     (i) => i.tanggal >= window.from && i.tanggal <= window.to,
   );
@@ -48,6 +80,8 @@ async function getReportSummary(range: ReportRange): Promise<ReportSummary> {
     pendapatan: payments
       .filter((p) => p.status === "Terverifikasi")
       .reduce((s, p) => s + p.jumlah, 0),
+    pendapatanSebelumGoLive: opening.reduce((s, day) => s + day.total, 0),
+    unitSebelumGoLive: opening.reduce((s, day) => s + day.qty, 0),
     // Matches financeApi.getAgingReport()'s own definition: a cancelled
     // invoice is not a receivable, whatever its stale total/terbayar/kredit
     // figures still say. Without this exclusion the two screens disagree on
@@ -82,6 +116,7 @@ async function getDailySeries(range: ReportRange): Promise<DailyPoint[]> {
       target: 0,
       realisasi: 0,
       pendapatan: 0,
+      pendapatanSebelumGoLive: 0,
     });
   }
 
@@ -95,6 +130,10 @@ async function getDailySeries(range: ReportRange): Promise<DailyPoint[]> {
     if (p.status !== "Terverifikasi") continue;
     const point = points.get(p.tanggal);
     if (point) point.pendapatan += p.jumlah;
+  }
+  for (const day of openingRevenue(db, window)) {
+    const point = points.get(day.date);
+    if (point) point.pendapatanSebelumGoLive += day.total;
   }
 
   return [...points.values()];
@@ -183,12 +222,14 @@ async function exportReport(range: ReportRange): Promise<number> {
   const series = await getDailySeries(range);
   exportCsv(
     `laporan-${range}-${timestampSuffix()}`,
-    ["Tanggal", `Target (${unitLabel()})`, `Realisasi (${unitLabel()})`, "Pendapatan (Rp)"],
+    ["Tanggal", `Target (${unitLabel()})`, `Realisasi (${unitLabel()})`, "Pendapatan (Rp)",
+      "Pendapatan sebelum go-live (Rp)"],
     series.map((p) => [
       new Date(p.tanggal).toLocaleDateString("id-ID"),
       p.target,
       p.realisasi,
       p.pendapatan,
+      p.pendapatanSebelumGoLive,
     ]),
   );
   return series.length;
@@ -230,6 +271,7 @@ async function printReport(range: ReportRange): Promise<void> {
         <tr><td>Pencapaian</td><td class="num">${summary.pencapaian.toFixed(1)}%</td></tr>
         <tr><td>Rata-rata per hari</td><td class="num">${fmt(summary.rerataPerHari)}</td></tr>
         <tr><td>Pendapatan terverifikasi</td><td class="num">${rupiah(summary.pendapatan)}</td></tr>
+        <tr><td>Pendapatan sebelum go-live (SIM3LON)</td><td class="num">${rupiah(summary.pendapatanSebelumGoLive)}</td></tr>
         <tr><td>Piutang menunggu verifikasi</td><td class="num">${rupiah(summary.piutang)}</td></tr>
       </tbody>
       <tfoot><tr><td>Surat jalan tertunda</td><td class="num">${fmt(summary.suratJalanTertunda)}</td></tr></tfoot>

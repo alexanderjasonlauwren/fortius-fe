@@ -47,7 +47,7 @@
  * the daily series alike. Same trigger, same fix, once real volumes justify
  * it.
  */
-import { getList } from "@/lib/api";
+import { getList, getOne } from "@/lib/api";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getVehicles } from "@/features/vehicles/api/vehicleApi";
 import { getSettings } from "@/features/settings/api/settingsApi";
@@ -141,6 +141,23 @@ async function fetchPayments(): Promise<PaymentResponse[]> {
   return page.items;
 }
 
+/** Mirrors the SIM3LON usecase's OpeningRevenueResponse. */
+interface OpeningRevenueResponse {
+  days: Array<{ date: string; qty: number; total: number }>;
+  qty: number;
+  total: number;
+}
+
+/**
+ * Pre-go-live SIM3LON revenue, already aggregated per day server-side from
+ * the same rows the ledger journals were posted from -- so, unlike payments,
+ * it has no page cap to work around.
+ */
+async function fetchOpeningRevenue(window: { from: string; to: string }): Promise<OpeningRevenueResponse> {
+  const params = new URLSearchParams({ from: window.from, to: window.to });
+  return getOne<OpeningRevenueResponse>(`/sim3lon-opening-revenue?${params.toString()}`);
+}
+
 /** No date filter server-side -- see this file's header. */
 async function fetchInvoices(): Promise<InvoiceResponse[]> {
   const page = await getList<InvoiceResponse>("/invoices", {
@@ -152,10 +169,11 @@ async function fetchInvoices(): Promise<InvoiceResponse[]> {
 
 async function getReportSummary(range: ReportRange): Promise<ReportSummary> {
   const window = resolveRange(range);
-  const [deliveries, payments, invoices] = await Promise.all([
+  const [deliveries, payments, invoices, opening] = await Promise.all([
     fetchDeliveries(window),
     fetchPayments(),
     fetchInvoices(),
+    fetchOpeningRevenue(window),
   ]);
 
   const paymentsInWindow = payments.filter((p) => inWindow(p.payment_date, window));
@@ -178,6 +196,8 @@ async function getReportSummary(range: ReportRange): Promise<ReportSummary> {
     pendapatan: paymentsInWindow
       .filter((p) => p.payment_status === "verified")
       .reduce((s, p) => s + p.amount, 0),
+    pendapatanSebelumGoLive: opening.total,
+    unitSebelumGoLive: opening.qty,
     piutang: invoicesInWindow.reduce((s, i) => s + i.outstanding_amount, 0),
     ditolak: paymentsInWindow
       .filter((p) => p.payment_status === "rejected")
@@ -192,11 +212,15 @@ async function getReportSummary(range: ReportRange): Promise<ReportSummary> {
 
 async function getDailySeries(range: ReportRange): Promise<DailyPoint[]> {
   const window = resolveRange(range);
-  const [deliveries, payments] = await Promise.all([fetchDeliveries(window), fetchPayments()]);
+  const [deliveries, payments, opening] = await Promise.all([
+    fetchDeliveries(window), fetchPayments(), fetchOpeningRevenue(window),
+  ]);
   const points = new Map<string, DailyPoint>();
 
   for (let d = new Date(window.from); isoDate(d) <= window.to; d = addDays(d, 1)) {
-    points.set(isoDate(d), { tanggal: isoDate(d), target: 0, realisasi: 0, pendapatan: 0 });
+    points.set(isoDate(d), {
+      tanggal: isoDate(d), target: 0, realisasi: 0, pendapatan: 0, pendapatanSebelumGoLive: 0,
+    });
   }
 
   for (const row of deliveries) {
@@ -209,6 +233,10 @@ async function getDailySeries(range: ReportRange): Promise<DailyPoint[]> {
     if (p.payment_status !== "verified") continue;
     const point = points.get(p.payment_date.slice(0, 10));
     if (point) point.pendapatan += p.amount;
+  }
+  for (const day of opening.days) {
+    const point = points.get(day.date);
+    if (point) point.pendapatanSebelumGoLive += day.total;
   }
 
   return [...points.values()];
@@ -314,12 +342,14 @@ async function exportReport(range: ReportRange): Promise<number> {
   const series = await getDailySeries(range);
   exportCsv(
     `laporan-${range}-${timestampSuffix()}`,
-    ["Tanggal", `Target (${unitLabel()})`, `Realisasi (${unitLabel()})`, "Pendapatan (Rp)"],
+    ["Tanggal", `Target (${unitLabel()})`, `Realisasi (${unitLabel()})`, "Pendapatan (Rp)",
+      "Pendapatan sebelum go-live (Rp)"],
     series.map((p) => [
       new Date(p.tanggal).toLocaleDateString("id-ID"),
       p.target,
       p.realisasi,
       p.pendapatan,
+      p.pendapatanSebelumGoLive,
     ]),
   );
   return series.length;
@@ -369,6 +399,7 @@ async function printReport(range: ReportRange): Promise<void> {
         <tr><td>Pencapaian</td><td class="num">${summary.pencapaian.toFixed(1)}%</td></tr>
         <tr><td>Rata-rata per hari</td><td class="num">${fmt(summary.rerataPerHari)}</td></tr>
         <tr><td>Pendapatan terverifikasi</td><td class="num">${rupiah(summary.pendapatan)}</td></tr>
+        <tr><td>Pendapatan sebelum go-live (SIM3LON)</td><td class="num">${rupiah(summary.pendapatanSebelumGoLive)}</td></tr>
         <tr><td>Piutang menunggu verifikasi</td><td class="num">${rupiah(summary.piutang)}</td></tr>
       </tbody>
       <tfoot><tr><td>Surat jalan tertunda</td><td class="num">${fmt(summary.suratJalanTertunda)}</td></tr></tfoot>

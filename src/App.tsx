@@ -11,6 +11,7 @@ import { SAManagementPage } from "./pages/sa/SAManagementPage";
 import { SADetailPage } from "./pages/sa/SADetailPage";
 import { DistributionPage } from "./pages/distribution/DistributionPage";
 import { MonitoringPage } from "./pages/monitoring/MonitoringPage";
+import { SIM3LONIntegrationPage } from "./pages/integration/SIM3LONIntegrationPage";
 import { TransportationClaimListPage } from "./pages/transportation/TransportationClaimListPage";
 import { TransportationClaimDocumentPage } from "./pages/transportation/TransportationClaimDocumentPage";
 import { TransportationRecapPage } from "./pages/transportation/TransportationRecapPage";
@@ -100,6 +101,13 @@ const router = createBrowserRouter([
           permissions={[PERMISSIONS.DELIVERIES_VIEW, PERMISSIONS.GPS_TRACKS_VIEW]}
         >
           <MonitoringPage />
+        </RequirePermission>
+      ) },
+      // The backend additionally restricts this to SPBE tenants; the permission
+      // gate here only hides it from roles that cannot open it at all.
+      { path: "integration/sim3lon", element: (
+        <RequirePermission permission={PERMISSIONS.INTEGRATION_SIM3LON_VIEW}>
+          <SIM3LONIntegrationPage />
         </RequirePermission>
       ) },
       { path: "transportation-claims", element: (

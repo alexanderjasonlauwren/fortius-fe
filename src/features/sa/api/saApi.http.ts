@@ -11,6 +11,7 @@ import { getList, getOne, send, upload } from "@/lib/api";
 import type { FilterSpec } from "@/lib/listQuery";
 import { scopeKey } from "@/mocks/scope";
 import type {
+  PlanningCutoverReport,
   SAImportApplied,
   SAImportBatch,
   SAImportChangeKind,
@@ -20,6 +21,7 @@ import type {
   SIM3LONApplyReview,
   SIM3LONPreview,
   SIM3LONReconciliationPreview,
+  SIM3LONVarianceReport,
   ScheduleAgreement,
   SAFilterParams,
   SAStatus,
@@ -74,6 +76,7 @@ interface ImportSummaryResponse {
     normal_qty: number;
     fakultatif_qty: number;
     remaining_qty: number;
+    opening_qty?: number;
   }>;
 }
 
@@ -168,6 +171,7 @@ function toImportSummary(row: ImportSummaryResponse | null): SAImportSummary | n
       normal: o.normal_qty,
       fakultatif: o.fakultatif_qty,
       sisa: o.remaining_qty,
+      saldoAwal: o.opening_qty ?? 0,
     })),
   };
 }
@@ -286,12 +290,120 @@ interface SIM3LONReconciliationResponse {
     non_draft_discrepancy: boolean;
     crew_assignment_affected: boolean;
   }>;
-  blockers: Array<{
-    code: string;
-    message: string;
-    plan_id?: string;
-    registration_code?: string;
+  blockers: WireBlocker[];
+  planning_start_date?: string;
+  opening_balance_delta?: number;
+  variance_count?: number;
+}
+
+interface WireBlocker {
+  code: string;
+  message: string;
+  plan_id?: string;
+  registration_code?: string;
+}
+
+/** Mirrors the SIM3LON usecase's CutoverResponse. */
+export interface PlanningCutoverResponse {
+  branch_id: string;
+  current_planning_start_date: string | null;
+  planning_start_date: string;
+  dry_run: boolean;
+  applied: boolean;
+  scopes: Array<{
+    batch_id: string;
+    product_id: string;
+    period_month: string;
+    quota_total: number;
+    allocated_before: number;
+    allocated_after: number;
+    used_before: number;
+    used_after: number;
+    opening_before: number;
+    opening_after: number;
+    revenue_before?: number;
+    revenue_after?: number;
+    outlets: Array<{ outlet_id: string; opening_before: number; opening_after: number }>;
   }>;
+  blockers: WireBlocker[];
+  warnings: WireBlocker[];
+}
+
+/** Mirrors the SIM3LON usecase's VarianceResponse. */
+export interface SIM3LONVarianceResponse {
+  batch_id: string | null;
+  planning_start_date: string | null;
+  total_variance: number;
+  rows: Array<{
+    outlet_id: string;
+    outlet_code: string;
+    outlet_name: string;
+    date: string;
+    sim3lon_qty: number;
+    committed_qty: number;
+    delivered_qty: number;
+    variance: number;
+    kind: SIM3LONVarianceReport["rows"][number]["kind"];
+  }>;
+}
+
+function toBlocker(blocker: WireBlocker) {
+  return {
+    code: blocker.code,
+    message: blocker.message,
+    planId: blocker.plan_id,
+    registrationCode: blocker.registration_code,
+  };
+}
+
+export function toPlanningCutover(row: PlanningCutoverResponse): PlanningCutoverReport {
+  return {
+    branchId: row.branch_id,
+    currentPlanningStartDate: row.current_planning_start_date ?? null,
+    planningStartDate: row.planning_start_date,
+    dryRun: row.dry_run,
+    applied: row.applied,
+    scopes: (row.scopes ?? []).map((scope) => ({
+      batchId: scope.batch_id,
+      productId: scope.product_id,
+      periodMonth: scope.period_month,
+      quotaTotal: scope.quota_total,
+      allocatedBefore: scope.allocated_before,
+      allocatedAfter: scope.allocated_after,
+      usedBefore: scope.used_before,
+      usedAfter: scope.used_after,
+      openingBefore: scope.opening_before,
+      openingAfter: scope.opening_after,
+      revenueBefore: scope.revenue_before ?? 0,
+      revenueAfter: scope.revenue_after ?? 0,
+      outlets: (scope.outlets ?? []).map((outlet) => ({
+        outletId: outlet.outlet_id,
+        openingBefore: outlet.opening_before,
+        openingAfter: outlet.opening_after,
+      })),
+    })),
+    blockers: (row.blockers ?? []).map(toBlocker),
+    warnings: (row.warnings ?? []).map(toBlocker),
+  };
+}
+
+export function toSIM3LONVariances(row: SIM3LONVarianceResponse): SIM3LONVarianceReport {
+  return {
+    batchId: row.batch_id ?? null,
+    planningStartDate: row.planning_start_date ?? null,
+    totalVariance: row.total_variance,
+    rows: (row.rows ?? []).map((variance) => ({
+      outletId: variance.outlet_id,
+      outletCode: variance.outlet_code,
+      outletName: variance.outlet_name,
+      date: variance.date,
+      sim3lonQty: variance.sim3lon_qty,
+      committedQty: variance.committed_qty,
+      deliveredQty: variance.delivered_qty,
+      variance: variance.variance,
+      kind: variance.kind,
+    })),
+  };
 }
 
 function toSIM3LONPreview(row: SIM3LONPreviewResponse): SIM3LONPreview {
@@ -350,12 +462,10 @@ function toSIM3LONReconciliation(row: SIM3LONReconciliationResponse): SIM3LONRec
       nonDraftDiscrepancy: change.non_draft_discrepancy,
       crewAssignmentAffected: change.crew_assignment_affected,
     })),
-    blockers: (row.blockers ?? []).map((blocker) => ({
-      code: blocker.code,
-      message: blocker.message,
-      planId: blocker.plan_id,
-      registrationCode: blocker.registration_code,
-    })),
+    blockers: (row.blockers ?? []).map(toBlocker),
+    planningStartDate: row.planning_start_date ?? null,
+    openingBalanceDelta: row.opening_balance_delta ?? 0,
+    varianceCount: row.variance_count ?? 0,
   };
 }
 
@@ -548,6 +658,30 @@ export const saApiHttp: ScheduleAgreementApi = {
       outletTargetsWritten: applied.outlet_targets_written,
       dailyTargetsWritten: applied.daily_targets_written,
     };
+  },
+
+  async setPlanningCutover(planningStartDate: string, dryRun: boolean): Promise<PlanningCutoverReport> {
+    const originScope = scopeKey();
+    const branchId = await defaultBranchID();
+    assertScope(originScope);
+    const report = await send<PlanningCutoverResponse>(
+      "post",
+      `/branches/${branchId}/planning-cutover`,
+      { planning_start_date: planningStartDate, dry_run: dryRun },
+    );
+    assertScope(originScope);
+    return toPlanningCutover(report);
+  },
+
+  async getSIM3LONVariances(productId: string, month: string): Promise<SIM3LONVarianceReport> {
+    const originScope = scopeKey();
+    const branchId = await defaultBranchID();
+    const params = new URLSearchParams({ product_id: productId, month });
+    const report = await getOne<SIM3LONVarianceResponse>(
+      `/branches/${branchId}/sim3lon-variances?${params.toString()}`,
+    );
+    assertScope(originScope);
+    return toSIM3LONVariances(report);
   },
 
   async getSupplierOptions(): Promise<string[]> {

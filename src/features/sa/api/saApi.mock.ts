@@ -23,6 +23,8 @@ import type {
   SIM3LONSourceSnapshotEntity,
 } from "@/mocks/types";
 import type {
+  PlanningCutoverReport,
+  PlanningCutoverScope,
   SAImportApplied,
   SAImportBatch,
   SAImportSummary,
@@ -32,6 +34,8 @@ import type {
   SIM3LONReconciliationBlocker,
   SIM3LONReconciliationChange,
   SIM3LONReconciliationPreview,
+  SIM3LONVarianceReport,
+  SIM3LONVarianceRow,
   ScheduleAgreement,
   SAFilterParams,
   UploadSAPayload,
@@ -459,6 +463,21 @@ function buildMockReconciliation(
     };
   });
 
+  const cutover = planningStartOf(db, candidate.branchId);
+  let openingBalanceDelta = 0;
+  let cutoverChanges = changes;
+  if (cutover && cutover > `${candidate.periodMonth}-01`) {
+    // Same split as the backend: a date before the cutover has no plan to
+    // reconcile, only an opening balance the apply rewrites.
+    cutoverChanges = changes.map((change) => {
+      if (change.planId || change.operationalDate >= cutover) return change;
+      if (change.baselineQty === change.proposedQty) return { ...change, classification: "unchanged" as const };
+      openingBalanceDelta += change.proposedQty - change.baselineQty;
+      return { ...change, classification: "pre_cutover" as const, currentQty: null };
+    });
+    blockers.push(...plansBeforeCutover(db, candidate, cutover));
+  }
+
   const normalized = deduplicateBlockers(blockers);
   return {
     candidateBatchId: candidate.batchId,
@@ -466,9 +485,62 @@ function buildMockReconciliation(
     sourceCreatedAt: candidate.createdAt,
     reviewReady: normalized.length === 0,
     expectedPlanVersions,
-    changes,
+    changes: cutoverChanges,
     blockers: normalized,
+    planningStartDate: cutover && cutover > `${candidate.periodMonth}-01` ? cutover : null,
+    openingBalanceDelta,
+    varianceCount: cutoverChanges.filter((change) => change.nonDraftDiscrepancy).length,
   };
+}
+
+function planningStartOf(db: Database, branchId: string): string | null {
+  return db.branches.find((branch) => branch.id === branchId)?.planningStartDate ?? null;
+}
+
+function plansBeforeCutover(
+  db: Database,
+  source: SIM3LONSourceSnapshotEntity,
+  cutover: string,
+): SIM3LONReconciliationBlocker[] {
+  return db.plans
+    .filter((plan) =>
+      plan.tenantId === source.tenantId && plan.branchId === source.branchId &&
+      plan.tanggal.startsWith(source.periodMonth) && plan.tanggal < cutover && plan.status !== "Batal",
+    )
+    .map((plan) => ({
+      code: "plan_before_cutover",
+      message: "Rencana aktif bertanggal sebelum tanggal mulai sistem cabang.",
+      planId: plan.id,
+    }));
+}
+
+/** Outlet -> units before the cutover, from one applied source. */
+function openingFor(source: SIM3LONSourceSnapshotEntity, cutover: string): Record<string, number> {
+  const opening: Record<string, number> = {};
+  for (const row of source.rows) {
+    if (row.date < cutover) opening[row.outletId] = (opening[row.outletId] ?? 0) + row.qty;
+  }
+  return opening;
+}
+
+function sumOpening(opening: Record<string, number> | undefined): number {
+  return Object.values(opening ?? {}).reduce((total, qty) => total + qty, 0);
+}
+
+/**
+ * Rewrites an agreement's opening balance from `source` and moves its counters
+ * by the net delta -- the mock half of the backend's reviseQuota. Throws the
+ * same 409 when the opening would pass the ceiling.
+ */
+function syncMockOpening(sa: SAEntity, source: SIM3LONSourceSnapshotEntity, cutover: string): void {
+  const next = openingFor(source, cutover);
+  const delta = sumOpening(next) - sumOpening(sa.saldoAwal);
+  if (sa.dialokasikan + delta > sa.totalKuota) {
+    throw new ApiError("Penyaluran sebelum tanggal mulai sistem melebihi kuota Base.", 409);
+  }
+  sa.saldoAwal = next;
+  sa.dialokasikan += delta;
+  sa.terpakai += delta;
 }
 
 function requireCandidate(
@@ -645,6 +717,11 @@ async function applySIM3LON(
         });
       }
     }
+    const cutover = planningStartOf(db, candidate.branchId);
+    const agreement = db.scheduleAgreements.find((sa) => sa.id === candidate.saId);
+    if (cutover && cutover > `${candidate.periodMonth}-01` && agreement) {
+      syncMockOpening(agreement, candidate, cutover);
+    }
     candidate.status = "applied";
     recordAudit(db, {
       action: "sim3lon.apply_reconciliation",
@@ -663,6 +740,153 @@ async function applySIM3LON(
     baseAgreementId: result.candidate.saId,
     outletTargetsWritten: result.outletTargetsWritten,
     dailyTargetsWritten: result.dailyTargetsWritten,
+  };
+}
+
+function latestApplied(db: Database, tenantId: string, branchId: string): SIM3LONSourceSnapshotEntity[] {
+  const latest = new Map<string, SIM3LONSourceSnapshotEntity>();
+  for (const source of db.sim3lonSourceSnapshots) {
+    if (source.tenantId !== tenantId || source.branchId !== branchId || source.status !== "applied") continue;
+    const key = `${source.productId}|${source.periodMonth}`;
+    const current = latest.get(key);
+    if (!current || source.createdAt > current.createdAt) latest.set(key, source);
+  }
+  return [...latest.values()];
+}
+
+/**
+ * The write half follows the acting tenant only: a branch that is merely
+ * visible (a descendant's) is refused, the same as the backend's 403.
+ */
+function actingBranch(db: Database) {
+  const active = getActiveScope();
+  const branch = active.branchId
+    ? db.branches.find((row) => row.id === active.branchId)
+    : db.branches.find((row) => row.tenantId === active.actingTenantId && row.utama);
+  if (!branch) throw new ApiError("Cabang tidak ditemukan pada tenant aktif.", 404);
+  if (branch.tenantId !== active.actingTenantId) {
+    throw new ApiError("Masuk ke tenant pemilik cabang ini untuk mengatur tanggal mulai sistemnya.", 403);
+  }
+  return branch;
+}
+
+async function setPlanningCutover(planningStartDate: string, dryRun: boolean): Promise<PlanningCutoverReport> {
+  const originScope = scopeKey();
+  await latency(dryRun ? "read" : "write");
+  if (!sameScope(scopeKey(), originScope)) {
+    throw new Error("Tenant berubah. Muat ulang pada tenant yang sesuai.");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(planningStartDate)) {
+    throw new ApiError("Tanggal mulai sistem tidak valid.", 422);
+  }
+  const build = (db: Database, commit: boolean): PlanningCutoverReport => {
+    const branch = actingBranch(db);
+    const current = branch.planningStartDate ?? null;
+    const boundary = current && current > planningStartDate ? current : planningStartDate;
+    const scopes: PlanningCutoverScope[] = [];
+    const blockers: PlanningCutoverReport["blockers"] = [];
+    const writes: Array<() => void> = [];
+    for (const source of latestApplied(db, branch.tenantId, branch.id)) {
+      if (`${source.periodMonth}-01` >= boundary) continue;
+      const sa = db.scheduleAgreements.find((row) => row.id === source.saId);
+      if (!sa) continue;
+      const price = db.products.find((product) => product.id === source.productId)?.hargaJual ?? 0;
+      blockers.push(...plansBeforeCutover(db, source, planningStartDate));
+      const next = `${source.periodMonth}-01` < planningStartDate ? openingFor(source, planningStartDate) : {};
+      const before = sa.saldoAwal ?? {};
+      const delta = sumOpening(next) - sumOpening(before);
+      if (sa.dialokasikan + delta > sa.totalKuota) {
+        blockers.push({
+          code: "OPENING_EXCEEDS_QUOTA",
+          message: `Penyaluran sebelum tanggal mulai melebihi kuota Base ${source.periodMonth}.`,
+        });
+      }
+      const outletIds = new Set([...Object.keys(before), ...Object.keys(next)]);
+      scopes.push({
+        batchId: source.batchId, productId: source.productId, periodMonth: source.periodMonth,
+        quotaTotal: sa.totalKuota,
+        allocatedBefore: sa.dialokasikan, allocatedAfter: sa.dialokasikan + delta,
+        usedBefore: sa.terpakai, usedAfter: sa.terpakai + delta,
+        openingBefore: sumOpening(before), openingAfter: sumOpening(next),
+        revenueBefore: sumOpening(before) * price, revenueAfter: sumOpening(next) * price,
+        outlets: [...outletIds].sort().map((outletId) => ({
+          outletId, openingBefore: before[outletId] ?? 0, openingAfter: next[outletId] ?? 0,
+        })),
+      });
+      writes.push(() => {
+        sa.saldoAwal = next;
+        sa.dialokasikan += delta;
+        sa.terpakai += delta;
+      });
+    }
+    const report: PlanningCutoverReport = {
+      branchId: branch.id, currentPlanningStartDate: current, planningStartDate,
+      dryRun: !commit, applied: false, scopes, blockers: deduplicateBlockers(blockers), warnings: [],
+    };
+    if (!commit) return report;
+    if (report.blockers.length > 0) {
+      throw new ApiError("Selesaikan penghambat tanggal mulai sistem sebelum menerapkannya.", 409);
+    }
+    branch.planningStartDate = planningStartDate;
+    writes.forEach((write) => write());
+    recordAudit(db, {
+      action: "sim3lon.planning_cutover",
+      entity: "Branch",
+      entityId: branch.id,
+      summary: `Tanggal mulai sistem cabang ${branch.kode} diatur ke ${planningStartDate}.`,
+    });
+    return { ...report, applied: true };
+  };
+  return dryRun ? build(scopedDb(), false) : mutate((db) => build(db, true));
+}
+
+async function getSIM3LONVariances(productId: string, month: string): Promise<SIM3LONVarianceReport> {
+  await latency("read");
+  const db = scopedDb();
+  const branch = actingBranch(db);
+  const cutover = branch.planningStartDate ?? null;
+  const empty: SIM3LONVarianceReport = { batchId: null, planningStartDate: cutover, rows: [], totalVariance: 0 };
+  const monthStart = `${month}-01`;
+  const from = cutover && cutover > monthStart ? cutover : monthStart;
+  if (!from.startsWith(month)) return empty;
+  const source = latestApplied(db, branch.tenantId, branch.id)
+    .find((row) => row.productId === productId && row.periodMonth === month);
+  if (!source) return empty;
+
+  const today = startOfToday().toISOString().slice(0, 10);
+  const sim3lon = new Map<string, number>();
+  for (const row of source.rows) {
+    if (row.date >= from) sim3lon.set(sourceKey(row.outletId, row.date), row.qty);
+  }
+  const committed = new Map<string, number>();
+  const committedPlans = db.plans.filter((plan) =>
+    plan.branchId === branch.id && plan.saId === source.saId && plan.tanggal.startsWith(month) &&
+    plan.tanggal >= from && plan.status !== "Draft" && plan.status !== "Batal",
+  );
+  for (const plan of committedPlans) {
+    for (const row of db.planRows.filter((planRow) => planRow.planId === plan.id)) {
+      const key = sourceKey(row.outletId, plan.tanggal);
+      committed.set(key, (committed.get(key) ?? 0) + row.jumlahUnit);
+    }
+  }
+  const rows: SIM3LONVarianceRow[] = [];
+  for (const key of new Set([...sim3lon.keys(), ...committed.keys()])) {
+    const [outletId, date] = key.split("|");
+    const sourceQty = sim3lon.get(key) ?? 0;
+    const committedQty = committed.get(key) ?? 0;
+    if (sourceQty === committedQty || (!committed.has(key) && date >= today)) continue;
+    const outlet = db.outlets.find((row) => row.id === outletId);
+    rows.push({
+      outletId, outletCode: outlet?.kode ?? outletId, outletName: outlet?.nama ?? outletId, date,
+      sim3lonQty: sourceQty, committedQty, deliveredQty: 0, variance: sourceQty - committedQty,
+      kind: !sim3lon.has(key) ? "extra" : !committed.has(key) ? "unplanned" : committedQty > sourceQty ? "over" : "under",
+    });
+  }
+  rows.sort((left, right) =>
+    Math.abs(right.variance) - Math.abs(left.variance) || left.date.localeCompare(right.date));
+  return {
+    batchId: source.batchId, planningStartDate: cutover, rows,
+    totalVariance: rows.reduce((total, row) => total + row.variance, 0),
   };
 }
 
@@ -712,4 +936,6 @@ export const saApiMock: ScheduleAgreementApi = {
   previewSIM3LON,
   getSIM3LONReconciliation,
   applySIM3LON,
+  setPlanningCutover,
+  getSIM3LONVariances,
 };

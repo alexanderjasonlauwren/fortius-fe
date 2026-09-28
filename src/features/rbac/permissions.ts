@@ -36,6 +36,11 @@ export const PERMISSIONS = {
   PRODUCTS_EDIT: "masterdata.update.products",
   PRODUCTS_DELETE: "masterdata.delete.products",
 
+  // Live SIM3LON integration (proof-of-integration page). Read-only; the
+  // backend additionally restricts it to SPBE tenants, which is a property of
+  // the tenant rather than of this grant, so it is not expressible here.
+  INTEGRATION_SIM3LON_VIEW: "integration.read.sim3lon",
+
   // Schedule Agreements
   SA_VIEW: "distribution.read.schedule_agreements",
   SA_CREATE: "distribution.create.schedule_agreements",
@@ -44,6 +49,9 @@ export const PERMISSIONS = {
   // create.schedule_agreements: whoever may sign an agreement is not
   // necessarily whoever may re-import one over the top of it.
   SA_IMPORT: "distribution.import.schedule_agreements",
+  // The branch go-live date. It rewrites every affected Base quota's opening
+  // balance, so it is its own authority rather than riding on import.
+  SA_PLANNING_CUTOVER: "distribution.update.planning_cutovers",
 
   // Distribution planning
   DISTRIBUTION_VIEW: "distribution.read.distribution_orders",

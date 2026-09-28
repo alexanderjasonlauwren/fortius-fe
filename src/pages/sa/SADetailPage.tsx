@@ -1,9 +1,9 @@
 import { scopeKey } from "@/mocks/scope";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, FileText, Package, Store } from "lucide-react";
-import { getImportSummary, getSADetail } from "@/features/sa/api/saApi";
-import type { SAImportedOutlet, SAProductQuota } from "@/features/sa/types";
+import { ArrowLeft, FileText, Package, Scale, Store } from "lucide-react";
+import { getImportSummary, getSADetail, getSIM3LONVariances } from "@/features/sa/api/saApi";
+import type { SAImportedOutlet, SAProductQuota, SIM3LONVarianceKind, SIM3LONVarianceRow } from "@/features/sa/types";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
@@ -90,6 +90,74 @@ const outletColumns: Column<SAImportedOutlet>[] = [
   },
 ];
 
+// Shown only when a planning start date produced one: for an agreement whose
+// whole month is planned in the system the column would be a row of zeros.
+const openingColumn: Column<SAImportedOutlet> = {
+  key: "saldoAwal",
+  header: "Saldo awal",
+  align: "right",
+  render: (row) => <span className="data text-ink-muted">{formatNumber(row.saldoAwal)}</span>,
+  sortValue: (row) => row.saldoAwal,
+};
+
+const varianceKindLabel: Record<SIM3LONVarianceKind, string> = {
+  over: "Lebih dari SIM3LON",
+  under: "Kurang dari SIM3LON",
+  unplanned: "Tidak direncanakan",
+  extra: "Tidak ada di SIM3LON",
+};
+
+const varianceColumns: Column<SIM3LONVarianceRow>[] = [
+  {
+    key: "tanggal",
+    header: "Tanggal",
+    render: (row) => <span className="data text-ink">{formatDateId(row.date)}</span>,
+    sortValue: (row) => row.date,
+  },
+  {
+    key: "pangkalan",
+    header: "Pangkalan",
+    render: (row) => (
+      <>
+        <span className="block font-medium text-ink">{row.outletName}</span>
+        <span className="data block text-2xs text-ink-muted">{row.outletCode}</span>
+      </>
+    ),
+    sortValue: (row) => row.outletName,
+  },
+  {
+    key: "sim3lon",
+    header: "SIM3LON",
+    align: "right",
+    render: (row) => <span className="data text-ink">{formatNumber(row.sim3lonQty)}</span>,
+    sortValue: (row) => row.sim3lonQty,
+  },
+  {
+    key: "komitmen",
+    header: "Dikonfirmasi",
+    align: "right",
+    render: (row) => <span className="data text-ink">{formatNumber(row.committedQty)}</span>,
+    sortValue: (row) => row.committedQty,
+  },
+  {
+    key: "selisih",
+    header: "Selisih",
+    align: "right",
+    render: (row) => (
+      <span className="data font-semibold text-ink">
+        {row.variance > 0 ? "+" : ""}{formatNumber(row.variance)}
+      </span>
+    ),
+    sortValue: (row) => Math.abs(row.variance),
+  },
+  {
+    key: "jenis",
+    header: "Jenis",
+    render: (row) => <span className="text-2xs text-ink-muted">{varianceKindLabel[row.kind]}</span>,
+    sortValue: (row) => row.kind,
+  },
+];
+
 export function SADetailPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -102,6 +170,16 @@ export function SADetailPage() {
   const importSummary = useQuery({
     queryKey: [...scopeKey(), "sa-import-summary", id],
     queryFn: () => getImportSummary(id),
+  });
+
+  // A SIM3LON agreement carries one product; the variance is read for it and
+  // the agreement's month once both are known.
+  const varianceProductId = detail.data?.products[0]?.productId;
+  const varianceMonth = detail.data?.periodeMulai.slice(0, 7);
+  const variances = useQuery({
+    queryKey: [...scopeKey(), "sa-sim3lon-variances", id, varianceProductId, varianceMonth],
+    queryFn: () => getSIM3LONVariances(varianceProductId ?? "", varianceMonth ?? ""),
+    enabled: Boolean(importSummary.data && varianceProductId && varianceMonth),
   });
 
   if (detail.isLoading) {
@@ -219,12 +297,45 @@ export function SADetailPage() {
             hint={`${summary.outlets.length} pangkalan tercatat dari berkas ini`}
           />
           <DataTable
-            columns={outletColumns}
+            columns={summary.outlets.some((row) => row.saldoAwal > 0)
+              ? [...outletColumns.slice(0, 4), openingColumn, ...outletColumns.slice(4)]
+              : outletColumns}
             data={summary.outlets}
             isLoading={false}
             rowKey={(row) => row.registrationCode}
             emptyIcon={Store}
             emptyMessage="Tidak ada pangkalan"
+            dense
+          />
+        </Panel>
+      )}
+
+      {summary && (
+        <Panel>
+          <PanelHeader
+            title="Selisih SIM3LON"
+            hint={variances.data?.planningStartDate
+              ? `SIM3LON terbaru dibanding rencana yang sudah dikonfirmasi, sejak ${formatDateId(variances.data.planningStartDate)}`
+              : "SIM3LON terbaru dibanding rencana yang sudah dikonfirmasi"}
+          />
+          {variances.data && !variances.data.planningStartDate &&
+            variances.data.rows.some((row) => row.kind === "unplanned") && (
+            <PanelBody>
+              <p className="rounded-sm border border-signal/30 bg-signal-soft px-3 py-2 text-xs text-signal-ink">
+                Tanggal mulai sistem cabang ini belum diatur, jadi setiap tanggal yang sudah lewat dianggap
+                harus direncanakan di sistem. Jika penyaluran sebelum go-live terjadi di luar sistem, atur
+                Tanggal mulai sistem di halaman Schedule Agreement agar tanggal itu menjadi saldo awal.
+              </p>
+            </PanelBody>
+          )}
+          <DataTable
+            columns={varianceColumns}
+            data={variances.data?.rows ?? []}
+            isLoading={variances.isLoading}
+            rowKey={(row) => `${row.outletId}-${row.date}`}
+            emptyIcon={Scale}
+            emptyMessage="Tidak ada selisih"
+            emptyDescription="Setiap tanggal yang sudah dikonfirmasi atau lewat sesuai dengan SIM3LON terbaru. Unggahan koreksi tidak pernah mengubah rencana berjalan; selisihnya muncul di sini."
             dense
           />
         </Panel>

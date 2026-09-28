@@ -205,7 +205,7 @@ export const TENANTS: TenantEntity[] = [
     indukId: null, level: 0, jenisUsaha: "holding", jenis: "grup", aktif: true,
   },
   {
-    id: "tnt-002", kode: "pt-salatiga", nama: "PT Bimbo Salatiga",
+    id: "tnt-002", kode: "pt-salatiga", nama: "PT. Bhakta Dharma Anindita",
     indukId: "tnt-001", level: 1, jenisUsaha: "lpg_distribution",
     jenis: "operasional", aktif: true,
   },
@@ -1220,7 +1220,7 @@ function seedBankAccounts(): BankAccountEntity[] {
     id: `bank-${String(i + 1).padStart(3, "0")}`,
     bank,
     nomorRekening: `${randInt(100, 999)}-${randInt(100000, 999999)}-${randInt(10, 99)}`,
-    atasNama: "PT Bimbo Salatiga",
+    atasNama: "PT. Bhakta Dharma Anindita",
     cabang,
     utama: i === 0,
     aktif: true,
@@ -1265,8 +1265,8 @@ function seedSettingsByTenant(): TenantSettingsEntity[] {
       // the group — which is the point.
       tenantId: "tnt-002",
       values: {
-        namaPerusahaan: "PT Bimbo Salatiga",
-        namaLegal: "PT Bimbo Salatiga Sejahtera",
+        namaPerusahaan: "PT. Bhakta Dharma Anindita",
+        namaLegal: "PT. Bhakta Dharma Anindita",
         nomorAgen: "AG-3373-0142",
         nomorRegistrasi: "NIB-3373-0001-2024",
         npwp: "01.234.567.8-508.000",

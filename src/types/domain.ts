@@ -95,6 +95,11 @@ export interface BranchEntity {
   /** The branch loaded at login when none is specified. */
   utama: boolean;
   aktif: boolean;
+  /**
+   * core.branches.planning_start_date: the first date this branch plans in
+   * the system. Earlier SIM3LON days are the Base quota's opening balance.
+   */
+  planningStartDate?: string;
 }
 
 /** The four authorisation levels the backend defines on iam.user_roles. */
@@ -277,6 +282,12 @@ export interface SAEntity extends Scoped {
   // until one is imported or added.
   productId?: ID;
   productName?: string;
+  /**
+   * Mock parity for core.sa_quota_opening_balances: outlet -> units delivered
+   * before the branch's planning start date. Folded into `dialokasikan` and
+   * `terpakai` the way the backend folds it into allocated and used.
+   */
+  saldoAwal?: Record<ID, number>;
 }
 
 /**

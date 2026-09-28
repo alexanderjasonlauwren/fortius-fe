@@ -46,6 +46,11 @@ export interface SAImportedOutlet {
   normal: number;
   fakultatif: number;
   sisa: number;
+  /**
+   * Delivered before the branch's planning start date, per SIM3LON. Already
+   * counted in the Base quota's allocated and used totals.
+   */
+  saldoAwal: number;
 }
 
 /**
@@ -189,7 +194,9 @@ export type SIM3LONChangeClassification =
   | "zero"
   | "removed"
   | "unchanged"
-  | "local_conflict";
+  | "local_conflict"
+  /** Before the planning start date: moves the opening balance, never a plan. */
+  | "pre_cutover";
 
 export interface SIM3LONReconciliationPlanVersion {
   planId: string;
@@ -225,6 +232,76 @@ export interface SIM3LONReconciliationPreview {
   expectedPlanVersions: SIM3LONReconciliationPlanVersion[];
   changes: SIM3LONReconciliationChange[];
   blockers: SIM3LONReconciliationBlocker[];
+  /** Set when the branch's planning start date falls in or after this month. */
+  planningStartDate: string | null;
+  /** How far applying moves the Base quota's opening balance. */
+  openingBalanceDelta: number;
+  /** Delivered or dispatched dates the new source disagrees with. */
+  varianceCount: number;
+}
+
+/** One outlet's opening balance before and after a planning cutover. */
+export interface PlanningCutoverOutlet {
+  outletId: string;
+  openingBefore: number;
+  openingAfter: number;
+}
+
+/** One product-month whose Base quota a cutover moves. */
+export interface PlanningCutoverScope {
+  batchId: string;
+  productId: string;
+  periodMonth: string;
+  quotaTotal: number;
+  allocatedBefore: number;
+  allocatedAfter: number;
+  usedBefore: number;
+  usedAfter: number;
+  openingBefore: number;
+  openingAfter: number;
+  /** Pre-go-live revenue in the ledger for this month, PPN included. */
+  revenueBefore: number;
+  revenueAfter: number;
+  outlets: PlanningCutoverOutlet[];
+}
+
+/**
+ * The dry-run report of setting a branch's planning start date, or the result
+ * once applied.
+ */
+export interface PlanningCutoverReport {
+  branchId: string;
+  currentPlanningStartDate: string | null;
+  planningStartDate: string;
+  dryRun: boolean;
+  applied: boolean;
+  scopes: PlanningCutoverScope[];
+  blockers: SIM3LONReconciliationBlocker[];
+  /** Do not stop the cutover, but will stop the next re-upload. */
+  warnings: SIM3LONReconciliationBlocker[];
+}
+
+export type SIM3LONVarianceKind = "over" | "under" | "unplanned" | "extra";
+
+/** One outlet-date where the latest SIM3LON disagrees with committed plans. */
+export interface SIM3LONVarianceRow {
+  outletId: string;
+  outletCode: string;
+  outletName: string;
+  date: string;
+  sim3lonQty: number;
+  committedQty: number;
+  deliveredQty: number;
+  /** SIM3LON minus committed: negative means more was sent than SIM3LON states. */
+  variance: number;
+  kind: SIM3LONVarianceKind;
+}
+
+export interface SIM3LONVarianceReport {
+  batchId: string | null;
+  planningStartDate: string | null;
+  rows: SIM3LONVarianceRow[];
+  totalVariance: number;
 }
 
 export interface SIM3LONApplyReview {

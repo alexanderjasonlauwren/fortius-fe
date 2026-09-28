@@ -239,6 +239,7 @@ const classificationLabel: Record<SIM3LONChangeClassification, string> = {
   removed: "Dihapus sumber",
   unchanged: "Tetap",
   local_conflict: "Konflik lokal",
+  pre_cutover: "Saldo awal",
 };
 
 function ReconciliationLedger({ review }: { review: SIM3LONReconciliationPreview }) {
@@ -260,6 +261,28 @@ function ReconciliationLedger({ review }: { review: SIM3LONReconciliationPreview
           {review.reviewReady ? "Siap diterapkan" : "Perlu tindakan"}
         </span>
       </div>
+
+      {(review.planningStartDate || review.varianceCount > 0) && (
+        <div className="space-y-1 rounded-sm border border-line bg-panel-sunk px-3 py-2.5 text-2xs text-ink-muted">
+          {review.planningStartDate && (
+            <p>
+              Tanggal sebelum <span className="data text-ink">{review.planningStartDate}</span> sudah
+              disalurkan di luar sistem. Perubahannya menggeser saldo awal kuota Base sebesar{" "}
+              <span className="data font-semibold text-ink">
+                {review.openingBalanceDelta > 0 ? "+" : ""}{formatNumber(review.openingBalanceDelta)}
+              </span>{" "}
+              {unitLabel()}, tanpa membuat rencana.
+            </p>
+          )}
+          {review.varianceCount > 0 && (
+            <p>
+              <span className="data font-semibold text-ink">{formatNumber(review.varianceCount)}</span>{" "}
+              tanggal yang sudah dikonfirmasi atau dikirim kini berbeda dari SIM3LON. Rencana itu tidak
+              diubah; selisihnya tampil di halaman SA, bagian Selisih SIM3LON.
+            </p>
+          )}
+        </div>
+      )}
 
       {review.blockers.length > 0 && (
         <aside className="border-l-2 border-rust bg-rust-soft px-3 py-2.5">
@@ -298,7 +321,10 @@ function ReconciliationLedger({ review }: { review: SIM3LONReconciliationPreview
               <div className="mt-2 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 text-center">
                 <LedgerValue label="Sumber sebelumnya" value={change.baselineQty} />
                 <ArrowRight className="h-3.5 w-3.5 text-ink-faint" />
-                <LedgerValue label="Draf saat ini" value={change.currentQty} />
+                <LedgerValue
+                  label={change.classification === "pre_cutover" ? "Di luar sistem" : "Draf saat ini"}
+                  value={change.currentQty}
+                />
                 <ArrowRight className="h-3.5 w-3.5 text-ink-faint" />
                 <LedgerValue label="Usulan" value={change.proposedQty} />
               </div>

@@ -10,6 +10,7 @@
  * it is running against.
  */
 import type {
+  PlanningCutoverReport,
   SAImportApplied,
   SAImportBatch,
   SAImportSummary,
@@ -17,6 +18,7 @@ import type {
   SIM3LONApplyReview,
   SIM3LONPreview,
   SIM3LONReconciliationPreview,
+  SIM3LONVarianceReport,
   ScheduleAgreement,
   SAFilterParams,
   UploadSAPayload,
@@ -56,4 +58,15 @@ export interface ScheduleAgreementApi {
   previewSIM3LON(file: File, supplierName: string, productId: string): Promise<SIM3LONPreview>;
   getSIM3LONReconciliation(batchId: string): Promise<SIM3LONReconciliationPreview>;
   applySIM3LON(batchId: string, review?: SIM3LONApplyReview): Promise<SIM3LONApplied>;
+  /**
+   * Sets the date the default branch starts planning in the system. Earlier
+   * SIM3LON days become the Base quota's opening balance. `dryRun` reports the
+   * movement and blockers without writing.
+   */
+  setPlanningCutover(planningStartDate: string, dryRun: boolean): Promise<PlanningCutoverReport>;
+  /**
+   * Where the latest SIM3LON disagrees with confirmed-or-later plans, from the
+   * planning start date on. Computed on every read; nothing is rewritten.
+   */
+  getSIM3LONVariances(productId: string, month: string): Promise<SIM3LONVarianceReport>;
 }
