@@ -42,7 +42,7 @@ export function SIM3LONIntegrationPage() {
     <div>
       <PageHeader
         eyebrow="Integrasi"
-        title="SIM3LON — Data Langsung"
+        title="SIM3LON"
         description="Bukti integrasi: data ini ditarik langsung dari platform SIM3LON Pertamina dan ditampilkan apa adanya di sistem kita."
       />
 

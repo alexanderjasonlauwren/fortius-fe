@@ -106,7 +106,7 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: [PERMISSIONS.DELIVERIES_VIEW, PERMISSIONS.GPS_TRACKS_VIEW],
       },
       {
-        name: "SIM3LON Langsung",
+        name: "SIM3LON",
         href: "/integration/sim3lon",
         icon: Network,
         hint: "Data perencanaan & penyaluran ditarik langsung dari SIM3LON Pertamina",
