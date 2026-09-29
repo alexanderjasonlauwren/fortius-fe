@@ -702,7 +702,20 @@ export type AccountRole =
   | "returPenjualan"
   | "hpp"
   | "ppnKeluaran"
-  | "labaDitahan";
+  | "labaDitahan"
+  // Chart v2 (financial-statements plan, phase P1) -- mirrors
+  // fortius-backend's own new fin.accounts roles one for one; see
+  // tenantprovisioning/chart.go for the backend names these translate.
+  | "piutangPendaftaran"
+  | "hutangTitipan"
+  | "uangMuka"
+  | "saldoAwalEkuitas"
+  | "pendapatanPendaftaran"
+  | "jasaGiro"
+  | "pendapatanLain"
+  | "selisihPersediaan"
+  | "administrasiBank"
+  | "pajakJasaGiro";
 
 export interface AccountEntity {
   id: ID;

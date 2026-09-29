@@ -14,6 +14,9 @@ import type { AgingRow, FinanceApi } from "./contract";
 export type {
   AgingReport,
   AgingRow,
+  ChartUpgradeConflict,
+  ChartUpgradeResult,
+  CreateAccountInput,
   CreditNoteInput,
   CreditNoteView,
   FundingResult,
@@ -44,6 +47,8 @@ export const getJournals = api.getJournals.bind(api);
 export const getTrialBalance = api.getTrialBalance.bind(api);
 export const getProfitAndLoss = api.getProfitAndLoss.bind(api);
 export const getChartOfAccounts = api.getChartOfAccounts.bind(api);
+export const createAccount = api.createAccount.bind(api);
+export const upgradeChart = api.upgradeChart.bind(api);
 
 export async function exportAging(): Promise<number> {
   const report = await getAgingReport();

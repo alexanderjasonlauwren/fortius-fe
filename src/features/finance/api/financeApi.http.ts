@@ -36,6 +36,8 @@ import type {
   AgingReport,
   AgingRow,
   AllocationLine,
+  ChartUpgradeResult,
+  CreateAccountInput,
   CreditNoteInput,
   CreditNoteView,
   DateRange,
@@ -820,6 +822,48 @@ async function getChartOfAccounts(): Promise<AccountBalance[]> {
     );
 }
 
+const ACCOUNT_TYPE_REVERSE: Record<CreateAccountInput["tipe"], string> = {
+  Aset: "asset",
+  Kewajiban: "liability",
+  Ekuitas: "equity",
+  Pendapatan: "revenue",
+  Beban: "expense",
+};
+
+async function createAccount(input: CreateAccountInput): Promise<void> {
+  await send("post", "/accounts", {
+    code: input.kode,
+    name: input.nama,
+    account_type: ACCOUNT_TYPE_REVERSE[input.tipe],
+    parent_id: input.indukId,
+    description: input.deskripsi,
+  });
+}
+
+interface ChartUpgradeConflictResponse {
+  code: string;
+  reason: string;
+}
+
+interface ChartUpgradeApiResponse {
+  dry_run: boolean;
+  accounts_added: string[] | null;
+  layouts_added: string[] | null;
+  conflicts: ChartUpgradeConflictResponse[] | null;
+}
+
+async function upgradeChart(dryRun = true): Promise<ChartUpgradeResult> {
+  const result = await send<ChartUpgradeApiResponse>("post", "/accounts/chart-upgrade", {
+    dry_run: dryRun,
+  });
+  return {
+    dryRun: result.dry_run,
+    akunDitambahkan: result.accounts_added ?? [],
+    layoutDitambahkan: result.layouts_added ?? [],
+    konflik: (result.conflicts ?? []).map((c) => ({ kode: c.code, alasan: c.reason })),
+  };
+}
+
 export const financeApiHttp: FinanceApi = {
   getInvoices,
   getAgingReport,
@@ -836,4 +880,6 @@ export const financeApiHttp: FinanceApi = {
   getTrialBalance,
   getProfitAndLoss,
   getChartOfAccounts,
+  createAccount,
+  upgradeChart,
 };

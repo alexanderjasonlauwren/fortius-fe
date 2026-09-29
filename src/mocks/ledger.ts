@@ -6,6 +6,7 @@
  * is what makes the finance figures reconcilable instead of merely plausible.
  */
 
+import { nextId } from "./db";
 import { stampScope } from "./scope";
 import type {
   AccountEntity,
@@ -51,10 +52,129 @@ const CHART: Seed[] = [
   { kode: "5-1000", nama: "Harga Pokok Penjualan", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", role: "hpp", sistem: true, aktif: true },
   { kode: "5-2000", nama: "Beban Angkut", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", sistem: false, aktif: true },
   { kode: "5-3000", nama: "Beban Operasional", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", sistem: false, aktif: true },
+
+  // Chart v2 (financial-statements plan, phase P1) -- ported from
+  // fortius-backend's own tenantprovisioning/chart.go, same codes, same
+  // names, same order, for the reason this file's own header gives: a
+  // tenant provisioned by the backend and this mock database describe the
+  // same ledger. Nothing posts to these yet (see each new AccountRole's own
+  // comment in types/domain.ts) -- that lands with the phase that needs it.
+  { kode: "1-1210", nama: "Piutang Pendaftaran Pangkalan", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", role: "piutangPendaftaran", sistem: true, aktif: true },
+  { kode: "1-1310", nama: "Persediaan Perlengkapan Pangkalan", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", sistem: false, aktif: true },
+  { kode: "1-1311", nama: "Persediaan Timbangan", tipe: "Aset", saldoNormal: "debit", induk: "1-1310", sistem: false, aktif: true },
+  { kode: "1-1312", nama: "Persediaan Papan Pangkalan", tipe: "Aset", saldoNormal: "debit", induk: "1-1310", sistem: false, aktif: true },
+  { kode: "1-1313", nama: "Persediaan APAR", tipe: "Aset", saldoNormal: "debit", induk: "1-1310", sistem: false, aktif: true },
+  { kode: "1-1400", nama: "Piutang Lain - lain", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", sistem: false, aktif: true },
+  { kode: "1-1500", nama: "Sewa Dibayar Dimuka", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", sistem: false, aktif: true },
+  { kode: "1-1600", nama: "Uang Muka Pembelian & Jaminan", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", role: "uangMuka", sistem: true, aktif: true },
+  { kode: "1-2000", nama: "ASET TETAP", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", sistem: false, aktif: true },
+  { kode: "1-2100", nama: "Bangunan", tipe: "Aset", saldoNormal: "debit", induk: "1-2000", sistem: false, aktif: true },
+  { kode: "1-2200", nama: "Kendaraan", tipe: "Aset", saldoNormal: "debit", induk: "1-2000", sistem: false, aktif: true },
+  { kode: "1-2300", nama: "Inventaris Kantor", tipe: "Aset", saldoNormal: "debit", induk: "1-2000", sistem: false, aktif: true },
+  { kode: "1-2900", nama: "Akumulasi Penyusutan", tipe: "Aset", saldoNormal: "kredit", induk: "1-2000", sistem: false, aktif: true },
+  { kode: "1-3000", nama: "ASET TIDAK BERWUJUD", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", sistem: false, aktif: true },
+  { kode: "1-3100", nama: "Perijinan", tipe: "Aset", saldoNormal: "debit", induk: "1-3000", sistem: false, aktif: true },
+  { kode: "1-3900", nama: "Akumulasi Amortisasi", tipe: "Aset", saldoNormal: "kredit", induk: "1-3000", sistem: false, aktif: true },
+
+  { kode: "2-1100", nama: "Hutang Titipan", tipe: "Kewajiban", saldoNormal: "kredit", induk: "2-0000", role: "hutangTitipan", sistem: true, aktif: true },
+  { kode: "2-1300", nama: "Hutang Pajak", tipe: "Kewajiban", saldoNormal: "kredit", induk: "2-0000", sistem: false, aktif: true },
+  { kode: "2-1310", nama: "Hutang PPh 4(2)", tipe: "Kewajiban", saldoNormal: "kredit", induk: "2-1300", sistem: false, aktif: true },
+  { kode: "2-1320", nama: "Hutang PPh 21", tipe: "Kewajiban", saldoNormal: "kredit", induk: "2-1300", sistem: false, aktif: true },
+  { kode: "2-1330", nama: "Hutang PPh 23", tipe: "Kewajiban", saldoNormal: "kredit", induk: "2-1300", sistem: false, aktif: true },
+  { kode: "2-1900", nama: "Hutang Lain - lain", tipe: "Kewajiban", saldoNormal: "kredit", induk: "2-0000", sistem: false, aktif: true },
+
+  { kode: "3-9000", nama: "Saldo Awal Ekuitas", tipe: "Ekuitas", saldoNormal: "kredit", induk: "3-0000", role: "saldoAwalEkuitas", sistem: true, aktif: true },
+
+  { kode: "4-1100", nama: "Pendapatan Pendaftaran Pangkalan", tipe: "Pendapatan", saldoNormal: "kredit", induk: "4-0000", role: "pendapatanPendaftaran", sistem: true, aktif: true },
+  { kode: "4-3100", nama: "Pendapatan Jasa Giro", tipe: "Pendapatan", saldoNormal: "kredit", induk: "4-0000", role: "jasaGiro", sistem: true, aktif: true },
+  { kode: "4-3900", nama: "Pendapatan Lain-lain", tipe: "Pendapatan", saldoNormal: "kredit", induk: "4-0000", role: "pendapatanLain", sistem: true, aktif: true },
+
+  { kode: "5-1900", nama: "Selisih Persediaan", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", role: "selisihPersediaan", sistem: true, aktif: true },
+  { kode: "5-3400", nama: "Beban Parkir", tipe: "Beban", saldoNormal: "debit", induk: "5-3000", sistem: false, aktif: true },
+  { kode: "5-4000", nama: "Beban Umum dan Administrasi", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", sistem: false, aktif: true },
+  { kode: "5-4100", nama: "Gaji Pokok Staff", tipe: "Beban", saldoNormal: "debit", induk: "5-4000", sistem: false, aktif: true },
+  { kode: "5-4200", nama: "ATK & Keperluan Kantor Lainnya", tipe: "Beban", saldoNormal: "debit", induk: "5-4000", sistem: false, aktif: true },
+  { kode: "5-4300", nama: "Iuran & Sumbangan", tipe: "Beban", saldoNormal: "debit", induk: "5-4000", sistem: false, aktif: true },
+  { kode: "5-4400", nama: "Telepon & Internet", tipe: "Beban", saldoNormal: "debit", induk: "5-4000", sistem: false, aktif: true },
+  { kode: "5-5000", nama: "Penyusutan & Amortisasi", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", sistem: false, aktif: true },
+  { kode: "5-5100", nama: "Biaya Penyusutan Bangunan", tipe: "Beban", saldoNormal: "debit", induk: "5-5000", sistem: false, aktif: true },
+  { kode: "5-5200", nama: "Biaya Penyusutan Kendaraan", tipe: "Beban", saldoNormal: "debit", induk: "5-5000", sistem: false, aktif: true },
+  { kode: "5-5300", nama: "Biaya Penyusutan Inventaris Kantor", tipe: "Beban", saldoNormal: "debit", induk: "5-5000", sistem: false, aktif: true },
+  { kode: "5-5400", nama: "Amortisasi Perijinan", tipe: "Beban", saldoNormal: "debit", induk: "5-5000", sistem: false, aktif: true },
+  { kode: "5-5500", nama: "Biaya Sewa Tanah", tipe: "Beban", saldoNormal: "debit", induk: "5-5000", sistem: false, aktif: true },
+  { kode: "5-6000", nama: "Beban Di Luar Usaha", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", sistem: false, aktif: true },
+  { kode: "5-6100", nama: "Administrasi Bank", tipe: "Beban", saldoNormal: "debit", induk: "5-6000", role: "administrasiBank", sistem: true, aktif: true },
+  { kode: "5-6200", nama: "Biaya Pajak Jasa Giro", tipe: "Beban", saldoNormal: "debit", induk: "5-6000", role: "pajakJasaGiro", sistem: true, aktif: true },
 ];
 
 export function seedAccounts(): AccountEntity[] {
   return CHART.map((a, i) => ({ ...a, id: `acc-${String(i + 1).padStart(3, "0")}` }));
+}
+
+/**
+ * Adds a plain, non-system account to the chart -- mirrors
+ * fortius-backend's `account.CreateAccount`. Never a system account: those
+ * exist only in the starting seed above, the same reasoning the backend's
+ * own CreateAccountRequest gives for accepting no `role`/`is_system`.
+ */
+export function createAccount(
+  db: Database,
+  input: { kode: string; nama: string; tipe: AccountEntity["tipe"]; indukId?: ID; deskripsi?: string },
+): AccountEntity {
+  if (db.accounts.some((a) => a.kode === input.kode)) {
+    throw new Error(`Akun dengan kode "${input.kode}" sudah ada.`);
+  }
+  const parent = input.indukId ? db.accounts.find((a) => a.id === input.indukId) : undefined;
+  const account: AccountEntity = {
+    id: nextId("acc"),
+    kode: input.kode,
+    nama: input.nama,
+    tipe: input.tipe,
+    saldoNormal: input.tipe === "Aset" || input.tipe === "Beban" ? "debit" : "kredit",
+    induk: parent?.kode,
+    sistem: false,
+    aktif: true,
+  };
+  db.accounts.push(account);
+  return account;
+}
+
+/**
+ * Brings this database's chart up to the current `CHART` seed above --
+ * mirrors fortius-backend's `tenantprovisioning.UpgradeChart` (financial-
+ * statements plan, phase P1). Every mock database is already seeded from
+ * the current `CHART` at creation (`seedAccounts`), so in practice this
+ * finds nothing to add; it exists so the console's "Perbarui bagan akun"
+ * button behaves identically against both adapters rather than only
+ * existing in one of them.
+ */
+export function upgradeChart(
+  db: Database,
+  dryRun: boolean,
+): { akunDitambahkan: string[]; konflik: { kode: string; alasan: string }[] } {
+  const byCode = new Map(db.accounts.map((a) => [a.kode, a]));
+  const akunDitambahkan: string[] = [];
+  const konflik: { kode: string; alasan: string }[] = [];
+
+  for (const seed of CHART) {
+    const existing = byCode.get(seed.kode);
+    if (existing) {
+      if (existing.tipe !== seed.tipe) {
+        konflik.push({
+          kode: seed.kode,
+          alasan: `sudah ada sebagai ${existing.tipe}, bagan standar mengharapkan ${seed.tipe}`,
+        });
+      }
+      continue;
+    }
+    akunDitambahkan.push(seed.kode);
+    if (!dryRun) {
+      const account: AccountEntity = { ...seed, id: nextId("acc") };
+      db.accounts.push(account);
+      byCode.set(account.kode, account);
+    }
+  }
+  return { akunDitambahkan, konflik };
 }
 
 /** Finds a posting account by role. Throws loudly — a missing role is a bug. */

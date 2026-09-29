@@ -320,3 +320,55 @@ describe("trial balance", () => {
     expect(getOne.mock.calls[0][0]).toBe("/journals/trial-balance?as_of=2026-09-30");
   });
 });
+
+describe("chart of accounts: create + upgrade (phase P1)", () => {
+  it("maps a create-account input to the backend's wire shape", async () => {
+    send.mockResolvedValue({
+      id: "a9", code: "1-9000", name: "Akun Kustom", account_type: "asset",
+      normal_balance: "dr", is_system: false,
+    });
+
+    await financeApiHttp.createAccount({
+      kode: "1-9000",
+      nama: "Akun Kustom",
+      tipe: "Aset",
+      indukId: "PARENT_ID",
+      deskripsi: "Ditambahkan manual",
+    });
+
+    expect(send).toHaveBeenCalledWith("post", "/accounts", {
+      code: "1-9000",
+      name: "Akun Kustom",
+      account_type: "asset",
+      parent_id: "PARENT_ID",
+      description: "Ditambahkan manual",
+    });
+  });
+
+  it("sends dry_run and maps the upgrade response, defaulting null arrays to empty", async () => {
+    send.mockResolvedValue({
+      dry_run: true,
+      accounts_added: ["1-2100", "1-2900"],
+      layouts_added: null,
+      conflicts: [{ code: "1-2100", reason: "exists as liability, seed expects asset" }],
+    });
+
+    const result = await financeApiHttp.upgradeChart(true);
+
+    expect(send).toHaveBeenCalledWith("post", "/accounts/chart-upgrade", { dry_run: true });
+    expect(result).toEqual({
+      dryRun: true,
+      akunDitambahkan: ["1-2100", "1-2900"],
+      layoutDitambahkan: [],
+      konflik: [{ kode: "1-2100", alasan: "exists as liability, seed expects asset" }],
+    });
+  });
+
+  it("defaults dryRun to true when the caller passes nothing", async () => {
+    send.mockResolvedValue({ dry_run: true, accounts_added: [], layouts_added: [], conflicts: [] });
+
+    await financeApiHttp.upgradeChart();
+
+    expect(send).toHaveBeenCalledWith("post", "/accounts/chart-upgrade", { dry_run: true });
+  });
+});

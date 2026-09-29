@@ -211,4 +211,31 @@ export interface FinanceApi {
   getTrialBalance(range: { from: string; to: string }): Promise<TrialBalanceView>;
   getProfitAndLoss(range: { from: string; to: string }): Promise<ProfitAndLossView>;
   getChartOfAccounts(): Promise<AccountBalance[]>;
+  /** Adds a plain sub-account to the chart -- never a system account, which
+   *  only the starting chart (or an upgrade) can create. */
+  createAccount(input: CreateAccountInput): Promise<void>;
+  /** Brings this tenant's chart of accounts and statement layouts up to the
+   *  current chart-v2 seed (financial-statements plan, phase P1). dryRun
+   *  defaults true: preview before writing. Only ever adds. */
+  upgradeChart(dryRun?: boolean): Promise<ChartUpgradeResult>;
+}
+
+export interface CreateAccountInput {
+  kode: string;
+  nama: string;
+  tipe: "Aset" | "Kewajiban" | "Ekuitas" | "Pendapatan" | "Beban";
+  indukId?: string;
+  deskripsi?: string;
+}
+
+export interface ChartUpgradeConflict {
+  kode: string;
+  alasan: string;
+}
+
+export interface ChartUpgradeResult {
+  dryRun: boolean;
+  akunDitambahkan: string[];
+  layoutDitambahkan: string[];
+  konflik: ChartUpgradeConflict[];
 }

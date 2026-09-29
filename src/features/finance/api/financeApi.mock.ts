@@ -1,7 +1,13 @@
 import { scopedDb } from "@/mocks/scope";
-import { ApiError, latency } from "@/mocks/db";
+import { ApiError, latency, mutate } from "@/mocks/db";
 import { agingBucket, invoiceSisa, outletExposure, unallocated } from "@/mocks/ar";
-import { accountBalances, profitAndLoss, trialBalance } from "@/mocks/ledger";
+import {
+  accountBalances,
+  createAccount as mocksCreateAccount,
+  profitAndLoss,
+  trialBalance,
+  upgradeChart as mocksUpgradeChart,
+} from "@/mocks/ledger";
 import {
   allocatePayment,
   createCreditNote,
@@ -16,6 +22,8 @@ import type {
   AgingReport,
   AgingRow,
   AllocationLine,
+  ChartUpgradeResult,
+  CreateAccountInput,
   CreditNoteInput,
   CreditNoteView,
   DateRange,
@@ -348,6 +356,30 @@ async function getChartOfAccounts(): Promise<AccountBalance[]> {
   return accountBalances(scopedDb());
 }
 
+async function createAccount(input: CreateAccountInput): Promise<void> {
+  await latency("write");
+  mutate((db) => {
+    mocksCreateAccount(db, {
+      kode: input.kode,
+      nama: input.nama,
+      tipe: input.tipe,
+      indukId: input.indukId,
+      deskripsi: input.deskripsi,
+    });
+  });
+}
+
+async function upgradeChart(dryRun = true): Promise<ChartUpgradeResult> {
+  await latency("write");
+  const result = mutate((db) => mocksUpgradeChart(db, dryRun));
+  return {
+    dryRun,
+    akunDitambahkan: result.akunDitambahkan,
+    layoutDitambahkan: [],
+    konflik: result.konflik,
+  };
+}
+
 export const financeApiMock: FinanceApi = {
   getInvoices,
   getAgingReport,
@@ -363,5 +395,7 @@ export const financeApiMock: FinanceApi = {
   getJournals,
   getTrialBalance,
   getProfitAndLoss,
+  createAccount,
+  upgradeChart,
   getChartOfAccounts,
 };

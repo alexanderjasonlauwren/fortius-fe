@@ -110,6 +110,11 @@ export const PERMISSIONS = {
    * tab needs its own gate, not the page-level JOURNALS_VIEW one.
    */
   ACCOUNTS_VIEW: "finance.read.accounts",
+  /**
+   * Adding to the chart -- a plain sub-account by hand, or the chart-v2
+   * upgrade (financial-statements plan, phase P1), which only ever adds.
+   */
+  ACCOUNTS_CREATE: "finance.create.accounts",
 
   // Delivery execution — what happens at the drop, recorded by whoever is
   // there. Executing is an update to the delivery row, not a verb of its own.
