@@ -115,6 +115,15 @@ export const PERMISSIONS = {
    * upgrade (financial-statements plan, phase P1), which only ever adds.
    */
   ACCOUNTS_CREATE: "finance.create.accounts",
+  /**
+   * The generated statements themselves (Laba Rugi, Neraca, Penjelasan
+   * Akun, Buku Besar) -- financial-statements plan, phase P2. Granted
+   * alongside JOURNALS_VIEW to tenant_admin and finance_officer, since
+   * every figure is already visible to both roles via the journals it is
+   * computed from.
+   */
+  FINANCIAL_STATEMENTS_VIEW: "finance.read.financial_statements",
+  FINANCIAL_STATEMENTS_EXPORT: "finance.export.financial_statements",
 
   // Delivery execution — what happens at the drop, recorded by whoever is
   // there. Executing is an update to the delivery row, not a verb of its own.

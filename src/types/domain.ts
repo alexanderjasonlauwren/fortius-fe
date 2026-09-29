@@ -715,7 +715,16 @@ export type AccountRole =
   | "pendapatanLain"
   | "selisihPersediaan"
   | "administrasiBank"
-  | "pajakJasaGiro";
+  | "pajakJasaGiro"
+  // Pre-existing backend accounts (fortius-backend's own tenantprovisioning/
+  // chart.go 1-1250/4-2000) the mock chart never carried until the
+  // financial-statements plan's ported layouts (phase P2) needed them.
+  | "piutangTransportFee"
+  | "pendapatanTransportFee"
+  | "bebanBahanBakar"
+  | "bebanTol"
+  | "bebanPemeliharaan"
+  | "bebanOperasionalLainnya";
 
 export interface AccountEntity {
   id: ID;
@@ -744,7 +753,12 @@ export type JournalSourceType =
   | "payment"
   | "creditNote"
   | "delivery"
-  | "manual";
+  | "manual"
+  // Mirrors fortius-backend's own fin.journals.source_type CHECK (no mock
+  // posting rule uses it yet): the financial-statements engine's own
+  // inventory-purchases cross-check (financial-statements plan, phase P2)
+  // needs to tell a real purchase journal apart from a hand-entered one.
+  | "purchase";
 
 /**
  * A posted journal is immutable. Corrections are made by posting a reversal,

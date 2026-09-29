@@ -22,6 +22,7 @@ import { PaymentPage } from "./pages/payments/PaymentPage";
 import { PaymentControlPage } from "./pages/payments/PaymentControlPage";
 import { ReceivablesPage } from "./pages/receivables/ReceivablesPage";
 import { LedgerPage } from "./pages/ledger/LedgerPage";
+import { FinancialStatementsPage } from "./pages/financialstatements/FinancialStatementsPage";
 import { ReportsPage } from "./pages/reports/ReportsPage";
 import { TransactionListPage } from "./pages/transactions/TransactionListPage";
 import { OutletListPage } from "./pages/outlet/OutletListPage";
@@ -162,6 +163,11 @@ const router = createBrowserRouter([
       { path: "ledger", element: (
         <RequirePermission permission={PERMISSIONS.JOURNALS_VIEW}>
           <LedgerPage />
+        </RequirePermission>
+      ) },
+      { path: "financial-statements", element: (
+        <RequirePermission permission={PERMISSIONS.FINANCIAL_STATEMENTS_VIEW}>
+          <FinancialStatementsPage />
         </RequirePermission>
       ) },
       { path: "reports", element: (

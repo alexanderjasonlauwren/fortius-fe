@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileSignature,
+  FileSpreadsheet,
   FileText,
   Fuel,
   IdCard,
@@ -66,7 +67,12 @@ export const NAV_GROUPS: NavGroup[] = [
         hint: "Papan berangkat hari ini dan angka kunci",
       },
       {
-        name: "Laporan Keuangan",
+        // Financial-statements plan, phase P2: renamed so it stops
+        // colliding with the new "Laporan Keuangan" (the generated
+        // statements themselves) under Keuangan below. This page is the
+        // operational recap -- volume, verified cash, top outlets -- not a
+        // Laba Rugi or Neraca.
+        name: "Rekap Operasional",
         href: "/reports",
         icon: FileText,
         hint: "Rekap distribusi, kas terverifikasi, dan piutang per periode",
@@ -165,6 +171,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: BookOpen,
         hint: "Jurnal, neraca saldo, dan laba rugi",
         permission: PERMISSIONS.JOURNALS_VIEW,
+      },
+      {
+        name: "Laporan Keuangan",
+        href: "/financial-statements",
+        icon: FileSpreadsheet,
+        hint: "Laba Rugi, Neraca, dan Penjelasan Akun, dihasilkan dari buku besar",
+        permission: PERMISSIONS.FINANCIAL_STATEMENTS_VIEW,
       },
       {
         name: "Rekap Transaksi",

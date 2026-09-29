@@ -31,6 +31,11 @@ const CHART: Seed[] = [
   { kode: "1-1100", nama: "Bank", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", role: "bank", sistem: true, aktif: true },
   { kode: "1-1200", nama: "Piutang Usaha", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", role: "piutang", sistem: true, aktif: true },
   { kode: "1-1300", nama: `Persediaan ${unitLabelTitle()}`, tipe: "Aset", saldoNormal: "debit", induk: "1-0000", role: "persediaan", sistem: true, aktif: true },
+  // The transportation-fee stream's own receivable, distinct from 1-1200 --
+  // mirrors fortius-backend's own pre-chart-v2 1-1250 (tenantprovisioning/
+  // chart.go), missing here until the financial-statements plan's own
+  // ported layouts (phase P2) needed it to render Piutang Usaha's Note 3.
+  { kode: "1-1250", nama: "Piutang Transport Fee", tipe: "Aset", saldoNormal: "debit", induk: "1-0000", role: "piutangTransportFee", sistem: true, aktif: true },
 
   // Kewajiban
   { kode: "2-0000", nama: "KEWAJIBAN", tipe: "Kewajiban", saldoNormal: "kredit", sistem: true, aktif: true },
@@ -46,12 +51,22 @@ const CHART: Seed[] = [
   { kode: "4-0000", nama: "PENDAPATAN", tipe: "Pendapatan", saldoNormal: "kredit", sistem: true, aktif: true },
   { kode: "4-1000", nama: "Penjualan", tipe: "Pendapatan", saldoNormal: "kredit", induk: "4-0000", role: "pendapatan", sistem: true, aktif: true },
   { kode: "4-1900", nama: "Retur & Potongan Penjualan", tipe: "Pendapatan", saldoNormal: "debit", induk: "4-0000", role: "returPenjualan", sistem: true, aktif: true },
+  // Mirrors fortius-backend's own pre-chart-v2 4-2000; see 1-1250's own
+  // comment above.
+  { kode: "4-2000", nama: "Pendapatan Transport Fee", tipe: "Pendapatan", saldoNormal: "kredit", induk: "4-0000", role: "pendapatanTransportFee", sistem: true, aktif: true },
 
   // Beban
   { kode: "5-0000", nama: "BEBAN", tipe: "Beban", saldoNormal: "debit", sistem: true, aktif: true },
   { kode: "5-1000", nama: "Harga Pokok Penjualan", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", role: "hpp", sistem: true, aktif: true },
   { kode: "5-2000", nama: "Beban Angkut", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", sistem: false, aktif: true },
   { kode: "5-3000", nama: "Beban Operasional", tipe: "Beban", saldoNormal: "debit", induk: "5-0000", sistem: false, aktif: true },
+  // Pre-existing backend accounts (tenantprovisioning/chart.go's own D3
+  // A-Step 4 expense-category roles) the mock chart never carried until the
+  // financial-statements plan's ported layouts (phase P2) needed them.
+  { kode: "5-3100", nama: "Beban Bahan Bakar", tipe: "Beban", saldoNormal: "debit", induk: "5-3000", role: "bebanBahanBakar", sistem: true, aktif: true },
+  { kode: "5-3200", nama: "Beban Tol", tipe: "Beban", saldoNormal: "debit", induk: "5-3000", role: "bebanTol", sistem: true, aktif: true },
+  { kode: "5-3300", nama: "Beban Pemeliharaan", tipe: "Beban", saldoNormal: "debit", induk: "5-3000", role: "bebanPemeliharaan", sistem: true, aktif: true },
+  { kode: "5-3900", nama: "Beban Operasional Lainnya", tipe: "Beban", saldoNormal: "debit", induk: "5-3000", role: "bebanOperasionalLainnya", sistem: true, aktif: true },
 
   // Chart v2 (financial-statements plan, phase P1) -- ported from
   // fortius-backend's own tenantprovisioning/chart.go, same codes, same

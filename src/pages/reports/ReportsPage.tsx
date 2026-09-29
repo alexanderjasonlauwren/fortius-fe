@@ -214,7 +214,7 @@ export function ReportsPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Keuangan"
-        title="Laporan Keuangan"
+        title="Rekap Operasional"
         description="Rekapitulasi distribusi dan pendapatan untuk periode yang dipilih, siap diunduh atau dicetak untuk arsip."
         actions={
           <>

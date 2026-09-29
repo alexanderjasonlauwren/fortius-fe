@@ -5,15 +5,31 @@ import { PERMISSIONS } from "./permissions";
 import { NAV_GROUPS, navGroupsFor, landingPathFor, titleFor, usesDriverConsole } from "@/layouts/nav";
 
 describe("financial report navigation", () => {
-  it("places the renamed report immediately after Beranda without duplicates", () => {
+  it("places the operational recap immediately after Beranda without duplicates", () => {
     const items = NAV_GROUPS.flatMap((group) => group.items);
     expect(items.slice(0, 2).map((item) => item.href)).toEqual(["/dashboard", "/reports"]);
     expect(items.filter((item) => item.href === "/reports")).toHaveLength(1);
-    expect(titleFor("/reports")).toBe("Laporan Keuangan");
+    // Renamed off "Laporan Keuangan" in the financial-statements plan's own
+    // phase P2, so it stops colliding with the new page that name now
+    // names -- the generated statements themselves.
+    expect(titleFor("/reports")).toBe("Rekap Operasional");
   });
   it("retains the report's invoice permission gate", () => {
     expect(navGroupsFor([]).flatMap((group) => group.items).some((item) => item.href === "/reports")).toBe(false);
     expect(navGroupsFor([PERMISSIONS.INVOICES_VIEW]).flatMap((group) => group.items).some((item) => item.href === "/reports")).toBe(true);
+  });
+  it("gives the generated statements page the freed-up name, once, gated on its own permission", () => {
+    const items = NAV_GROUPS.flatMap((group) => group.items);
+    expect(items.filter((item) => item.href === "/financial-statements")).toHaveLength(1);
+    expect(titleFor("/financial-statements")).toBe("Laporan Keuangan");
+    expect(
+      navGroupsFor([]).flatMap((group) => group.items).some((item) => item.href === "/financial-statements"),
+    ).toBe(false);
+    expect(
+      navGroupsFor([PERMISSIONS.FINANCIAL_STATEMENTS_VIEW])
+        .flatMap((group) => group.items)
+        .some((item) => item.href === "/financial-statements"),
+    ).toBe(true);
   });
 });
 

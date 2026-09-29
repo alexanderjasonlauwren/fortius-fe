@@ -581,17 +581,38 @@ function toJournalView(row: JournalResponse): JournalView {
   };
 }
 
+// A range with more than this many journals stops paginating rather than
+// walking forever against a fat-fingered date range -- 20 pages at
+// PAGE_SIZE is 2,000 journals, already more than LedgerPage's own table
+// renders usefully in one screen.
+const MAX_JOURNAL_PAGES = 20;
+
+/**
+ * Every journal in the range, not just the first 100.
+ *
+ * Was capped at one page (PAGE_SIZE), silently dropping anything past it
+ * for a range that crossed that many journals -- the ledger's own trial
+ * balance and P&L are unaffected (they sum server-side), but this list is
+ * what LedgerPage's Jurnal tab and the financial-statements Buku Besar tab
+ * both render directly.
+ */
 async function getJournals(range?: DateRange): Promise<JournalView[]> {
   const filters: { field: string; operator: "gte" | "lte"; value: string }[] = [];
   if (range?.from) filters.push({ field: "journal_date", operator: "gte", value: range.from });
   if (range?.to) filters.push({ field: "journal_date", operator: "lte", value: range.to });
 
-  const page = await getList<JournalResponse>("/journals", {
-    pageSize: PAGE_SIZE,
-    sort: [{ field: "journal_date", direction: "desc" }],
-    filters,
-  });
-  return page.items.map(toJournalView);
+  const items: JournalResponse[] = [];
+  for (let pageNumber = 1; pageNumber <= MAX_JOURNAL_PAGES; pageNumber++) {
+    const page = await getList<JournalResponse>("/journals", {
+      page: pageNumber,
+      pageSize: PAGE_SIZE,
+      sort: [{ field: "journal_date", direction: "desc" }],
+      filters,
+    });
+    items.push(...page.items);
+    if (!page.pagination.has_next) break;
+  }
+  return items.map(toJournalView);
 }
 
 /* ── accounts / trial balance / P&L ───────────────────────────────────── */

@@ -40,6 +40,18 @@ function outlet(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function journalWire(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "j-0001",
+    journal_number: "JV-0001",
+    journal_date: "2026-09-01T00:00:00Z",
+    description: "fixture",
+    journal_status: "posted",
+    lines: [],
+    ...overrides,
+  };
+}
+
 function invoiceWire(overrides: Record<string, unknown> = {}) {
   const today = new Date();
   return {
@@ -274,6 +286,39 @@ describe("payments", () => {
       expect(body.bank_account_number).toBe("1234567890");
       expect(body.bank_reference).toBe("1234567890");
     });
+  });
+});
+
+describe("journals", () => {
+  it("walks every page rather than stopping at the first 100", async () => {
+    getList
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 100 }, (_, i) => journalWire({ id: `p1-${i}` })),
+        pagination: { page: 1, page_size: 100, has_next: true, has_prev: false },
+      })
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 30 }, (_, i) => journalWire({ id: `p2-${i}` })),
+        pagination: { page: 2, page_size: 100, has_next: false, has_prev: true },
+      });
+
+    const journals = await financeApiHttp.getJournals();
+
+    expect(journals).toHaveLength(130);
+    expect(getList).toHaveBeenCalledTimes(2);
+    expect(getList.mock.calls[0][1]).toMatchObject({ page: 1 });
+    expect(getList.mock.calls[1][1]).toMatchObject({ page: 2 });
+  });
+
+  it("stops after one page when the server says there is no next", async () => {
+    getList.mockResolvedValueOnce({
+      items: [journalWire()],
+      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+    });
+
+    const journals = await financeApiHttp.getJournals();
+
+    expect(journals).toHaveLength(1);
+    expect(getList).toHaveBeenCalledTimes(1);
   });
 });
 
