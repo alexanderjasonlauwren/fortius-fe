@@ -25,6 +25,22 @@ export interface AccountAmount {
   amount: number;
 }
 
+/** Named rather than inlined so a Komparasi UI can read `stmt.compare.label`
+ *  as the column header, same shape across all three kinds. */
+export interface CompareInfo {
+  kind: "external" | "prior_period" | "prior_year";
+  label: string;
+}
+
+/** A line the compared book prints that our own layout has no code for --
+ *  grouped under the layout line it was imported against (parentCode).
+ *  Ours is implicitly zero. */
+export interface ExtraCompareLine {
+  parentCode: string;
+  label: string;
+  amount: number;
+}
+
 export interface StatementLine {
   code: string;
   label: string;
@@ -36,6 +52,11 @@ export interface StatementLine {
   amount: number;
   ratio: number | null;
   accounts: AccountAmount[];
+
+  /** Set only when the request named a `compare`. */
+  compareAmount?: number;
+  variance?: number;
+  keterangan?: string;
 }
 
 export interface StatementWarning {
@@ -63,6 +84,9 @@ export interface Statement {
   lines: StatementLine[];
   balanced: boolean;
   warnings: StatementWarning[];
+
+  compare?: CompareInfo;
+  extraCompareLines?: ExtraCompareLine[];
 }
 
 export type ProfitAndLossStatement = Statement;
@@ -72,6 +96,9 @@ export interface NoteLeaf {
   code: string;
   name: string;
   amount: number;
+
+  compareAmount?: number;
+  variance?: number;
 }
 
 export interface StatementNote {
@@ -80,12 +107,19 @@ export interface StatementNote {
   label: string;
   total: number;
   leaves: NoteLeaf[];
+
+  /** One explanatory text per note (matching the per-layout-line
+   *  granularity Statement.Line's own Keterangan uses), not per leaf. */
+  keterangan?: string;
 }
 
 export interface NotesStatement {
   asOf: string;
   company: { legalName: string };
   notes: StatementNote[];
+
+  compare?: CompareInfo;
+  extraCompareLines?: ExtraCompareLine[];
 }
 
 export interface GeneralLedgerLine {
@@ -112,15 +146,25 @@ export interface GeneralLedgerPage {
   offset: number;
 }
 
+/** `external:<uuid>`, `prior_period` or `prior_year` -- same grammar the
+ *  backend's own `compare` query param uses everywhere it appears. */
+export type CompareSource = string;
+
 export interface FinancialStatementsApi {
   getProfitAndLoss(input: {
     from: string;
     to: string;
     layout?: string;
     branchId?: string;
+    compare?: CompareSource;
   }): Promise<ProfitAndLossStatement>;
-  getBalanceSheet(input: { asOf: string; layout?: string; branchId?: string }): Promise<BalanceSheetStatement>;
-  getBalanceSheetNotes(input: { asOf: string; layout?: string }): Promise<NotesStatement>;
+  getBalanceSheet(input: {
+    asOf: string;
+    layout?: string;
+    branchId?: string;
+    compare?: CompareSource;
+  }): Promise<BalanceSheetStatement>;
+  getBalanceSheetNotes(input: { asOf: string; layout?: string; compare?: CompareSource }): Promise<NotesStatement>;
   getGeneralLedger(input: {
     accountId: string;
     from: string;
@@ -138,5 +182,6 @@ export interface FinancialStatementsApi {
     dateTo?: string;
     asOf?: string;
     branchId?: string;
+    compare?: CompareSource;
   }): Promise<void>;
 }

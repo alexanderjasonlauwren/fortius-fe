@@ -4,8 +4,8 @@
  * plan, phase P2.
  */
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { FileDown, TriangleAlert } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileDown, TriangleAlert, Upload } from "lucide-react";
 import {
   downloadPackage,
   getBalanceSheet,
@@ -14,6 +14,13 @@ import {
   getProfitAndLoss,
 } from "@/features/financialstatements/api/financialstatementsApi";
 import { StatementTable } from "@/features/financialstatements/components/StatementTable";
+import { KomparasiPanel } from "@/features/financialstatements/components/KomparasiPanel";
+import { notesToRows, statementToRows } from "@/features/financialstatements/lib/komparasiRows";
+import { scopeKeyBS, scopeKeyPL } from "@/features/financialstatements/lib/compare";
+import { listStatements } from "@/features/externalstatements/api/externalstatementsApi";
+import { ImportStatementDialog } from "@/features/externalstatements/components/ImportStatementDialog";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { Field, SegmentedControl, SelectInput } from "@/components/common/Field";
@@ -22,7 +29,8 @@ import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/mocks/scope";
 
-type Tab = "laba-rugi" | "neraca" | "penjelasan" | "buku-besar";
+type Tab = "laba-rugi" | "neraca" | "penjelasan" | "komparasi" | "buku-besar";
+type KomparasiView = "laba-rugi" | "penjelasan" | "neraca";
 
 const MONTHS = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -65,6 +73,12 @@ export function FinancialStatementsPage() {
 
   const [glAccount, setGlAccount] = useState<{ id: string; code: string } | null>(null);
 
+  const [komparasiView, setKomparasiView] = useState<KomparasiView>("laba-rugi");
+  const komparasiExternalKind = komparasiView === "laba-rugi" ? "profit_loss" : "balance_sheet";
+  const [compareSource, setCompareSource] = useState<string>("");
+  const [importOpen, setImportOpen] = useState(false);
+  const queryClient = useQueryClient();
+
   const pl = useQuery({
     queryKey: [...scopeKey(), "financial-statements", "pl", period.from, period.to],
     queryFn: () => getProfitAndLoss({ from: period.from, to: period.to }),
@@ -82,6 +96,27 @@ export function FinancialStatementsPage() {
     queryKey: [...scopeKey(), "financial-statements", "gl", glAccount?.id, period.from, period.to],
     queryFn: () => getGeneralLedger({ accountId: glAccount!.id, from: period.from, to: period.to }),
     enabled: tab === "buku-besar" && !!glAccount,
+  });
+
+  const externalStatements = useQuery({
+    queryKey: [...scopeKey(), "financial-statements", "external-statements", komparasiExternalKind],
+    queryFn: () => listStatements(komparasiExternalKind),
+    enabled: tab === "komparasi",
+  });
+  const komparasiPL = useQuery({
+    queryKey: [...scopeKey(), "financial-statements", "komparasi-pl", period.from, period.to, compareSource],
+    queryFn: () => getProfitAndLoss({ from: period.from, to: period.to, compare: compareSource }),
+    enabled: tab === "komparasi" && komparasiView === "laba-rugi" && !!compareSource,
+  });
+  const komparasiBS = useQuery({
+    queryKey: [...scopeKey(), "financial-statements", "komparasi-bs", period.asOf, compareSource],
+    queryFn: () => getBalanceSheet({ asOf: period.asOf, compare: compareSource }),
+    enabled: tab === "komparasi" && komparasiView === "neraca" && !!compareSource,
+  });
+  const komparasiNotes = useQuery({
+    queryKey: [...scopeKey(), "financial-statements", "komparasi-notes", period.asOf, compareSource],
+    queryFn: () => getBalanceSheetNotes({ asOf: period.asOf, compare: compareSource }),
+    enabled: tab === "komparasi" && komparasiView === "penjelasan" && !!compareSource,
   });
 
   const exportMutation = useDeskMutation({
@@ -116,6 +151,7 @@ export function FinancialStatementsPage() {
               { value: "laba-rugi" as const, label: "Laba Rugi" },
               { value: "neraca" as const, label: "Neraca" },
               { value: "penjelasan" as const, label: "Penjelasan Akun" },
+              { value: "komparasi" as const, label: "Komparasi" },
               { value: "buku-besar" as const, label: "Buku Besar" },
             ]}
           />
@@ -231,6 +267,99 @@ export function FinancialStatementsPage() {
           )}
         </Panel>
       )}
+
+      {tab === "komparasi" && (
+        <Panel>
+          <PanelHeader
+            title="Komparasi"
+            hint="Dibandingkan dengan laporan yang diimpor, periode sebelumnya, atau tahun sebelumnya."
+            actions={
+              <CanAccess permission={PERMISSIONS.EXTERNAL_STATEMENTS_CREATE}>
+                <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+                  <Upload className="h-3.5 w-3.5" />
+                  Impor laporan pembanding
+                </Button>
+              </CanAccess>
+            }
+          />
+          <div className="flex flex-wrap items-end gap-4 border-b border-line p-4">
+            <Field label="Jenis laporan" htmlFor="komparasi-view">
+              <SegmentedControl
+                value={komparasiView}
+                onChange={(v) => { setKomparasiView(v); setCompareSource(""); }}
+                options={[
+                  { value: "laba-rugi" as const, label: "Laba Rugi" },
+                  { value: "penjelasan" as const, label: "Penjelasan Akun" },
+                  { value: "neraca" as const, label: "Neraca" },
+                ]}
+              />
+            </Field>
+            <Field label="Bandingkan dengan" htmlFor="komparasi-source">
+              <SelectInput id="komparasi-source" value={compareSource} onChange={(e) => setCompareSource(e.target.value)}>
+                <option value="">— Pilih —</option>
+                {(externalStatements.data ?? []).map((s) => (
+                  <option key={s.id} value={`external:${s.id}`}>{s.label}</option>
+                ))}
+                <option value="prior_period">Periode sebelumnya</option>
+                <option value="prior_year">Tahun sebelumnya</option>
+              </SelectInput>
+            </Field>
+          </div>
+
+          {!compareSource ? (
+            <p className="p-4 text-sm text-ink-muted">
+              Pilih laporan pembanding di atas untuk melihat selisihnya dengan sistem.
+            </p>
+          ) : komparasiView === "laba-rugi" ? (
+            komparasiPL.isLoading ? (
+              <Skeleton className="h-96 w-full" />
+            ) : komparasiPL.data ? (
+              <KomparasiPanel
+                rows={statementToRows(komparasiPL.data)}
+                extras={komparasiPL.data.extraCompareLines ?? []}
+                compareLabel={komparasiPL.data.compare?.label ?? "Pembanding"}
+                scopeKey={scopeKeyPL(period.from, period.to)}
+                externalStatementId={compareSource.startsWith("external:") ? compareSource.slice("external:".length) : undefined}
+              />
+            ) : null
+          ) : komparasiView === "neraca" ? (
+            komparasiBS.isLoading ? (
+              <Skeleton className="h-96 w-full" />
+            ) : komparasiBS.data ? (
+              <KomparasiPanel
+                rows={statementToRows(komparasiBS.data)}
+                extras={komparasiBS.data.extraCompareLines ?? []}
+                compareLabel={komparasiBS.data.compare?.label ?? "Pembanding"}
+                scopeKey={scopeKeyBS(period.asOf)}
+                externalStatementId={compareSource.startsWith("external:") ? compareSource.slice("external:".length) : undefined}
+              />
+            ) : null
+          ) : komparasiNotes.isLoading ? (
+            <Skeleton className="h-96 w-full" />
+          ) : komparasiNotes.data ? (
+            <KomparasiPanel
+              rows={notesToRows(komparasiNotes.data)}
+              extras={komparasiNotes.data.extraCompareLines ?? []}
+              compareLabel={komparasiNotes.data.compare?.label ?? "Pembanding"}
+              scopeKey={scopeKeyBS(period.asOf)}
+              externalStatementId={compareSource.startsWith("external:") ? compareSource.slice("external:".length) : undefined}
+            />
+          ) : null}
+        </Panel>
+      )}
+
+      <ImportStatementDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        kind={komparasiExternalKind}
+        defaultPeriodFrom={period.from}
+        defaultPeriodTo={period.to}
+        defaultAsOf={period.asOf}
+        onImported={(id) => {
+          setCompareSource(`external:${id}`);
+          queryClient.invalidateQueries({ queryKey: [...scopeKey(), "financial-statements", "external-statements"] });
+        }}
+      />
 
       {tab === "buku-besar" && (
         <Panel>

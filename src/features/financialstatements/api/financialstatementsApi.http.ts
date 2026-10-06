@@ -10,6 +10,8 @@
 import { apiClient, getOne } from "@/lib/api";
 import type {
   BalanceSheetStatement,
+  CompareInfo,
+  ExtraCompareLine,
   FinancialStatementsApi,
   GeneralLedgerPage,
   NotesStatement,
@@ -18,6 +20,26 @@ import type {
   StatementLineKind,
   StatementWarning,
 } from "./contract";
+
+interface CompareInfoResponse {
+  kind: CompareInfo["kind"];
+  label: string;
+}
+
+interface ExtraCompareLineResponse {
+  parent_code: string;
+  label: string;
+  amount: number;
+}
+
+function toCompareInfo(row?: CompareInfoResponse): CompareInfo | undefined {
+  return row ? { kind: row.kind, label: row.label } : undefined;
+}
+
+function toExtras(rows?: ExtraCompareLineResponse[] | null): ExtraCompareLine[] | undefined {
+  if (!rows || rows.length === 0) return undefined;
+  return rows.map((r) => ({ parentCode: r.parent_code, label: r.label, amount: r.amount }));
+}
 
 interface LineResponse {
   code: string;
@@ -30,6 +52,9 @@ interface LineResponse {
   amount: number;
   ratio: number | null;
   accounts?: { account_id: string; code: string; name: string; amount: number }[];
+  compare_amount?: number;
+  variance?: number;
+  keterangan?: string;
 }
 
 interface WarningResponse {
@@ -46,6 +71,8 @@ interface StatementResponse {
   lines: LineResponse[];
   balanced: boolean;
   warnings: WarningResponse[] | null;
+  compare?: CompareInfoResponse;
+  extra_compare_lines?: ExtraCompareLineResponse[] | null;
 }
 
 function toLine(row: LineResponse): StatementLine {
@@ -60,6 +87,9 @@ function toLine(row: LineResponse): StatementLine {
     amount: row.amount,
     ratio: row.ratio,
     accounts: (row.accounts ?? []).map((a) => ({ accountId: a.account_id, code: a.code, name: a.name, amount: a.amount })),
+    compareAmount: row.compare_amount,
+    variance: row.variance,
+    keterangan: row.keterangan,
   };
 }
 
@@ -75,21 +105,44 @@ function toStatement(row: StatementResponse): ProfitAndLossStatement {
     lines: row.lines.map(toLine),
     balanced: row.balanced,
     warnings: (row.warnings ?? []).map(toWarning),
+    compare: toCompareInfo(row.compare),
+    extraCompareLines: toExtras(row.extra_compare_lines),
   };
 }
 
-async function getProfitAndLoss(input: { from: string; to: string; layout?: string; branchId?: string }): Promise<ProfitAndLossStatement> {
+async function getProfitAndLoss(input: {
+  from: string;
+  to: string;
+  layout?: string;
+  branchId?: string;
+  compare?: string;
+}): Promise<ProfitAndLossStatement> {
   const params = new URLSearchParams({ date_from: input.from, date_to: input.to });
   if (input.layout) params.set("layout", input.layout);
   if (input.branchId) params.set("branch_id", input.branchId);
+  if (input.compare) params.set("compare", input.compare);
   return toStatement(await getOne<StatementResponse>(`/financial-statements/profit-and-loss?${params}`));
 }
 
-async function getBalanceSheet(input: { asOf: string; layout?: string; branchId?: string }): Promise<BalanceSheetStatement> {
+async function getBalanceSheet(input: {
+  asOf: string;
+  layout?: string;
+  branchId?: string;
+  compare?: string;
+}): Promise<BalanceSheetStatement> {
   const params = new URLSearchParams({ as_of: input.asOf });
   if (input.layout) params.set("layout", input.layout);
   if (input.branchId) params.set("branch_id", input.branchId);
+  if (input.compare) params.set("compare", input.compare);
   return toStatement(await getOne<StatementResponse>(`/financial-statements/balance-sheet?${params}`));
+}
+
+interface NoteLeafResponse {
+  code: string;
+  name: string;
+  amount: number;
+  compare_amount?: number;
+  variance?: number;
 }
 
 interface NoteResponse {
@@ -97,18 +150,22 @@ interface NoteResponse {
   line_code: string;
   label: string;
   total: number;
-  leaves?: { code: string; name: string; amount: number }[];
+  leaves?: NoteLeafResponse[];
+  keterangan?: string;
 }
 
 interface NotesResponse {
   as_of: string;
   company: { legal_name: string };
   notes: NoteResponse[] | null;
+  compare?: CompareInfoResponse;
+  extra_compare_lines?: ExtraCompareLineResponse[] | null;
 }
 
-async function getBalanceSheetNotes(input: { asOf: string; layout?: string }): Promise<NotesStatement> {
+async function getBalanceSheetNotes(input: { asOf: string; layout?: string; compare?: string }): Promise<NotesStatement> {
   const params = new URLSearchParams({ as_of: input.asOf });
   if (input.layout) params.set("layout", input.layout);
+  if (input.compare) params.set("compare", input.compare);
   const row = await getOne<NotesResponse>(`/financial-statements/balance-sheet-notes?${params}`);
   return {
     asOf: row.as_of,
@@ -118,8 +175,14 @@ async function getBalanceSheetNotes(input: { asOf: string; layout?: string }): P
       lineCode: n.line_code,
       label: n.label,
       total: n.total,
-      leaves: n.leaves ?? [],
+      leaves: (n.leaves ?? []).map((leaf) => ({
+        code: leaf.code, name: leaf.name, amount: leaf.amount,
+        compareAmount: leaf.compare_amount, variance: leaf.variance,
+      })),
+      keterangan: n.keterangan,
     })),
+    compare: toCompareInfo(row.compare),
+    extraCompareLines: toExtras(row.extra_compare_lines),
   };
 }
 
@@ -190,6 +253,7 @@ async function downloadPackage(input: {
   dateTo?: string;
   asOf?: string;
   branchId?: string;
+  compare?: string;
 }): Promise<void> {
   const params = new URLSearchParams();
   if (input.fiscalYear) params.set("fiscal_year", String(input.fiscalYear));
@@ -197,6 +261,7 @@ async function downloadPackage(input: {
   if (input.dateTo) params.set("date_to", input.dateTo);
   if (input.asOf) params.set("as_of", input.asOf);
   if (input.branchId) params.set("branch_id", input.branchId);
+  if (input.compare) params.set("compare", input.compare);
 
   const response = await apiClient.get(`/financial-statements/export?${params}`, { responseType: "blob" });
   const disposition: string = response.headers["content-disposition"] ?? "";

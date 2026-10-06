@@ -124,6 +124,17 @@ export const PERMISSIONS = {
    */
   FINANCIAL_STATEMENTS_VIEW: "finance.read.financial_statements",
   FINANCIAL_STATEMENTS_EXPORT: "finance.export.financial_statements",
+  /**
+   * Imported comparison books (Komparasi) -- financial-statements plan
+   * P8/gap-closing phase A. finance_officer holds only the read grant;
+   * importing/correcting/deleting a book is tenant_admin-only.
+   */
+  EXTERNAL_STATEMENTS_VIEW: "finance.read.external_statements",
+  EXTERNAL_STATEMENTS_CREATE: "finance.create.external_statements",
+  EXTERNAL_STATEMENTS_UPDATE: "finance.update.external_statements",
+  EXTERNAL_STATEMENTS_DELETE: "finance.delete.external_statements",
+  /** Keterangan, editable inline on a Komparasi row. */
+  STATEMENT_NOTES_UPDATE: "finance.update.statement_notes",
 
   // Delivery execution — what happens at the drop, recorded by whoever is
   // there. Executing is an update to the delivery row, not a verb of its own.

@@ -12,6 +12,9 @@ import type { FinancialStatementsApi } from "./contract";
 export type {
   AccountAmount,
   BalanceSheetStatement,
+  CompareInfo,
+  CompareSource,
+  ExtraCompareLine,
   GeneralLedgerLine,
   GeneralLedgerPage,
   LayoutRef,
