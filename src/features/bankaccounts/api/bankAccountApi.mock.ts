@@ -36,7 +36,16 @@ async function saveBankAccount(
     if (input.id) {
       const existing = db.bankAccounts.find((a) => a.id === input.id);
       if (!existing) throw new ApiError("Rekening tidak ditemukan.", 404);
-      Object.assign(existing, input);
+      // kind/ledgerAccountCode are immutable after creation (mirrors the
+      // backend's CreateBankAccountRequest.Kind) -- applied one field at a
+      // time, rather than Object.assign(existing, input), so a stale form
+      // value can never change them underneath an update.
+      existing.bank = input.bank ?? existing.bank;
+      existing.nomorRekening = input.nomorRekening ?? existing.nomorRekening;
+      existing.atasNama = input.atasNama ?? existing.atasNama;
+      existing.cabang = input.cabang ?? existing.cabang;
+      existing.utama = input.utama ?? existing.utama;
+      existing.aktif = input.aktif ?? existing.aktif;
       applyPrimary(existing);
       recordAudit(db, {
         action: "bank.update",
@@ -47,6 +56,7 @@ async function saveBankAccount(
       return existing;
     }
 
+    const kind = input.kind ?? "bank";
     const created: BankAccountEntity = {
       id: nextId("bank"),
       bank: input.bank ?? "BCA",
@@ -55,6 +65,10 @@ async function saveBankAccount(
       cabang: input.cabang ?? "",
       utama: input.utama ?? false,
       aktif: input.aktif ?? true,
+      kind,
+      // Mirrors the backend's own provisioning: "bank" under 1-1100,
+      // "cash" under 1-1000 (CreateBankAccountRequest.Kind's own doc).
+      ledgerAccountCode: kind === "cash" ? "1-1000" : "1-1100",
     };
     db.bankAccounts.push(created);
     applyPrimary(created);

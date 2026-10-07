@@ -136,6 +136,29 @@ export const PERMISSIONS = {
   /** Keterangan, editable inline on a Komparasi row. */
   STATEMENT_NOTES_UPDATE: "finance.update.statement_notes",
 
+  /**
+   * Kas & Bank vouchers (financial-statements plan P4.1/gap-closing phase
+   * Phase B): kas masuk/keluar/transfer, draft -> posted -> void. Post and
+   * void both ride on approve -- see the backend's own
+   * internal/controller/cashvoucher/routes.go comment for why.
+   */
+  CASH_VOUCHERS_VIEW: "finance.read.cash_vouchers",
+  CASH_VOUCHERS_CREATE: "finance.create.cash_vouchers",
+  CASH_VOUCHERS_UPDATE: "finance.update.cash_vouchers",
+  CASH_VOUCHERS_APPROVE: "finance.approve.cash_vouchers",
+  /**
+   * Rekening koran import, auto-match and manual classification
+   * (financial-statements plan P4.2). Both ride on update -- the backend's
+   * own routes.go treats resolving a line as editing the import's state,
+   * not a distinct authority.
+   */
+  BANK_STATEMENTS_VIEW: "finance.read.bank_statements",
+  BANK_STATEMENTS_IMPORT: "finance.import.bank_statements",
+  BANK_STATEMENTS_CLASSIFY: "finance.update.bank_statements",
+  BANK_STATEMENT_RULES_VIEW: "finance.read.bank_statement_rules",
+  BANK_STATEMENT_RULES_CREATE: "finance.create.bank_statement_rules",
+  BANK_STATEMENT_RULES_UPDATE: "finance.update.bank_statement_rules",
+
   // Delivery execution — what happens at the drop, recorded by whoever is
   // there. Executing is an update to the delivery row, not a verb of its own.
   DELIVERIES_VIEW: "distribution.read.deliveries",

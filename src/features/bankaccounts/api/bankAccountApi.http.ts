@@ -16,6 +16,8 @@ interface BankAccountResponse {
   account_holder: string;
   branch_name?: string;
   is_default: boolean;
+  kind: string;
+  ledger_account_code: string;
   status: string;
   version: number;
 }
@@ -32,6 +34,8 @@ function toEntity(row: BankAccountResponse): BankAccountEntity {
     cabang: row.branch_name ?? "",
     utama: row.is_default,
     aktif: row.status === "atv",
+    kind: row.kind === "cash" ? "cash" : "bank",
+    ledgerAccountCode: row.ledger_account_code,
   };
 }
 
@@ -56,6 +60,10 @@ async function saveBankAccount(
         account_holder: input.atasNama,
         branch_name: input.cabang || undefined,
         is_default: input.utama ?? false,
+        // Omitted defaults to "bank" server-side -- see
+        // CreateBankAccountRequest.Kind's own doc. Immutable after
+        // creation, so this is the only place it is ever sent.
+        kind: input.kind,
       }),
     );
   }

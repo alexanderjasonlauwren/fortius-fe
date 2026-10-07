@@ -28,6 +28,8 @@ function wire(overrides: Record<string, unknown> = {}) {
     account_holder: "PT Bhakta Dharma Anindita",
     branch_name: "Salatiga",
     is_default: true,
+    kind: "bank",
+    ledger_account_code: "1-1100",
     status: "atv",
     version: 1,
     ...overrides,
@@ -51,6 +53,13 @@ it("maps a full list of accounts", async () => {
 it("falls back to an empty branch name", async () => {
   getList.mockResolvedValue({ items: [wire({ branch_name: undefined })] });
   expect((await bankAccountApiHttp.getBankAccounts())[0].cabang).toBe("");
+});
+
+it("maps a cash-kind account's ledger code", async () => {
+  getList.mockResolvedValue({ items: [wire({ kind: "cash", ledger_account_code: "1-1000" })] });
+  const row = (await bankAccountApiHttp.getBankAccounts())[0];
+  expect(row.kind).toBe("cash");
+  expect(row.ledgerAccountCode).toBe("1-1000");
 });
 
 describe("writing", () => {
@@ -80,6 +89,19 @@ describe("writing", () => {
     expect(path).toBe("/bank-accounts");
     expect(body.version).toBeUndefined();
     expect(getOne).not.toHaveBeenCalled();
+  });
+
+  it("sends kind on create", async () => {
+    send.mockResolvedValue(wire({ kind: "cash", ledger_account_code: "1-1000" }));
+    await bankAccountApiHttp.saveBankAccount({
+      bank: "BCA",
+      nomorRekening: "KAS-KECIL",
+      atasNama: "PT Contoh",
+      kind: "cash",
+    });
+
+    const [, , body] = send.mock.calls[0];
+    expect(body.kind).toBe("cash");
   });
 
   it("deletes by id", async () => {

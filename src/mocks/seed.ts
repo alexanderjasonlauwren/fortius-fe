@@ -43,7 +43,7 @@ import type {
   UserEntity,
 } from "./types";
 
-export const DB_VERSION = 13;
+export const DB_VERSION = 14;
 
 /* ── deterministic RNG ─────────────────────────────────────────────────── */
 
@@ -1216,7 +1216,7 @@ function seedBankAccounts(): BankAccountEntity[] {
     ["Mandiri", "Ungaran"],
     ["BRI", "Tambun"],
   ];
-  return rows.map(([bank, cabang], i) => ({
+  const bankRows: BankAccountEntity[] = rows.map(([bank, cabang], i) => ({
     id: `bank-${String(i + 1).padStart(3, "0")}`,
     bank,
     nomorRekening: `${randInt(100, 999)}-${randInt(100000, 999999)}-${randInt(10, 99)}`,
@@ -1224,7 +1224,26 @@ function seedBankAccounts(): BankAccountEntity[] {
     cabang,
     utama: i === 0,
     aktif: true,
+    kind: "bank",
+    ledgerAccountCode: "1-1100",
   }));
+  // A till with no bank of its own -- Kas & Bank console (gap-closing
+  // phase, Phase B) is the first feature that needs one to exist. Real
+  // tenants get one only once someone creates it via Settings; seeded here
+  // so the mock demo has one out of the box the same way it already does
+  // for every other "day one" fixture.
+  const pettyCash: BankAccountEntity = {
+    id: "bank-cash-001",
+    bank: "BCA",
+    nomorRekening: "KAS-KECIL",
+    atasNama: "PT. Bhakta Dharma Anindita",
+    cabang: "Salatiga",
+    utama: false,
+    aktif: true,
+    kind: "cash",
+    ledgerAccountCode: "1-1000",
+  };
+  return [...bankRows, pettyCash];
 }
 
 /**
@@ -1589,6 +1608,11 @@ export function createSeedDatabase(): Database {
     bankAccounts: seedBankAccounts(),
     accounts,
     journals,
+    // Kas & Bank console (gap-closing phase, Phase B): nothing recorded yet
+    // at day one, the same reasoning deliveryEvents/audit above follow.
+    cashVouchers: [],
+    bankStatementImports: [],
+    bankStatementRules: [],
     invoices,
     creditNotes,
     settings,

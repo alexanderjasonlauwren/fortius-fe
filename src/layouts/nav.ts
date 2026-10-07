@@ -12,6 +12,7 @@ import {
   FileText,
   Fuel,
   IdCard,
+  Landmark,
   LayoutDashboard,
   Map,
   MapPin,
@@ -164,6 +165,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Wallet,
         hint: "Uang masuk dan alokasinya ke tagihan",
         permission: PERMISSIONS.PAYMENTS_VIEW,
+      },
+      {
+        name: "Kas & Bank",
+        href: "/cash-bank",
+        icon: Landmark,
+        hint: "Voucher kas masuk/keluar/transfer, rekening koran, dan rekonsiliasi",
+        permission: PERMISSIONS.CASH_VOUCHERS_VIEW,
       },
       {
         name: "Buku Besar",

@@ -758,7 +758,10 @@ export type JournalSourceType =
   // posting rule uses it yet): the financial-statements engine's own
   // inventory-purchases cross-check (financial-statements plan, phase P2)
   // needs to tell a real purchase journal apart from a hand-entered one.
-  | "purchase";
+  | "purchase"
+  // Kas & Bank vouchers (financial-statements plan's gap-closing phase,
+  // Phase B) -- mirrors the backend's "cash_voucher" source_type.
+  | "cashVoucher";
 
 /**
  * A posted journal is immutable. Corrections are made by posting a reversal,
@@ -955,6 +958,105 @@ export interface BankAccountEntity {
   /** The account printed on invoices by default. */
   utama: boolean;
   aktif: boolean;
+  /**
+   * Which ledger sub-account this account posts to: "bank" under 1-1100
+   * (receiving accounts), "cash" under 1-1000 (petty cash, a till with no
+   * bank of its own). Immutable after creation -- backend's own
+   * BankAccountResponse.Kind. Kas & Bank console (gap-closing phase, Phase
+   * B) is the first feature that needs a "cash" one to exist at all; every
+   * account created before this field existed is "bank".
+   */
+  kind: "bank" | "cash";
+  /** The fin.accounts leaf this account posts to -- read-only, set by the
+   *  backend at creation. */
+  ledgerAccountCode: string;
+}
+
+/* ── Kas & Bank (financial-statements plan's gap-closing phase, Phase B) ─ */
+
+export type CashVoucherType = "receipt" | "disbursement" | "transfer";
+export type CashVoucherStatus = "draft" | "posted" | "void";
+
+/** One classified leg of a receipt/disbursement voucher -- mirrors
+ *  fortius-backend's cashvoucher.LineRequest/LineResponse. */
+export interface CashVoucherLineEntity {
+  accountId: ID;
+  amount: number;
+  memo?: string;
+}
+
+/** Mirrors fortius-backend's internal/entities/cashvoucher.CashVoucherResponse. */
+export interface CashVoucherEntity extends Scoped {
+  id: ID;
+  voucherNumber: string;
+  voucherType: CashVoucherType;
+  voucherDate: string;
+  counterparty?: string;
+  description?: string;
+  bankAccountId: ID;
+  counterBankAccountId?: ID;
+  totalAmount: number;
+  status: CashVoucherStatus;
+  lines: CashVoucherLineEntity[];
+  /** Set once posted -- the journal this voucher's post wrote, so a void
+   *  can reverse exactly that entry via reverseJournal. */
+  journalId?: ID;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BankStatementLineStatus = "unmatched" | "matched" | "posted" | "ignored";
+
+/** One transaction line of an imported rekening koran -- mirrors
+ *  fortius-backend's bankstatement.LineResponse. */
+export interface BankStatementLineEntity {
+  id: ID;
+  lineNo: number;
+  lineDate: string;
+  description: string;
+  reference: string;
+  debit: number;
+  credit: number;
+  balance?: number;
+  status: BankStatementLineStatus;
+  matchedSourceType?: string;
+  cashVoucherId?: ID;
+  /**
+   * Mock-only: which journal this line was derived from at import time (see
+   * bankStatementApi.mock.ts's own doc for why) -- autoMatch reads this to
+   * resolve the line to an already-posted document without re-searching
+   * the ledger by amount/date. Never serialised to a client; the real
+   * backend's own LineResponse has no equivalent, because there the line's
+   * own stored row already knows nothing about its origin until matched.
+   */
+  sourceJournalId?: ID;
+}
+
+/** Mirrors fortius-backend's internal/entities/bankstatement.ImportResponse. */
+export interface BankStatementImportEntity extends Scoped {
+  id: ID;
+  bankAccountId: ID;
+  periodFrom: string;
+  periodTo: string;
+  openingBalance: number;
+  closingBalance: number;
+  fileName: string;
+  lines: BankStatementLineEntity[];
+  createdAt: string;
+}
+
+/** An auto-classification rule -- mirrors bankstatement.RuleResponse. */
+export interface BankStatementRuleEntity extends Scoped {
+  id: ID;
+  pattern: string;
+  direction: "in" | "out";
+  accountId: ID;
+  sortOrder: number;
+  isActive: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Document prefixes. Visible on every table row and printout. */
@@ -1179,6 +1281,9 @@ export interface Database {
   bankAccounts: BankAccountEntity[];
   accounts: AccountEntity[];
   journals: JournalEntity[];
+  cashVouchers: CashVoucherEntity[];
+  bankStatementImports: BankStatementImportEntity[];
+  bankStatementRules: BankStatementRuleEntity[];
   invoices: InvoiceEntity[];
   creditNotes: CreditNoteEntity[];
   /**

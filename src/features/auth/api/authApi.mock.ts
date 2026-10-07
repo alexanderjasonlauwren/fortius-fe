@@ -83,6 +83,21 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     // Only finance_officer and tenant_admin hold journal read on the
     // backend -- this mock role is the finance_officer counterpart.
     PERMISSIONS.JOURNALS_VIEW,
+    // Needed to pick a line account on a cash voucher or classify a bank
+    // statement line (gap-closing phase, Phase B) -- mirrors the same
+    // backend grant added this phase (seeds/04-role-permissions/seeder.go).
+    PERMISSIONS.ACCOUNTS_VIEW,
+    // Kas & Bank vouchers and rekening koran (gap-closing phase, Phase B).
+    // Rules stay read-only here, the same tier the backend's own
+    // finance_officer bundle gives them.
+    PERMISSIONS.CASH_VOUCHERS_VIEW,
+    PERMISSIONS.CASH_VOUCHERS_CREATE,
+    PERMISSIONS.CASH_VOUCHERS_UPDATE,
+    PERMISSIONS.CASH_VOUCHERS_APPROVE,
+    PERMISSIONS.BANK_STATEMENTS_VIEW,
+    PERMISSIONS.BANK_STATEMENTS_IMPORT,
+    PERMISSIONS.BANK_STATEMENTS_CLASSIFY,
+    PERMISSIONS.BANK_STATEMENT_RULES_VIEW,
     PERMISSIONS.EXPENSES_VIEW,
     PERMISSIONS.EXPENSES_APPROVE,
     PERMISSIONS.OCR_ARCHIVE_VIEW,

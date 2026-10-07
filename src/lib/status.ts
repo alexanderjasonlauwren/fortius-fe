@@ -66,6 +66,11 @@ const STATUS_MAP: Record<string, StatusVariant> = {
   Dijadwalkan: "process",
   Diserahkan: "process",
   "Sedang Ditinjau": "process",
+  // Kas & Bank (gap-closing phase, Phase B): a posted voucher/journal, and
+  // a bank statement line already linked to one.
+  Diposting: "success",
+  Cocok: "success",
+  "Belum Dicocokkan": "warning",
 
   // blocked
   Tertunda: "danger",
@@ -79,6 +84,8 @@ const STATUS_MAP: Record<string, StatusVariant> = {
   // uncommitted
   Draft: "draft",
   Batal: "draft",
+  Dibatalkan: "draft",
+  Diabaikan: "draft",
   Standby: "draft",
   Cuti: "draft",
   Diundang: "draft",
