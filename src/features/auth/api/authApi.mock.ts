@@ -79,7 +79,15 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     PERMISSIONS.DISTRIBUTION_VIEW,
     PERMISSIONS.ORDERS_VIEW,
     PERMISSIONS.INVOICES_VIEW,
+    // "Buat tagihan" (gap-closing phase, Phase C) -- finance_officer holds
+    // finance.create.invoices on the backend, the same code the manual
+    // invoice route rides on.
+    PERMISSIONS.INVOICES_CREATE,
     PERMISSIONS.INVOICES_EXPORT,
+    // Picking a template when raising a registration invoice -- read-only
+    // here, the same tier bank_statement_rules above takes: defining or
+    // renaming a package stays with tenant_admin.
+    PERMISSIONS.REGISTRATION_PACKAGES_VIEW,
     // Only finance_officer and tenant_admin hold journal read on the
     // backend -- this mock role is the finance_officer counterpart.
     PERMISSIONS.JOURNALS_VIEW,

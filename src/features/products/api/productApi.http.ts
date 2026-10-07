@@ -47,6 +47,7 @@ interface ProductResponse {
   margin?: number;
   margin_percent?: number;
   status: string;
+  product_kind: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -108,6 +109,7 @@ function toView(row: ProductResponse): ProductView {
     stok: 0,
     stokMinimum: row.min_stock,
     aktif: row.status === "atv",
+    productKind: row.product_kind === "accessory" ? "accessory" : "commodity",
     // Absent (either price not yet set) reads the same as 0 here — ProductView
     // has no separate "unknown" state, unlike the response DTO it comes from.
     margin: row.margin ?? 0,

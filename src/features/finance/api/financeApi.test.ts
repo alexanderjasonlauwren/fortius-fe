@@ -300,6 +300,7 @@ describe("journals", () => {
         items: Array.from({ length: 30 }, (_, i) => journalWire({ id: `p2-${i}` })),
         pagination: { page: 2, page_size: 100, has_next: false, has_prev: true },
       });
+    getOne.mockImplementation((path: string) => journalWire({ id: path.split("/").pop() }));
 
     const journals = await financeApiHttp.getJournals();
 
@@ -314,11 +315,34 @@ describe("journals", () => {
       items: [journalWire()],
       pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
     });
+    getOne.mockResolvedValueOnce(journalWire());
 
     const journals = await financeApiHttp.getJournals();
 
     expect(journals).toHaveLength(1);
     expect(getList).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetches each journal's own detail to recover lines the list never carries", async () => {
+    getList.mockResolvedValueOnce({
+      items: [journalWire({ id: "j-0001", lines: null })],
+      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+    });
+    getOne.mockResolvedValueOnce(
+      journalWire({
+        id: "j-0001",
+        lines: [
+          { account_id: "a-1", account_code: "5-1000", account_name: "HPP", debit: 150_000, credit: 0 },
+          { account_id: "a-2", account_code: "1-1311", account_name: "Persediaan", debit: 0, credit: 150_000 },
+        ],
+      }),
+    );
+
+    const [journal] = await financeApiHttp.getJournals();
+
+    expect(getOne).toHaveBeenCalledWith("/journals/j-0001");
+    expect(journal.lines).toHaveLength(2);
+    expect(journal.total).toBe(150_000);
   });
 });
 

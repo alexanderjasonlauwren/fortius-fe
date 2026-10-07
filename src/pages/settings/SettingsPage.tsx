@@ -42,6 +42,7 @@ import {
 } from "@/components/common/Field";
 import { SupplierSection } from "@/features/settings/components/SupplierSection";
 import { BankSection } from "@/features/settings/components/BankSection";
+import { RegistrationPackageSection } from "@/features/settings/components/RegistrationPackageSection";
 import { NumberingSection } from "@/features/settings/components/NumberingSection";
 import { OperationsSection } from "@/features/settings/components/OperationsSection";
 import { Button } from "@/components/ui/button";
@@ -633,6 +634,7 @@ export function SettingsPage() {
           <div className="space-y-4 lg:col-span-2">
             <SupplierSection />
             <BankSection />
+            <RegistrationPackageSection />
             <NumberingSection />
           </div>
         )}

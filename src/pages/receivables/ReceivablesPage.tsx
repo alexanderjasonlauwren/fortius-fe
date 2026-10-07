@@ -1,8 +1,8 @@
 import { scopeKey } from "@/mocks/scope";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { FileSpreadsheet, Receipt, ShieldAlert, StickyNote } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FilePlus, FileSpreadsheet, Receipt, ShieldAlert, StickyNote } from "lucide-react";
 import {
   exportAging,
   getAgingReport,
@@ -11,6 +11,9 @@ import {
   type AgingRow,
   type InvoiceView,
 } from "@/features/finance/api/financeApi";
+import { ManualInvoiceDialog } from "@/features/finance/components/ManualInvoiceDialog";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader, Meter } from "@/components/common/Panel";
@@ -266,11 +269,19 @@ function AgingSection() {
 
 /* ── invoices ──────────────────────────────────────────────────────────── */
 
+const INVOICE_TYPE_LABEL: Record<InvoiceView["invoiceType"], string> = {
+  delivery: "Pengiriman",
+  registration: "Pendaftaran",
+  other: "Lain-lain",
+};
+
 function InvoiceSection() {
   const [status, setStatus] = useState("Belum lunas");
   const [search, setSearch] = useState("");
   const [creditNote, setCreditNote] = useState<InvoiceView | null>(null);
   const [form, setForm] = useState({ jumlah: 0, alasan: "" });
+  const [manualInvoiceOpen, setManualInvoiceOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const invoices = useQuery({
     queryKey: [...scopeKey(), "invoices", status, search],
@@ -300,7 +311,13 @@ function InvoiceSection() {
       render: (row) => (
         <>
           <span className="data block text-xs text-ink">{row.nomor}</span>
-          <span className="data block text-2xs text-ink-muted">{row.suratJalan}</span>
+          {row.invoiceType === "delivery" ? (
+            <span className="data block text-2xs text-ink-muted">{row.suratJalan}</span>
+          ) : (
+            <span className="mt-0.5 inline-flex rounded-sm bg-panel-sunk px-1.5 py-0.5 text-2xs font-medium text-ink-muted">
+              {INVOICE_TYPE_LABEL[row.invoiceType]}
+            </span>
+          )}
         </>
       ),
       sortValue: (row) => row.nomor,
@@ -442,6 +459,12 @@ function InvoiceSection() {
                   { value: "Semua", label: "Semua" },
                 ]}
               />
+              <CanAccess permission={PERMISSIONS.INVOICES_CREATE}>
+                <Button size="sm" onClick={() => setManualInvoiceOpen(true)}>
+                  <FilePlus className="h-3.5 w-3.5" />
+                  Buat tagihan
+                </Button>
+              </CanAccess>
             </div>
           }
         />
@@ -520,6 +543,12 @@ function InvoiceSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ManualInvoiceDialog
+        open={manualInvoiceOpen}
+        onClose={() => setManualInvoiceOpen(false)}
+        onCreated={() => void queryClient.invalidateQueries({ queryKey: [...scopeKey(), "invoices"] })}
+      />
     </>
   );
 }

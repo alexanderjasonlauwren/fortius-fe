@@ -77,8 +77,26 @@ export const PERMISSIONS = {
   // -- ops_manager holds it and must see the page. The ledger reads the
   // journal itself, which only finance_officer and tenant_admin hold.
   INVOICES_VIEW: "finance.read.invoices",
+  /**
+   * Raising a "Buat tagihan" (registration or other) invoice by hand --
+   * financial-statements plan P5 / gap-closing phase, Phase C. The
+   * backend's own routes.go gates POST /invoices/manual on this same
+   * code, not a separate one: a manual invoice is still finance.create
+   * on the invoices resource, just a second creation path.
+   */
+  INVOICES_CREATE: "finance.create.invoices",
   INVOICES_EXPORT: "finance.export.invoices",
   JOURNALS_VIEW: "finance.read.journals",
+
+  /**
+   * Registration package templates (financial-statements plan P5 / gap-
+   * closing phase, Phase C): what a "Pendaftaran Pangkalan" invoice picks
+   * a fee/kit-item set from. finance_officer holds only the read grant;
+   * defining or renaming a template is tenant_admin-only.
+   */
+  REGISTRATION_PACKAGES_VIEW: "finance.read.registration_packages",
+  REGISTRATION_PACKAGES_CREATE: "finance.create.registration_packages",
+  REGISTRATION_PACKAGES_UPDATE: "finance.update.registration_packages",
 
   // The reconciliation ledger (Rekap Transaksi) is its own real resource,
   // backed by GET /transactions -- unlike Reports, this one has a single

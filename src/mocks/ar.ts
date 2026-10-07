@@ -194,6 +194,7 @@ export function issueInvoiceForDelivery(
     nomor: docNo(db, db.settings.penomoran.invoice, d.tanggal, seq),
     outletId: d.outletId,
     deliveryId: d.id,
+    invoiceType: "delivery",
     tanggal: d.tanggal,
     jatuhTempo: addDaysIso(d.tanggal, termin),
     lines,
@@ -233,6 +234,179 @@ export function issueInvoiceForDelivery(
           ]
         : []),
     ],
+  });
+
+  return inv;
+}
+
+/** One kit item on a registration invoice's create payload. */
+export interface ManualInvoiceKitItemInput {
+  productId: ID;
+  qty: number;
+}
+
+/** One line of an "other" invoice's create payload. */
+export interface ManualInvoiceLineInput {
+  description: string;
+  amount: number;
+  revenueAccountId: ID;
+}
+
+/** Create payload for raiseManualInvoice -- mirrors the real backend's
+ *  CreateManualInvoiceRequest. No branchId override: neither this mock nor
+ *  the console's own dialog offers one yet, the same "every read is
+ *  tenant-wide" gap financialstatements' own DATA_SOURCES.md row names. */
+export interface CreateManualInvoiceInput {
+  invoiceType: "registration" | "other";
+  outletId: ID;
+  issueDate: string;
+  dueDate?: string;
+  description?: string;
+  packageId?: ID;
+  feeAmount?: number;
+  kitItems?: ManualInvoiceKitItemInput[];
+  lines?: ManualInvoiceLineInput[];
+}
+
+/**
+ * Raises a "registration" or "other" invoice by hand -- a Pendaftaran
+ * Pangkalan package fee plus kit items, or a free-form charge against
+ * whatever revenue account each line names (financial-statements plan P5
+ * / gap-closing plan Phase C). Mirrors issueInvoiceForDelivery's own
+ * create-then-post shape; the two creation paths never share a function
+ * because nothing else about them overlaps -- one prices from a
+ * delivery's realized lines, this one prices from what the caller typed.
+ *
+ * `pajak` is always 0, the same simplification issueInvoiceForDelivery's
+ * own comment on InvoiceEntity.pajak already documents -- PPN is not
+ * modelled anywhere in this mock yet.
+ */
+export function raiseManualInvoice(
+  db: Database,
+  input: CreateManualInvoiceInput,
+  aktor: string,
+): InvoiceEntity {
+  const outlet = db.outlets.find((o) => o.id === input.outletId);
+  if (!outlet) throw new ApiError("Outlet tidak ditemukan.", 400);
+  const scope = scopeFromOutlet(db, input.outletId);
+  const dueDate = input.dueDate ?? addDaysIso(input.issueDate, outlet.termin ?? 0);
+
+  let lines: InvoiceEntity["lines"];
+  let subtotal: number;
+  let totalQty = 0;
+  let journalLines: { akunId: ID; debit: number; kredit: number }[];
+
+  if (input.invoiceType === "registration") {
+    let feeAmount = input.feeAmount;
+    let kitSpecs = input.kitItems;
+    if (input.packageId) {
+      const pkg = db.registrationPackages.find((p) => p.id === input.packageId);
+      if (!pkg) throw new ApiError("Paket pendaftaran tidak ditemukan.", 400);
+      if (feeAmount === undefined) feeAmount = pkg.feeAmount;
+      if (kitSpecs === undefined) {
+        kitSpecs = pkg.items.map((i) => ({ productId: i.productId, qty: i.qty }));
+      }
+    }
+    if (!feeAmount || feeAmount <= 0) {
+      throw new ApiError("Pendaftaran memerlukan nilai pendaftaran atau paket.", 422);
+    }
+
+    const resolvedKit = (kitSpecs ?? []).map((k) => {
+      const product = db.products.find((p) => p.id === k.productId);
+      if (!product) throw new ApiError("Produk kit tidak ditemukan.", 400);
+      if (product.productKind !== "accessory") {
+        throw new ApiError(`"${product.nama}" bukan produk aksesori/perlengkapan.`, 422);
+      }
+      return { product, qty: k.qty };
+    });
+    totalQty = resolvedKit.reduce((s, k) => s + k.qty, 0);
+
+    lines = [
+      {
+        productId: null, nama: "Pendaftaran Pangkalan", satuan: "paket",
+        jumlah: 1, hargaSatuan: feeAmount, subtotal: feeAmount,
+      },
+      // Zero-price record lines -- the kit is included in the fee above,
+      // not a second revenue source (mirrors the real backend's own
+      // KitItemRequest doc).
+      ...resolvedKit.map((k) => ({
+        productId: k.product.id, nama: k.product.nama, satuan: k.product.satuan,
+        jumlah: k.qty, hargaSatuan: 0, subtotal: 0,
+      })),
+    ];
+    subtotal = feeAmount;
+    journalLines = [
+      { akunId: accountByRole(db, "piutangPendaftaran").id, debit: subtotal, kredit: 0 },
+      { akunId: accountByRole(db, "pendapatanPendaftaran").id, debit: 0, kredit: subtotal },
+    ];
+    // COGS per kit item, from each product's own purchase price -- posted
+    // to the generic hpp/persediaan roles rather than a per-product
+    // override, unlike the real backend's own inventory_account_id
+    // override (seeds/06-outlets/seeder.go): that per-kind sub-ledger
+    // split is Phase F's own job, not modelled here.
+    for (const k of resolvedKit) {
+      const cogsAmount = round(k.product.hargaBeli * k.qty);
+      if (cogsAmount > 0) {
+        journalLines.push({ akunId: accountByRole(db, "hpp").id, debit: cogsAmount, kredit: 0 });
+        journalLines.push({ akunId: accountByRole(db, "persediaan").id, debit: 0, kredit: cogsAmount });
+      }
+    }
+  } else {
+    if (!input.lines || input.lines.length === 0) {
+      throw new ApiError("Tagihan lain-lain memerlukan minimal satu baris.", 422);
+    }
+    const resolved = input.lines.map((l) => {
+      const account = db.accounts.find((a) => a.id === l.revenueAccountId);
+      if (!account) throw new ApiError("Akun pendapatan pada salah satu baris tidak ditemukan.", 400);
+      if (account.tipe !== "Pendapatan") {
+        throw new ApiError("Akun pada baris harus akun pendapatan.", 422);
+      }
+      if (l.amount <= 0) throw new ApiError("Nilai baris harus lebih dari nol.", 422);
+      return { description: l.description, amount: l.amount, accountId: account.id };
+    });
+    lines = resolved.map((r) => ({
+      productId: null, nama: r.description, satuan: "—",
+      jumlah: 1, hargaSatuan: r.amount, subtotal: r.amount,
+    }));
+    subtotal = round(resolved.reduce((s, r) => s + r.amount, 0));
+    journalLines = [
+      { akunId: accountByRole(db, "piutang").id, debit: subtotal, kredit: 0 },
+      ...resolved.map((r) => ({ akunId: r.accountId, debit: 0, kredit: r.amount })),
+    ];
+  }
+
+  const seq = db.invoices.length + 1;
+  const inv: InvoiceEntity = {
+    ...scope,
+    id: nextId("inv"),
+    nomor: docNo(db, db.settings.penomoran.invoice, input.issueDate, seq),
+    outletId: outlet.id,
+    deliveryId: null,
+    invoiceType: input.invoiceType,
+    tanggal: input.issueDate,
+    jatuhTempo: dueDate,
+    lines,
+    jumlahUnit: totalQty,
+    hargaSatuan: blendedUnitPrice(lines),
+    subtotal,
+    pajak: 0,
+    total: subtotal,
+    terbayar: 0,
+    kredit: 0,
+    status: "Terbit",
+    catatan: input.description,
+    dibuatOleh: aktor,
+  };
+  refreshInvoiceStatus(inv);
+  db.invoices.unshift(inv);
+
+  postJournal(db, {
+    scope: { tenantId: inv.tenantId, branchId: inv.branchId },
+    tanggal: inv.tanggal,
+    keterangan: `${inv.nomor} — ${input.invoiceType === "registration" ? "Pendaftaran Pangkalan" : "Tagihan lain-lain"} ${outlet.nama}`,
+    sumber: { tipe: "invoice", id: inv.id },
+    aktor,
+    lines: journalLines,
   });
 
   return inv;

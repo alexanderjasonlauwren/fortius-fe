@@ -25,6 +25,10 @@ export const AGING_BUCKETS = [
 
 export type AgingBucket = (typeof AGING_BUCKETS)[number];
 
+/** "registration"/"other" (financial-statements plan P5 / gap-closing
+ *  plan Phase C) are raised by hand, with no delivery behind them. */
+export type InvoiceType = "delivery" | "registration" | "other";
+
 export interface InvoiceView {
   id: string;
   nomor: string;
@@ -32,6 +36,7 @@ export interface InvoiceView {
   outlet: string;
   kecamatan: string;
   suratJalan: string;
+  invoiceType: InvoiceType;
   tanggal: string;
   jatuhTempo: string;
   /** Negative until due, positive once overdue. */
@@ -44,6 +49,38 @@ export interface InvoiceView {
   sisa: number;
   status: InvoiceStatus;
   termin: number;
+}
+
+/** One kit item on a registration invoice's create payload. */
+export interface ManualInvoiceKitItemInput {
+  productId: string;
+  qty: number;
+}
+
+/** One line of an "other" invoice's create payload -- no catalogue
+ *  product, just a description and the revenue account it posts to. */
+export interface ManualInvoiceLineInput {
+  description: string;
+  amount: number;
+  revenueAccountId: string;
+}
+
+/**
+ * Raises a "registration" or "other" invoice by hand -- mirrors the real
+ * backend's CreateManualInvoiceRequest. For "registration", an explicit
+ * feeAmount/kitItems always wins; a named packageId supplies whichever of
+ * the two was left out. For "other", lines is required.
+ */
+export interface CreateManualInvoiceInput {
+  invoiceType: "registration" | "other";
+  outletId: string;
+  issueDate: string;
+  dueDate?: string;
+  description?: string;
+  packageId?: string;
+  feeAmount?: number;
+  kitItems?: ManualInvoiceKitItemInput[];
+  lines?: ManualInvoiceLineInput[];
 }
 
 export interface InvoiceFilters {
@@ -189,6 +226,9 @@ export interface FinanceApi {
   getPayments(status?: string, search?: string): Promise<PaymentView[]>;
   /** Open invoices for the allocation picker. */
   getOpenInvoices(outletId: string): Promise<InvoiceView[]>;
+  /** "Buat tagihan" (financial-statements plan P5 / gap-closing plan
+   *  Phase C): a registration or other manual invoice. */
+  createManualInvoice(input: CreateManualInvoiceInput): Promise<InvoiceView>;
   submitPayment(input: RecordPaymentInput): Promise<PaymentView>;
   submitAllocation(paymentId: string, alokasi: AllocationLine[]): Promise<PaymentView>;
   submitPaymentDecision(

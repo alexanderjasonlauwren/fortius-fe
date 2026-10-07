@@ -455,7 +455,14 @@ export interface DeliveryLine {
  * documents.
  */
 export interface InvoiceLine {
-  productId: ID;
+  /**
+   * Null for a product-less manual line (financial-statements plan P5 /
+   * gap-closing plan Phase C) -- a registration fee line or a free-form
+   * "other" charge, neither of which names a catalogue product. `nama`
+   * carries the line's own description either way, mirroring the real
+   * backend's Line.ProductID/Description split.
+   */
+  productId: ID | null;
   nama: string;
   satuan: string;
   jumlah: number;
@@ -615,6 +622,13 @@ export interface InvoiceEntity extends Scoped {
   nomor: string;
   outletId: ID;
   deliveryId: ID | null;
+  /**
+   * "registration"/"other" (financial-statements plan P5 / gap-closing
+   * plan Phase C) raise an invoice by hand, with no delivery behind it --
+   * deliveryId is null for both. Mirrors the real backend's own
+   * InvoiceResponse.InvoiceType verbatim.
+   */
+  invoiceType: "delivery" | "registration" | "other";
   tanggal: string;
   /** Derived from the outlet's payment terms at the time of issue. */
   jatuhTempo: string;
@@ -909,6 +923,15 @@ export interface ProductEntity {
   stok: number;
   stokMinimum: number;
   aktif: boolean;
+  /**
+   * Separates a weighed LPG commodity from a kit accessory (financial-
+   * statements plan P3.3) -- an accessory has no weight of its own and is
+   * what a registration invoice's kit items pick from. Read-only in this
+   * build: no product form writes it yet (that is the gap-closing plan's
+   * own Phase F) -- Phase C's "Buat tagihan" kit-item picker is this
+   * field's only consumer today.
+   */
+  productKind: "commodity" | "accessory";
 }
 
 export type OrderStatus =
@@ -1054,6 +1077,28 @@ export interface BankStatementRuleEntity extends Scoped {
   accountId: ID;
   sortOrder: number;
   isActive: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ── registration packages (gap-closing plan, Phase C) ──────────────────── */
+
+/** One kit item a registration package issues. */
+export interface RegistrationPackageItemEntity {
+  productId: ID;
+  qty: number;
+}
+
+/** A reusable Pendaftaran Pangkalan template -- mirrors
+ *  registrationpackage.PackageResponse. */
+export interface RegistrationPackageEntity extends Scoped {
+  id: ID;
+  name: string;
+  feeAmount: number;
+  isDefault: boolean;
+  isActive: boolean;
+  items: RegistrationPackageItemEntity[];
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -1284,6 +1329,7 @@ export interface Database {
   cashVouchers: CashVoucherEntity[];
   bankStatementImports: BankStatementImportEntity[];
   bankStatementRules: BankStatementRuleEntity[];
+  registrationPackages: RegistrationPackageEntity[];
   invoices: InvoiceEntity[];
   creditNotes: CreditNoteEntity[];
   /**

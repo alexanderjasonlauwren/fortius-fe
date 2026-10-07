@@ -1047,6 +1047,10 @@ export function validateReceipt(
       nomor: docNumber(db, "invoice", r.tanggalKwitansi, seq),
       outletId: r.outletId,
       deliveryId: null,
+      // Billed from a scanned receipt, not a formal delivery record -- the
+      // closest of the three real types (financial-statements plan P5's
+      // own "registration"/"other" split has no third option for this).
+      invoiceType: "other",
       tanggal: r.tanggalKwitansi,
       jatuhTempo: addDaysIso(r.tanggalKwitansi, pkl?.termin ?? 0),
       // Billed from the receipt's own items, at the prices the paper states
@@ -1718,6 +1722,7 @@ export function saveProduct(
       stok: input.stok ?? 0,
       stokMinimum: input.stokMinimum ?? 0,
       aktif: input.aktif ?? true,
+      productKind: input.productKind ?? "commodity",
     };
     db.products.unshift(created);
     recordAudit(db, {

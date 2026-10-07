@@ -102,6 +102,13 @@ describe("reading", () => {
     getOne.mockResolvedValue(wire({ status: "ina" }));
     expect((await productApiHttp.getProductDetail(ID)).aktif).toBe(false);
   });
+
+  it("maps product_kind, defaulting an absent one to commodity", async () => {
+    getOne.mockResolvedValue(wire({ product_kind: "accessory" }));
+    expect((await productApiHttp.getProductDetail(ID)).productKind).toBe("accessory");
+    getOne.mockResolvedValue(wire({ product_kind: undefined }));
+    expect((await productApiHttp.getProductDetail(ID)).productKind).toBe("commodity");
+  });
 });
 
 describe("writing", () => {

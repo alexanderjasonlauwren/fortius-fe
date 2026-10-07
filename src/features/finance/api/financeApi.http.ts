@@ -38,6 +38,7 @@ import type {
   AllocationLine,
   ChartUpgradeResult,
   CreateAccountInput,
+  CreateManualInvoiceInput,
   CreditNoteInput,
   CreditNoteView,
   DateRange,
@@ -76,7 +77,11 @@ interface InvoiceResponse {
   id: string;
   invoice_number: string;
   outlet_id: string;
-  delivery_id: string;
+  // Absent for a "registration"/"other" invoice (financial-statements
+  // plan P5 / gap-closing plan Phase C) -- see InvoiceResponse's own doc:
+  // DeliveryID is nil for either.
+  delivery_id?: string;
+  invoice_type: string;
   lines: InvoiceLineResponse[];
   subtotal: number;
   tax_percentage: number;
@@ -152,6 +157,9 @@ function toInvoiceView(
     kecamatan: outlet?.kecamatan ?? "—",
     // See this file's header: not resolvable without a per-row request.
     suratJalan: "—",
+    invoiceType: row.invoice_type === "registration" || row.invoice_type === "other"
+      ? row.invoice_type
+      : "delivery",
     tanggal: row.issued_at.slice(0, 10),
     jatuhTempo: dueDate,
     umurHari: Math.floor(
@@ -215,6 +223,25 @@ async function getOpenInvoices(outletId: string): Promise<InvoiceView[]> {
     .map((r) => toInvoiceView(r, outlets, today))
     .filter((inv) => inv.status !== "Batal" && inv.sisa > 0)
     .sort((a, b) => a.jatuhTempo.localeCompare(b.jatuhTempo));
+}
+
+async function createManualInvoice(input: CreateManualInvoiceInput): Promise<InvoiceView> {
+  const row = await send<InvoiceResponse>("post", "/invoices/manual", {
+    invoice_type: input.invoiceType,
+    outlet_id: input.outletId,
+    issue_date: input.issueDate,
+    due_date: input.dueDate,
+    description: input.description,
+    package_id: input.packageId,
+    fee_amount: input.feeAmount,
+    kit_items: input.kitItems?.map((k) => ({ product_id: k.productId, qty: k.qty })),
+    lines: input.lines?.map((l) => ({
+      description: l.description, amount: l.amount, revenue_account_id: l.revenueAccountId,
+    })),
+  });
+  const outlets = await outletsById();
+  const today = new Date().toISOString().slice(0, 10);
+  return toInvoiceView(row, outlets, today);
 }
 
 /* ── ageing ────────────────────────────────────────────────────────────── */
@@ -565,14 +592,15 @@ interface JournalResponse {
 }
 
 function toJournalView(row: JournalResponse): JournalView {
+  const lines = row.lines ?? [];
   return {
     id: row.id,
     nomor: row.journal_number,
     tanggal: row.journal_date.slice(0, 10),
     keterangan: row.description,
     status: row.journal_status === "reversed" ? "Dibatalkan" : "Diposting",
-    total: row.lines.reduce((s, l) => s + l.debit, 0),
-    lines: row.lines.map((l) => ({
+    total: lines.reduce((s, l) => s + l.debit, 0),
+    lines: lines.map((l) => ({
       akun: { id: l.account_id, kode: l.account_code, nama: l.account_name },
       debit: l.debit,
       kredit: l.credit,
@@ -612,7 +640,15 @@ async function getJournals(range?: DateRange): Promise<JournalView[]> {
     items.push(...page.items);
     if (!page.pagination.has_next) break;
   }
-  return items.map(toJournalView);
+  // ListJournals never carries lines (same N+1-avoidance the registration
+  // packages list applies to its own items) -- the detail read is the only
+  // place they're real. The ledger's own date-range view is what this page
+  // is for, so it fetches every row's detail rather than showing accounts
+  // with no amounts against them.
+  const withLines = await Promise.all(
+    items.map((item) => getOne<JournalResponse>(`/journals/${item.id}`)),
+  );
+  return withLines.map(toJournalView);
 }
 
 /* ── accounts / trial balance / P&L ───────────────────────────────────── */
@@ -890,6 +926,7 @@ export const financeApiHttp: FinanceApi = {
   getAgingReport,
   getPayments,
   getOpenInvoices,
+  createManualInvoice,
   submitPayment,
   submitAllocation,
   submitPaymentDecision,

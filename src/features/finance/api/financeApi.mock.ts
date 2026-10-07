@@ -1,6 +1,6 @@
 import { scopedDb } from "@/mocks/scope";
-import { ApiError, latency, mutate } from "@/mocks/db";
-import { agingBucket, invoiceSisa, outletExposure, unallocated } from "@/mocks/ar";
+import { ApiError, currentActor, latency, mutate } from "@/mocks/db";
+import { agingBucket, invoiceSisa, outletExposure, raiseManualInvoice, unallocated } from "@/mocks/ar";
 import {
   accountBalances,
   createAccount as mocksCreateAccount,
@@ -24,6 +24,7 @@ import type {
   AllocationLine,
   ChartUpgradeResult,
   CreateAccountInput,
+  CreateManualInvoiceInput,
   CreditNoteInput,
   CreditNoteView,
   DateRange,
@@ -56,6 +57,7 @@ function toInvoiceView(id: string): InvoiceView | null {
     outlet: pkl?.nama ?? "—",
     kecamatan: pkl?.kecamatan ?? "—",
     suratJalan: delivery?.kode ?? "—",
+    invoiceType: inv.invoiceType,
     tanggal: inv.tanggal,
     jatuhTempo: inv.jatuhTempo,
     umurHari: Math.floor(
@@ -208,6 +210,30 @@ async function getOpenInvoices(outletId: string): Promise<InvoiceView[]> {
     )
     .map((i) => toInvoiceView(i.id)!)
     .sort((a, b) => a.jatuhTempo.localeCompare(b.jatuhTempo));
+}
+
+async function createManualInvoice(input: CreateManualInvoiceInput): Promise<InvoiceView> {
+  await latency("write");
+  return mutate((db) => {
+    const inv = raiseManualInvoice(
+      db,
+      {
+        invoiceType: input.invoiceType,
+        outletId: input.outletId,
+        issueDate: input.issueDate,
+        dueDate: input.dueDate,
+        description: input.description,
+        packageId: input.packageId,
+        feeAmount: input.feeAmount,
+        kitItems: input.kitItems?.map((k) => ({ productId: k.productId, qty: k.qty })),
+        lines: input.lines?.map((l) => ({
+          description: l.description, amount: l.amount, revenueAccountId: l.revenueAccountId,
+        })),
+      },
+      currentActor(),
+    );
+    return toInvoiceView(inv.id)!;
+  });
 }
 
 async function submitPayment(input: RecordPaymentInput): Promise<PaymentView> {
@@ -385,6 +411,7 @@ export const financeApiMock: FinanceApi = {
   getAgingReport,
   getPayments,
   getOpenInvoices,
+  createManualInvoice,
   submitPayment,
   submitAllocation,
   submitPaymentDecision,

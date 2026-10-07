@@ -32,6 +32,7 @@ import type {
   OperationsEntity,
   OrderEntity,
   ProductEntity,
+  RegistrationPackageEntity,
   SupplierEntity,
   ReceiptEntity,
   SAEntity,
@@ -43,7 +44,7 @@ import type {
   UserEntity,
 } from "./types";
 
-export const DB_VERSION = 14;
+export const DB_VERSION = 15;
 
 /* ── deterministic RNG ─────────────────────────────────────────────────── */
 
@@ -830,6 +831,7 @@ function seedReceivables(
       nomor: `INV-${d.tanggal.replace(/-/g, "")}-${String(i + 1).padStart(3, "0")}`,
       outletId: d.outletId,
       deliveryId: d.id,
+      invoiceType: "delivery",
       tanggal: d.tanggal,
       jatuhTempo,
       lines: invLines,
@@ -1090,14 +1092,18 @@ function seedUsers(drivers: DriverEntity[]): UserEntity[] {
 
 function seedProducts(): ProductEntity[] {
   // `returnable` marks the products where the customer hands back an empty in
-  // exchange — cylinders do, accessories do not.
+  // exchange — cylinders do, accessories do not. The last two are kit
+  // accessories (financial-statements plan P3.3) -- what a registration
+  // invoice's kit items pick from (gap-closing plan, Phase C) -- mirroring
+  // the real backend's own seeded Timbangan/Papan Pangkalan/APAR kit
+  // products (seeds/06-outlets/seeder.go).
   const catalog = [
-    { nama: "LPG 3 kg Subsidi", ukuran: "3 kg", satuan: "tabung", returnable: true, jual: 15_520, beli: 10_000 },
-    { nama: "LPG 5,5 kg Bright Gas", ukuran: "5,5 kg", satuan: "tabung", returnable: true, jual: 88_000, beli: 79_500 },
-    { nama: "LPG 12 kg", ukuran: "12 kg", satuan: "tabung", returnable: true, jual: 192_000, beli: 175_000 },
-    { nama: "LPG 50 kg", ukuran: "50 kg", satuan: "tabung", returnable: true, jual: 810_000, beli: 742_000 },
-    { nama: "Segel Tabung", ukuran: "1 lusin", satuan: "lusin", returnable: false, jual: 24_000, beli: 18_000 },
-    { nama: "Selang Regulator SNI", ukuran: "1 set", satuan: "set", returnable: false, jual: 95_000, beli: 71_000 },
+    { nama: "LPG 3 kg Subsidi", ukuran: "3 kg", satuan: "tabung", returnable: true, jual: 15_520, beli: 10_000, kind: "commodity" as const },
+    { nama: "LPG 5,5 kg Bright Gas", ukuran: "5,5 kg", satuan: "tabung", returnable: true, jual: 88_000, beli: 79_500, kind: "commodity" as const },
+    { nama: "LPG 12 kg", ukuran: "12 kg", satuan: "tabung", returnable: true, jual: 192_000, beli: 175_000, kind: "commodity" as const },
+    { nama: "LPG 50 kg", ukuran: "50 kg", satuan: "tabung", returnable: true, jual: 810_000, beli: 742_000, kind: "commodity" as const },
+    { nama: "Segel Tabung", ukuran: "1 lusin", satuan: "lusin", returnable: false, jual: 24_000, beli: 18_000, kind: "accessory" as const },
+    { nama: "Selang Regulator SNI", ukuran: "1 set", satuan: "set", returnable: false, jual: 95_000, beli: 71_000, kind: "accessory" as const },
   ];
   return catalog.map((c, i) => ({
     id: `prd-${String(i + 1).padStart(3, "0")}`,
@@ -1111,6 +1117,7 @@ function seedProducts(): ProductEntity[] {
     stok: randInt(20, 900),
     stokMinimum: randInt(40, 120),
     aktif: i !== 5,
+    productKind: c.kind,
   }));
 }
 
@@ -1244,6 +1251,30 @@ function seedBankAccounts(): BankAccountEntity[] {
     ledgerAccountCode: "1-1000",
   };
   return [...bankRows, pettyCash];
+}
+
+/** One starting Pendaftaran Pangkalan template, so the "Buat tagihan"
+ *  console (gap-closing plan, Phase C) has something to pick from out of
+ *  the box -- "Segel Tabung" is the one active accessory in seedProducts
+ *  above. */
+function seedRegistrationPackages(products: ProductEntity[]): RegistrationPackageEntity[] {
+  const segel = products.find((p) => p.nama === "Segel Tabung");
+  const now = isoDate(startOfToday());
+  return [
+    {
+      id: "regpkg-001",
+      tenantId: TENANT.id,
+      branchId: BRANCHES[0].id,
+      name: "Paket Standar",
+      feeAmount: 500_000,
+      isDefault: true,
+      isActive: true,
+      items: segel ? [{ productId: segel.id, qty: 1 }] : [],
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
 }
 
 /**
@@ -1613,6 +1644,13 @@ export function createSeedDatabase(): Database {
     cashVouchers: [],
     bankStatementImports: [],
     bankStatementRules: [],
+    // "Buat tagihan" console (gap-closing plan, Phase C): one starting
+    // template, so the demo has something to pick from immediately --
+    // mirrors the real backend's own seeded kit products
+    // (seeds/06-outlets/seeder.go), minus the two this mock's catalogue
+    // never carried (Timbangan/Papan Pangkalan/APAR) in favour of the
+    // accessory already in seedProducts above.
+    registrationPackages: seedRegistrationPackages(products),
     invoices,
     creditNotes,
     settings,

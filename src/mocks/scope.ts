@@ -170,6 +170,7 @@ export function scopedDb(override?: Partial<ActiveScope>): Database {
     cashVouchers: db.cashVouchers.filter(keep),
     bankStatementImports: db.bankStatementImports.filter(keep),
     bankStatementRules: db.bankStatementRules.filter(keep),
+    registrationPackages: db.registrationPackages.filter(keep),
     transportationClaims: db.transportationClaims.filter(keep),
     // Daily targets and import batches have no scope of their own; they follow
     // their agreement, the same way plan rows follow their plan.
