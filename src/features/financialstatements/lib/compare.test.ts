@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Statement } from "../api/contract";
-import { mergeOwnCompare, parseCompare, shiftBSAsOf, shiftPLWindow } from "./compare";
+import type { NotesStatement, Statement } from "../api/contract";
+import { mergeOwnCompare, mergeOwnNotesCompare, parseCompare, shiftBSAsOf, shiftPLWindow } from "./compare";
 
 function stmt(lines: { code: string; amount: number }[]): Statement {
   return {
@@ -74,5 +74,30 @@ describe("mergeOwnCompare", () => {
 
     expect(merged.compare).toEqual({ kind: "prior_period", label: "2024-01-01 - 2024-12-31" });
     expect(merged.extraCompareLines).toBeUndefined();
+  });
+});
+
+describe("mergeOwnNotesCompare", () => {
+  it("never leaks a note's own general (no-comparison) Keterangan into a comparison that has none of its own", () => {
+    // Simulates what attachGeneralNotesKeterangan (the plain Penjelasan
+    // Akun tab's own call) would have set on this note before a
+    // comparison merge runs on top of it -- financial-statements plan's
+    // gap-closing phase, Phase A's own closing note, and the mirror of
+    // the backend fix for the exact same leak class
+    // (internal/usecase/financialstatement/compare.go).
+    const notes: NotesStatement = {
+      asOf: "2025-12-31",
+      company: { legalName: "PT Contoh" },
+      notes: [{
+        noteNumber: 2, lineCode: "persediaan", label: "Persediaan", total: 100,
+        leaves: [{ code: "1-1300", name: "Tabung", amount: 100 }],
+        keterangan: "Catatan umum, bukan untuk komparasi manapun.",
+      }],
+    };
+    const compareNotes: NotesStatement = { ...notes, notes: [{ ...notes.notes[0], total: 0, leaves: [] }] };
+
+    const merged = mergeOwnNotesCompare(notes, compareNotes, "prior_period", "2024-12-31", "bs:no-note-written-for-this-scope");
+
+    expect(merged.notes[0].keterangan).toBeUndefined();
   });
 });

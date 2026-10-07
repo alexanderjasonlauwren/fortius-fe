@@ -28,6 +28,18 @@ export function parseCompare(raw?: string): ParsedCompare | undefined {
   throw new ApiError("compare tidak valid: external:<id>, prior_period atau prior_year.", 400);
 }
 
+/** Attaches each note's general (no-comparison) Keterangan -- readable
+ *  from the plain Penjelasan Akun tab regardless of whether a Komparasi
+ *  is active, financial-statements plan's gap-closing phase, Phase A's
+ *  own closing note. Mirrors BalanceSheetNotes' own unconditional attach
+ *  on the backend. */
+export function attachGeneralNotesKeterangan(notes: NotesStatement, scopeKey: string): NotesStatement {
+  return {
+    ...notes,
+    notes: notes.notes.map((n) => ({ ...n, keterangan: findNoteForCompare(n.lineCode, scopeKey, undefined) })),
+  };
+}
+
 export function scopeKeyPL(from: string, to: string): string {
   return `pl:${from}..${to}`;
 }
@@ -115,7 +127,13 @@ export function mergeOwnNotesCompare(notes: NotesStatement, compareNotes: NotesS
       if (v === undefined) return leaf;
       return { ...leaf, compareAmount: v, variance: leaf.amount - v };
     });
-    return { ...n, leaves, ...(keterangan !== undefined ? { keterangan } : {}) };
+    // keterangan is assigned explicitly (not spread conditionally) so it
+    // always overrides n's own -- n may already carry a general
+    // (no-comparison) Keterangan the plain getBalanceSheetNotes call
+    // attached, and a line with no note scoped to THIS comparison must
+    // show none, never fall back to the general one. Mirrors the same
+    // fix on the backend (internal/usecase/financialstatement/compare.go).
+    return { ...n, leaves, keterangan };
   });
   return { ...notes, notes: resultNotes, compare: { kind, label } };
 }
@@ -146,7 +164,9 @@ export function mergeExternalNotesCompare(notes: NotesStatement, externalId: str
       const matched = r.accountCode && n.leaves.some((leaf) => leaf.code === r.accountCode);
       if (!matched) extras.push({ parentCode: n.lineCode, label: r.label, amount: r.amount });
     }
-    return { ...n, leaves, ...(keterangan !== undefined ? { keterangan } : {}) };
+    // Explicit assignment, not a conditional spread -- see mergeOwnNotesCompare's
+    // own comment for why this matters.
+    return { ...n, leaves, keterangan };
   });
   return { ...notes, notes: resultNotes, compare: { kind: "external", label: ext.label }, extraCompareLines: extras };
 }

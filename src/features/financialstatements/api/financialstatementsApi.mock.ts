@@ -17,6 +17,7 @@ import type {
 import { computeBalanceSheet, computeGeneralLedger, computeNotes, computeProfitAndLoss } from "../lib/engine";
 import { defaultLayout, layoutByCode } from "../lib/layouts";
 import {
+  attachGeneralNotesKeterangan,
   mergeExternalCompare,
   mergeExternalNotesCompare,
   mergeOwnCompare,
@@ -69,9 +70,9 @@ async function getBalanceSheetNotes(input: { asOf: string; layout?: string; comp
   await latency("read");
   const layout = (input.layout && layoutByCode(input.layout)) || defaultLayout("balance_sheet");
   const notes = computeNotes(scopedDb(), input.asOf, layout);
-  const src = parseCompare(input.compare);
-  if (!src) return notes;
   const scopeKey = scopeKeyBS(input.asOf);
+  const src = parseCompare(input.compare);
+  if (!src) return attachGeneralNotesKeterangan(notes, scopeKey);
   if (src.kind === "external") return mergeExternalNotesCompare(notes, src.externalId!, scopeKey);
   const pAsOf = shiftBSAsOf(input.asOf, src.kind);
   const compareNotes = computeNotes(scopedDb(), pAsOf, layout);

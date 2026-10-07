@@ -15,6 +15,7 @@ import {
 } from "@/features/financialstatements/api/financialstatementsApi";
 import { StatementTable } from "@/features/financialstatements/components/StatementTable";
 import { KomparasiPanel } from "@/features/financialstatements/components/KomparasiPanel";
+import { GeneralKeterangan } from "@/features/financialstatements/components/GeneralKeterangan";
 import { notesToRows, statementToRows } from "@/features/financialstatements/lib/komparasiRows";
 import { scopeKeyBS, scopeKeyPL } from "@/features/financialstatements/lib/compare";
 import { listStatements } from "@/features/externalstatements/api/externalstatementsApi";
@@ -261,6 +262,11 @@ export function FinancialStatementsPage() {
                       </tbody>
                     </table>
                   )}
+                  <GeneralKeterangan
+                    layoutLineCode={n.lineCode}
+                    scopeKey={scopeKeyBS(period.asOf)}
+                    value={n.keterangan}
+                  />
                 </div>
               ))}
             </div>
