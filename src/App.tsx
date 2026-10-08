@@ -22,6 +22,7 @@ import { PaymentPage } from "./pages/payments/PaymentPage";
 import { PaymentControlPage } from "./pages/payments/PaymentControlPage";
 import { ReceivablesPage } from "./pages/receivables/ReceivablesPage";
 import { CashBankPage } from "./pages/cashbank/CashBankPage";
+import { AssetsPage } from "./pages/assets/AssetsPage";
 import { LedgerPage } from "./pages/ledger/LedgerPage";
 import { FinancialStatementsPage } from "./pages/financialstatements/FinancialStatementsPage";
 import { ReportsPage } from "./pages/reports/ReportsPage";
@@ -164,6 +165,11 @@ const router = createBrowserRouter([
       { path: "cash-bank", element: (
         <RequirePermission permission={PERMISSIONS.CASH_VOUCHERS_VIEW}>
           <CashBankPage />
+        </RequirePermission>
+      ) },
+      { path: "assets", element: (
+        <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+          <AssetsPage />
         </RequirePermission>
       ) },
       { path: "ledger", element: (

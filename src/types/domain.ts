@@ -775,7 +775,10 @@ export type JournalSourceType =
   | "purchase"
   // Kas & Bank vouchers (financial-statements plan's gap-closing phase,
   // Phase B) -- mirrors the backend's "cash_voucher" source_type.
-  | "cashVoucher";
+  | "cashVoucher"
+  // Monthly depreciation/amortisation runs (gap-closing plan, Phase D) --
+  // mirrors the backend's "depreciation" source_type.
+  | "depreciation";
 
 /**
  * A posted journal is immutable. Corrections are made by posting a reversal,
@@ -1104,6 +1107,62 @@ export interface RegistrationPackageEntity extends Scoped {
   updatedAt: string;
 }
 
+/* ── asset register & depreciation runs (gap-closing plan, Phase D) ─────── */
+
+export type AssetClass = "building" | "vehicle" | "office_equipment" | "intangible" | "prepaid";
+export type AssetStatus = "active" | "fully_depreciated" | "disposed";
+
+/** A depreciable or amortisable register row -- mirrors asset.AssetResponse.
+ *  `monthlyAmount`/`accumulatedToDate` are computed on read, never stored,
+ *  the same way the real backend's own toResponse attaches them. */
+export interface AssetEntity extends Scoped {
+  id: ID;
+  assetCode: string;
+  name: string;
+  assetClass: AssetClass;
+  acquisitionDate: string;
+  depreciationStartDate: string;
+  cost: number;
+  residualValue: number;
+  usefulLifeMonths: number;
+  method: "straight_line";
+  openingAccumulated: number;
+  openingAsOf?: string;
+  assetAccountId: ID;
+  accumulatedAccountId?: ID;
+  expenseAccountId: ID;
+  vehicleId?: ID;
+  status: AssetStatus;
+  disposedAt?: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DepreciationRunStatus = "posted" | "void";
+
+/** One asset's charge within a run -- mirrors depreciationrun.LineResponse. */
+export interface DepreciationRunLineEntity {
+  assetId: ID;
+  amount: number;
+}
+
+/** One monthly depreciation run -- mirrors depreciationrun.
+ *  DepreciationRunResponse. No draft state: a run computes its lines and
+ *  posts the one balanced journal in the same write, the same reasoning
+ *  the backend's own services.go header gives. */
+export interface DepreciationRunEntity extends Scoped {
+  id: ID;
+  period: string;
+  status: DepreciationRunStatus;
+  lines: DepreciationRunLineEntity[];
+  /** Set once posted -- the journal this run's post wrote, so a void can
+   *  reverse exactly that entry via reverseJournal. */
+  journalId?: ID;
+  version: number;
+  createdAt: string;
+}
+
 /** Document prefixes. Visible on every table row and printout. */
 export interface NumberingEntity {
   suratJalan: string;
@@ -1330,6 +1389,8 @@ export interface Database {
   bankStatementImports: BankStatementImportEntity[];
   bankStatementRules: BankStatementRuleEntity[];
   registrationPackages: RegistrationPackageEntity[];
+  assets: AssetEntity[];
+  depreciationRuns: DepreciationRunEntity[];
   invoices: InvoiceEntity[];
   creditNotes: CreditNoteEntity[];
   /**

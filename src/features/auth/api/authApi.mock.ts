@@ -106,6 +106,12 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     PERMISSIONS.BANK_STATEMENTS_IMPORT,
     PERMISSIONS.BANK_STATEMENTS_CLASSIFY,
     PERMISSIONS.BANK_STATEMENT_RULES_VIEW,
+    // The asset register and depreciation runs (gap-closing phase, Phase
+    // D): read-only, the same tier journals/registration_packages above
+    // take -- registering an asset or running depreciation stays with
+    // tenant_admin.
+    PERMISSIONS.ASSETS_VIEW,
+    PERMISSIONS.DEPRECIATION_RUNS_VIEW,
     PERMISSIONS.EXPENSES_VIEW,
     PERMISSIONS.EXPENSES_APPROVE,
     PERMISSIONS.OCR_ARCHIVE_VIEW,

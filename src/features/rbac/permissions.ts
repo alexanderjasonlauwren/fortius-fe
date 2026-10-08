@@ -177,6 +177,20 @@ export const PERMISSIONS = {
   BANK_STATEMENT_RULES_CREATE: "finance.create.bank_statement_rules",
   BANK_STATEMENT_RULES_UPDATE: "finance.update.bank_statement_rules",
 
+  /**
+   * The asset register and its monthly depreciation run (financial-
+   * statements plan P6 / gap-closing plan Phase D). Void rides on update --
+   * a run has no draft to approve into existence, so the only later
+   * authority is "undo this", the same reasoning the backend's own
+   * internal/controller/depreciationrun/routes.go comment gives.
+   */
+  ASSETS_VIEW: "finance.read.assets",
+  ASSETS_CREATE: "finance.create.assets",
+  ASSETS_UPDATE: "finance.update.assets",
+  DEPRECIATION_RUNS_VIEW: "finance.read.depreciation_runs",
+  DEPRECIATION_RUNS_CREATE: "finance.create.depreciation_runs",
+  DEPRECIATION_RUNS_UPDATE: "finance.update.depreciation_runs",
+
   // Delivery execution — what happens at the drop, recorded by whoever is
   // there. Executing is an update to the delivery row, not a verb of its own.
   DELIVERIES_VIEW: "distribution.read.deliveries",

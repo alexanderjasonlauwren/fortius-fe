@@ -9,6 +9,8 @@
 import { seedAccounts } from "./ledger";
 import { applyScalarRealisasi, costOfGoods, priceLines } from "./lines";
 import type {
+  AccountEntity,
+  AssetEntity,
   BranchEntity,
   TenantEntity,
   CreditNoteEntity,
@@ -44,7 +46,7 @@ import type {
   UserEntity,
 } from "./types";
 
-export const DB_VERSION = 15;
+export const DB_VERSION = 16;
 
 /* ── deterministic RNG ─────────────────────────────────────────────────── */
 
@@ -1278,6 +1280,90 @@ function seedRegistrationPackages(products: ProductEntity[]): RegistrationPackag
 }
 
 /**
+ * Three demo register rows -- one per class the console's own Daftar aset
+ * tab needs to show, so "Rekonsiliasi" and the kit-item picker on
+ * ManualInvoiceDialog both have something real on day one (gap-closing
+ * plan, Phase D). `openingAccumulated` on the vehicle and building rows is
+ * hand-computed by the same straight-line math `lib/depreciation.ts`
+ * exposes (monthly * periods elapsed through `openingAsOf`), so a first
+ * live run against this seed charges forward from a realistic baseline
+ * rather than from zero on an asset that is actually years into its life.
+ */
+function seedAssets(accounts: AccountEntity[], vehicles: VehicleEntity[]): AssetEntity[] {
+  const byCode = (kode: string) => accounts.find((a) => a.kode === kode)!.id;
+  const now = isoDate(startOfToday());
+  const scope = branchFor();
+  return [
+    {
+      ...scope,
+      id: "ast-001",
+      assetCode: "AST-VHC-001",
+      name: `Truk ${vehicles[0]?.armada ?? "Angkut"} — ${vehicles[0]?.plat ?? "B 0000 XX"}`,
+      assetClass: "vehicle",
+      acquisitionDate: "2024-06-01",
+      depreciationStartDate: "2024-06-01",
+      cost: 350_000_000,
+      residualValue: 50_000_000,
+      usefulLifeMonths: 60,
+      method: "straight_line",
+      openingAccumulated: 135_000_000,
+      openingAsOf: "2026-09-30",
+      assetAccountId: byCode("1-2200"),
+      accumulatedAccountId: byCode("1-2900"),
+      expenseAccountId: byCode("5-5200"),
+      vehicleId: vehicles[0]?.id,
+      status: "active",
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      ...scope,
+      id: "ast-002",
+      assetCode: "AST-OFC-001",
+      name: "Server & Peralatan Jaringan",
+      assetClass: "office_equipment",
+      acquisitionDate: "2026-09-01",
+      depreciationStartDate: "2026-09-01",
+      cost: 45_000_000,
+      residualValue: 5_000_000,
+      usefulLifeMonths: 36,
+      method: "straight_line",
+      openingAccumulated: 0,
+      assetAccountId: byCode("1-2300"),
+      accumulatedAccountId: byCode("1-2900"),
+      expenseAccountId: byCode("5-5300"),
+      status: "active",
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      ...scope,
+      id: "ast-003",
+      assetCode: "AST-BLD-001",
+      name: "Gedung Gudang & Kantor Cabang",
+      assetClass: "building",
+      acquisitionDate: "2020-01-01",
+      depreciationStartDate: "2020-01-01",
+      cost: 800_000_000,
+      residualValue: 100_000_000,
+      usefulLifeMonths: 240,
+      method: "straight_line",
+      openingAccumulated: 233_333_360,
+      openingAsOf: "2026-09-30",
+      assetAccountId: byCode("1-2100"),
+      accumulatedAccountId: byCode("1-2900"),
+      expenseAccountId: byCode("5-5100"),
+      status: "active",
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+}
+
+/**
  * What each tenant sets for itself.
  *
  * Partial by design: a field absent here is inherited from the parent, which is
@@ -1651,6 +1737,11 @@ export function createSeedDatabase(): Database {
     // never carried (Timbangan/Papan Pangkalan/APAR) in favour of the
     // accessory already in seedProducts above.
     registrationPackages: seedRegistrationPackages(products),
+    // Asset register console (gap-closing plan, Phase D): three demo rows,
+    // no run posted against them yet -- the seeded day starts with none,
+    // the same reasoning deliveryEvents/audit/cashVouchers above follow.
+    assets: seedAssets(accounts, vehicles),
+    depreciationRuns: [],
     invoices,
     creditNotes,
     settings,

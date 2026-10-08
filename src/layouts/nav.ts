@@ -5,6 +5,7 @@ import {
   Network,
   Bell,
   BookOpen,
+  Building2,
   ClipboardCheck,
   ClipboardList,
   FileSignature,
@@ -179,6 +180,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: BookOpen,
         hint: "Jurnal, neraca saldo, dan laba rugi",
         permission: PERMISSIONS.JOURNALS_VIEW,
+      },
+      {
+        name: "Aset Tetap",
+        href: "/assets",
+        icon: Building2,
+        hint: "Daftar aset, penyusutan bulanan, dan rekonsiliasi",
+        permission: PERMISSIONS.ASSETS_VIEW,
       },
       {
         name: "Laporan Keuangan",
