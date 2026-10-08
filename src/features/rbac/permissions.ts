@@ -87,6 +87,15 @@ export const PERMISSIONS = {
   INVOICES_CREATE: "finance.create.invoices",
   INVOICES_EXPORT: "finance.export.invoices",
   JOURNALS_VIEW: "finance.read.journals",
+  /**
+   * "Jurnal umum" manual entry, and the "Balik jurnal" reversal that rides
+   * on the same code (gap-closing plan, Phase E): the backend's own
+   * routes.go gates both POST /journals and POST /journals/:id/reverse on
+   * finance.create.journals, not a separate permission for each. Stays
+   * tenant_admin-only -- finance_officer holds only JOURNALS_VIEW, the
+   * same tier the chart of accounts does.
+   */
+  JOURNALS_CREATE: "finance.create.journals",
 
   /**
    * Registration package templates (financial-statements plan P5 / gap-
@@ -190,6 +199,21 @@ export const PERMISSIONS = {
   DEPRECIATION_RUNS_VIEW: "finance.read.depreciation_runs",
   DEPRECIATION_RUNS_CREATE: "finance.create.depreciation_runs",
   DEPRECIATION_RUNS_UPDATE: "finance.update.depreciation_runs",
+
+  /**
+   * Fiscal-year close/reopen and the opening-balance wizard (financial-
+   * statements plan P7.1/P7.2 / gap-closing plan Phase E). The opening-
+   * balance wizard rides on these same two codes rather than ones of its
+   * own -- the backend's own internal/controller/openingbalance/routes.go
+   * comment: Preview needs only read, Commit needs create, since the
+   * wizard is a one-time precursor to the same operation closing a year
+   * is. Reopen stays tenant_admin-only, same as close -- neither of these
+   * is granted to finance_officer at all (read-only tier, same as
+   * assets/depreciation_runs above).
+   */
+  FISCAL_YEARS_VIEW: "finance.read.fiscal_years",
+  FISCAL_YEARS_CLOSE: "finance.create.fiscal_years",
+  FISCAL_YEARS_REOPEN: "finance.update.fiscal_years",
 
   // Delivery execution — what happens at the drop, recorded by whoever is
   // there. Executing is an update to the delivery row, not a verb of its own.

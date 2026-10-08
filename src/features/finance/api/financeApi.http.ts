@@ -39,6 +39,7 @@ import type {
   ChartUpgradeResult,
   CreateAccountInput,
   CreateManualInvoiceInput,
+  CreateManualJournalInput,
   CreditNoteInput,
   CreditNoteView,
   DateRange,
@@ -587,9 +588,23 @@ interface JournalResponse {
   journal_number: string;
   journal_date: string;
   description: string;
+  source_type: string;
   journal_status: string;
   lines: JournalLineResponse[];
+  version: number;
 }
+
+// Mirrors fin.journals.source_type's own CHECK constraint values, renamed
+// to this build's camelCase JournalSourceType. An unrecognised wire value
+// (a source_type added on the backend before this map catches up) falls
+// back to "manual" rather than throwing -- close enough for display, and
+// reverseJournal's own eligibility check treats it the same as a real
+// manual entry would.
+const SOURCE_TYPE: Record<string, JournalView["sourceType"]> = {
+  invoice: "invoice", payment: "payment", credit_note: "creditNote", delivery: "delivery",
+  manual: "manual", purchase: "purchase", cash_voucher: "cashVoucher", depreciation: "depreciation",
+  closing: "closing", opening_balance: "openingBalance",
+};
 
 function toJournalView(row: JournalResponse): JournalView {
   const lines = row.lines ?? [];
@@ -598,6 +613,7 @@ function toJournalView(row: JournalResponse): JournalView {
     nomor: row.journal_number,
     tanggal: row.journal_date.slice(0, 10),
     keterangan: row.description,
+    sourceType: SOURCE_TYPE[row.source_type] ?? "manual",
     status: row.journal_status === "reversed" ? "Dibatalkan" : "Diposting",
     total: lines.reduce((s, l) => s + l.debit, 0),
     lines: lines.map((l) => ({
@@ -606,6 +622,7 @@ function toJournalView(row: JournalResponse): JournalView {
       kredit: l.credit,
       memo: l.memo,
     })),
+    version: row.version,
   };
 }
 
@@ -651,6 +668,32 @@ async function getJournals(range?: DateRange): Promise<JournalView[]> {
   return withLines.map(toJournalView);
 }
 
+async function createManualJournal(input: CreateManualJournalInput): Promise<JournalView> {
+  const row = await send<JournalResponse>("post", "/journals", {
+    branch_id: input.branchId,
+    // CreateManualJournalRequest.JournalDate is a real time.Time, unlike
+    // every other date field this adapter sends (asset/depreciation-run
+    // requests all declare theirs as a plain validated string) -- Go's
+    // JSON unmarshal rejects a bare "YYYY-MM-DD" against time.Time with a
+    // decode error the binding layer reports as "Request body is not
+    // valid JSON", caught live against the real API.
+    journal_date: `${input.journalDate}T00:00:00Z`,
+    description: input.description,
+    lines: input.lines.map((l) => ({
+      account_id: l.accountId,
+      debit: l.debit || undefined,
+      credit: l.kredit || undefined,
+      memo: l.memo,
+    })),
+  });
+  return toJournalView(row);
+}
+
+async function reverseJournal(id: string, version: number): Promise<JournalView> {
+  const row = await send<JournalResponse>("post", `/journals/${id}/reverse`, { version });
+  return toJournalView(row);
+}
+
 /* ── accounts / trial balance / P&L ───────────────────────────────────── */
 
 interface AccountResponse {
@@ -661,6 +704,7 @@ interface AccountResponse {
   normal_balance: "dr" | "cr";
   is_system: boolean;
   role?: string;
+  parent_id?: string;
 }
 
 const ACCOUNT_TYPE: Record<string, AccountType> = {
@@ -671,13 +715,24 @@ const ACCOUNT_TYPE: Record<string, AccountType> = {
   expense: "Beban",
 };
 
-function toAccountEntity(row: AccountResponse): AccountEntity {
+/**
+ * `idToCode` resolves `parent_id` (a uuid) to the parent's own code --
+ * `induk` stores the code, same as the mock (see mocks/ledger.ts's own
+ * accounts), so `leafAccounts()` can compare it against sibling codes
+ * without caring which adapter produced the row. Omitting this lookup left
+ * every API-mode account's `induk` undefined, which made `leafAccounts()` a
+ * silent no-op against the real backend -- caught live posting a manual
+ * journal to "5-4000 Beban Umum dan Administrasi", a grouping header still
+ * listed as selectable (gap-closing plan, Phase E).
+ */
+function toAccountEntity(row: AccountResponse, idToCode: Map<string, string>): AccountEntity {
   return {
     id: row.id,
     kode: row.code,
     nama: row.name,
     tipe: ACCOUNT_TYPE[row.account_type] ?? "Aset",
     saldoNormal: row.normal_balance === "dr" ? "debit" : "kredit",
+    induk: row.parent_id ? idToCode.get(row.parent_id) : undefined,
     // "payable" (Step 6) has no equivalent in the console's AccountRole
     // union yet, and nothing here reads .role, so an unrecognised role is
     // left undefined rather than widening that type for no consumer.
@@ -743,6 +798,7 @@ interface TrialBalanceResponse {
 function toAccountBalances(
   rows: TrialBalanceRowResponse[],
   accounts: Map<string, AccountResponse>,
+  idToCode: Map<string, string>,
 ): AccountBalance[] {
   return rows.map((r) => {
     const account = accounts.get(r.account_code);
@@ -750,7 +806,7 @@ function toAccountBalances(
     const saldo = normalBalance === "dr" ? r.debit - r.credit : r.credit - r.debit;
     return {
       akun: account
-        ? toAccountEntity(account)
+        ? toAccountEntity(account, idToCode)
         : {
             id: r.account_code,
             kode: r.account_code,
@@ -780,7 +836,8 @@ async function getTrialBalance(range: { from: string; to: string }): Promise<Tri
     fetchAccounts(),
   ]);
   const accounts = new Map(accountRows.map((a) => [a.code, a]));
-  const rows = toAccountBalances(response.rows, accounts).filter(
+  const idToCode = new Map(accountRows.map((a) => [a.id, a.code]));
+  const rows = toAccountBalances(response.rows, accounts, idToCode).filter(
     (r) => r.debit !== 0 || r.kredit !== 0,
   );
   return {
@@ -810,12 +867,13 @@ interface ProfitAndLossResponse {
 function toPnlRows(
   rows: ProfitAndLossRowResponse[],
   accounts: Map<string, AccountResponse>,
+  idToCode: Map<string, string>,
 ): AccountBalance[] {
   return rows.map((r) => {
     const account = accounts.get(r.account_code);
     return {
       akun: account
-        ? toAccountEntity(account)
+        ? toAccountEntity(account, idToCode)
         : {
             id: r.account_code,
             kode: r.account_code,
@@ -843,9 +901,10 @@ async function getProfitAndLoss(range: { from: string; to: string }): Promise<Pr
     fetchAccounts(),
   ]);
   const accounts = new Map(accountRows.map((a) => [a.code, a]));
+  const idToCode = new Map(accountRows.map((a) => [a.id, a.code]));
   return {
-    pendapatan: toPnlRows(response.revenue, accounts),
-    beban: toPnlRows([...response.cogs, ...response.expenses], accounts),
+    pendapatan: toPnlRows(response.revenue, accounts, idToCode),
+    beban: toPnlRows([...response.cogs, ...response.expenses], accounts, idToCode),
     totalPendapatan: response.total_revenue,
     totalBeban: response.total_cogs + response.total_expenses,
     labaKotor: response.gross_profit,
@@ -859,7 +918,8 @@ async function getChartOfAccounts(): Promise<AccountBalance[]> {
     getOne<TrialBalanceResponse>("/journals/trial-balance"),
   ]);
   const accounts = new Map(accountRows.map((a) => [a.code, a]));
-  const balances = toAccountBalances(tb.rows, accounts);
+  const idToCode = new Map(accountRows.map((a) => [a.id, a.code]));
+  const balances = toAccountBalances(tb.rows, accounts, idToCode);
   const balanceByCode = new Map(balances.map((b) => [b.akun.kode, b]));
 
   // Every account in the chart, not only the ones with lifetime movement --
@@ -871,7 +931,7 @@ async function getChartOfAccounts(): Promise<AccountBalance[]> {
     .map(
       (a) =>
         balanceByCode.get(a.code) ?? {
-          akun: toAccountEntity(a),
+          akun: toAccountEntity(a, idToCode),
           debit: 0,
           kredit: 0,
           saldo: 0,
@@ -935,6 +995,8 @@ export const financeApiHttp: FinanceApi = {
   releaseDistributionStop,
   submitCreditNote,
   getJournals,
+  createManualJournal,
+  reverseJournal,
   getTrialBalance,
   getProfitAndLoss,
   getChartOfAccounts,

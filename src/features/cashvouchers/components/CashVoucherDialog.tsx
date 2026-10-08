@@ -25,6 +25,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { formatRupiah } from "@/lib/format";
+import { leafAccounts } from "@/mocks/ledger";
 import { scopeKey } from "@/mocks/scope";
 
 /** Account codes the quick templates pre-select -- confirmed to exist on
@@ -81,6 +82,11 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
 
   const bankAccounts = useQuery({ queryKey: [...scopeKey(), "cash-bank", "bank-accounts"], queryFn: getBankAccounts, enabled: open });
   const accounts = useQuery({ queryKey: [...scopeKey(), "cash-bank", "chart-of-accounts"], queryFn: getChartOfAccounts, enabled: open });
+  // ledger.Post refuses a line posted to a grouping header ("Akun %s
+  // adalah akun induk; posting harus ke sub-akun"), caught live posting a
+  // manual journal to one (gap-closing plan, Phase E) -- the same chart,
+  // so a voucher's own line picker excludes parents too.
+  const postableAccounts = leafAccounts(accounts.data ?? []);
 
   const save = useDeskMutation({
     mutationFn: () => {
@@ -202,7 +208,7 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
                       onChange={(e) => setLines(lines.map((l) => (l.key === line.key ? { ...l, accountId: e.target.value } : l)))}
                     >
                       <option value="">— Pilih —</option>
-                      {(accounts.data ?? []).map((a) => (
+                      {postableAccounts.map((a) => (
                         <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
                       ))}
                     </SelectInput>

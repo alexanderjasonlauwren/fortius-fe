@@ -46,7 +46,7 @@ import type {
   UserEntity,
 } from "./types";
 
-export const DB_VERSION = 16;
+export const DB_VERSION = 17;
 
 /* ── deterministic RNG ─────────────────────────────────────────────────── */
 
@@ -807,6 +807,7 @@ function seedReceivables(
       status: "Diposting",
       dibuatOleh: "Sistem",
       dibuatPada: new Date().toISOString(),
+      version: 1,
     });
   };
 
@@ -1741,7 +1742,12 @@ export function createSeedDatabase(): Database {
     // no run posted against them yet -- the seeded day starts with none,
     // the same reasoning deliveryEvents/audit/cashVouchers above follow.
     assets: seedAssets(accounts, vehicles),
+    // Tutup Buku / opening-balance console (gap-closing plan, Phase E):
+    // no year closed and no opening balance committed yet at day one, the
+    // same reasoning deliveryEvents/audit/cashVouchers above follow.
     depreciationRuns: [],
+    fiscalYears: [],
+    openingBalances: [],
     invoices,
     creditNotes,
     settings,

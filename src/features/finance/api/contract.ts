@@ -13,7 +13,7 @@
  * source it is running against.
  */
 import type { AccountBalance } from "@/mocks/ledger";
-import type { BankNameEntity, CreditNoteStatus, InvoiceStatus } from "@/types/domain";
+import type { BankNameEntity, CreditNoteStatus, InvoiceStatus, JournalSourceType } from "@/types/domain";
 
 export const AGING_BUCKETS = [
   "Belum jatuh tempo",
@@ -195,9 +195,29 @@ export interface JournalView {
   nomor: string;
   tanggal: string;
   keterangan: string;
+  sourceType: JournalSourceType;
   status: "Diposting" | "Dibatalkan";
   lines: JournalLineView[];
   total: number;
+  version: number;
+}
+
+export interface ManualJournalLineInput {
+  accountId: string;
+  debit: number;
+  kredit: number;
+  memo?: string;
+}
+
+/** A hand-entered correction (gap-closing plan, Phase E / financial-
+ *  statements plan P7.4). There is deliberately no update or delete on a
+ *  journal -- a mistake is fixed with a second entry (reverseJournal),
+ *  not an edit of the first. */
+export interface CreateManualJournalInput {
+  branchId?: string;
+  journalDate: string;
+  description: string;
+  lines: ManualJournalLineInput[];
 }
 
 export interface DateRange {
@@ -248,6 +268,15 @@ export interface FinanceApi {
   releaseDistributionStop(input: FundStopInput): Promise<FundingResult>;
   submitCreditNote(input: CreditNoteInput): Promise<CreditNoteView>;
   getJournals(range?: DateRange): Promise<JournalView[]>;
+  /** "Jurnal umum" (gap-closing plan, Phase E). Refused by the real
+   *  backend's own finance.create.journals grant for anyone but
+   *  tenant_admin -- the same tier manual journal entry has always sat
+   *  at. */
+  createManualJournal(input: CreateManualJournalInput): Promise<JournalView>;
+  /** Posts the mirror of an existing journal. Refused unless the
+   *  original's sourceType is "manual" or "openingBalance" -- every other
+   *  source type already has its own module-specific void/cancel path. */
+  reverseJournal(id: string, version: number): Promise<JournalView>;
   getTrialBalance(range: { from: string; to: string }): Promise<TrialBalanceView>;
   getProfitAndLoss(range: { from: string; to: string }): Promise<ProfitAndLossView>;
   getChartOfAccounts(): Promise<AccountBalance[]>;

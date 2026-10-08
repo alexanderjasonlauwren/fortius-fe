@@ -778,7 +778,13 @@ export type JournalSourceType =
   | "cashVoucher"
   // Monthly depreciation/amortisation runs (gap-closing plan, Phase D) --
   // mirrors the backend's "depreciation" source_type.
-  | "depreciation";
+  | "depreciation"
+  // Fiscal-year close/reopen and the one-time opening-balance commit
+  // (gap-closing plan, Phase E) -- mirror the backend's "closing" and
+  // "opening_balance" source_types. Both are the two source_types
+  // ReverseJournalRequest itself names as reversible, alongside "manual".
+  | "closing"
+  | "openingBalance";
 
 /**
  * A posted journal is immutable. Corrections are made by posting a reversal,
@@ -796,6 +802,11 @@ export interface JournalEntity extends Scoped {
   reversalDari?: ID;
   dibuatOleh: string;
   dibuatPada: string;
+  /** Bumped when this entry is itself reversed -- the version guard
+   *  reverseJournal's own caller echoes back (gap-closing plan, Phase E).
+   *  A journal is otherwise immutable, so this exists for exactly one
+   *  transition. */
+  version: number;
 }
 
 export type ReceiptStatus = "Menunggu Review" | "Tervalidasi" | "Ditolak";
@@ -1163,6 +1174,37 @@ export interface DepreciationRunEntity extends Scoped {
   createdAt: string;
 }
 
+/* ── fiscal years & opening balance (gap-closing plan, Phase E) ─────────── */
+
+export type FiscalYearStatus = "open" | "closed";
+
+/** A fiscal year that has been closed (and possibly reopened) -- mirrors
+ *  fiscalyear.FiscalYearResponse. A year that has never been closed has
+ *  no row here at all; see FiscalYearSection's own doc for what that
+ *  means for a "which years can I close" list. */
+export interface FiscalYearEntity extends Scoped {
+  year: number;
+  status: FiscalYearStatus;
+  closedAt?: string;
+  closingJournalId?: ID;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Whether the one-time opening-balance commit has already run for this
+ *  tenant -- mirrors the real backend's own refusal ("An opening balance
+ *  already exists") on a second POST /opening-balance/commit. The mock
+ *  cannot read an uploaded workbook's content (same documented gap
+ *  externalstatements/bankstatements already carry), so this is the one
+ *  piece of real state it keeps: not what was committed, only that
+ *  something was. */
+export interface OpeningBalanceEntity extends Scoped {
+  asOf: string;
+  journalId: ID;
+  committedAt: string;
+}
+
 /** Document prefixes. Visible on every table row and printout. */
 export interface NumberingEntity {
   suratJalan: string;
@@ -1391,6 +1433,8 @@ export interface Database {
   registrationPackages: RegistrationPackageEntity[];
   assets: AssetEntity[];
   depreciationRuns: DepreciationRunEntity[];
+  fiscalYears: FiscalYearEntity[];
+  openingBalances: OpeningBalanceEntity[];
   invoices: InvoiceEntity[];
   creditNotes: CreditNoteEntity[];
   /**

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatRupiah } from "@/lib/format";
 import { outletLabel } from "@/lib/lexicon";
+import { leafAccounts } from "@/mocks/ledger";
 import { scopeKey } from "@/mocks/scope";
 
 type Jenis = "registration" | "other";
@@ -75,7 +76,11 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
     queryFn: () => getProducts({ onlyActive: true }),
     enabled: open && jenis === "registration",
   });
-  const revenueAccounts = (accounts.data ?? []).filter((a) => a.akun.tipe === "Pendapatan");
+  // leafAccounts: ledger.Post refuses a line posted to a grouping header
+  // ("Akun %s adalah akun induk; posting harus ke sub-akun"), caught live
+  // for the sibling pick in ManualJournalDialog -- the same chart, the
+  // same real restriction, so this picker excludes parents too.
+  const revenueAccounts = leafAccounts((accounts.data ?? []).filter((a) => a.akun.tipe === "Pendapatan"));
   const accessoryProducts = (kitProducts.data ?? []).filter((p) => p.productKind === "accessory");
 
   function reset() {

@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { leafAccounts } from "@/mocks/ledger";
 import { scopeKey } from "@/mocks/scope";
 
 const CLASS_LABEL: Record<AssetClass, string> = {
@@ -72,8 +73,13 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
 
   const vehicles = useQuery({ queryKey: [...scopeKey(), "assets", "vehicles"], queryFn: () => getVehicles(), enabled: open && assetClass === "vehicle" });
   const accounts = useQuery({ queryKey: [...scopeKey(), "assets", "accounts"], queryFn: getChartOfAccounts, enabled: open && !editing });
-  const assetAccounts = (accounts.data ?? []).filter((a) => a.akun.tipe === "Aset");
-  const expenseAccounts = (accounts.data ?? []).filter((a) => a.akun.tipe === "Beban");
+  // leafAccounts: ledger.Post refuses a line posted to a grouping header
+  // ("Akun %s adalah akun induk; posting harus ke sub-akun"), caught live
+  // posting a manual journal to one -- the same chart, so an asset's own
+  // account overrides exclude parents too (an asset posts through these
+  // every depreciation run).
+  const assetAccounts = leafAccounts((accounts.data ?? []).filter((a) => a.akun.tipe === "Aset"));
+  const expenseAccounts = leafAccounts((accounts.data ?? []).filter((a) => a.akun.tipe === "Beban"));
 
   const save = useDeskMutation({
     mutationFn: () =>

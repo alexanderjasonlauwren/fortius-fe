@@ -4,6 +4,7 @@ import { agingBucket, invoiceSisa, outletExposure, raiseManualInvoice, unallocat
 import {
   accountBalances,
   createAccount as mocksCreateAccount,
+  postJournal,
   profitAndLoss,
   trialBalance,
   upgradeChart as mocksUpgradeChart,
@@ -25,6 +26,7 @@ import type {
   ChartUpgradeResult,
   CreateAccountInput,
   CreateManualInvoiceInput,
+  CreateManualJournalInput,
   CreditNoteInput,
   CreditNoteView,
   DateRange,
@@ -354,6 +356,7 @@ async function getJournals(range?: DateRange): Promise<JournalView[]> {
       nomor: j.nomor,
       tanggal: j.tanggal,
       keterangan: j.keterangan,
+      sourceType: j.sumber.tipe,
       status: j.status,
       total: j.lines.reduce((s, l) => s + l.debit, 0),
       lines: j.lines.map((l) => ({
@@ -362,7 +365,89 @@ async function getJournals(range?: DateRange): Promise<JournalView[]> {
         kredit: l.kredit,
         memo: l.memo,
       })),
+      version: j.version,
     }));
+}
+
+/** "Jurnal umum": a hand-entered correction, posted exactly as given --
+ *  mirrors the real backend's own CreateManualJournalRequest validation
+ *  (every line names a real account, exactly one side positive, at least
+ *  two lines, debits equal credits -- the last two already enforced by
+ *  postJournal itself). */
+async function createManualJournal(input: CreateManualJournalInput): Promise<JournalView> {
+  await latency("write");
+  if (input.lines.length < 2) throw new ApiError("Jurnal memerlukan minimal dua baris.", 422);
+  return mutate((db) => {
+    for (const line of input.lines) {
+      if (!db.accounts.some((a) => a.id === line.accountId)) {
+        throw new ApiError("Akun pada salah satu baris tidak ditemukan.", 422);
+      }
+      if ((line.debit > 0) === (line.kredit > 0)) {
+        throw new ApiError("Setiap baris harus mengisi tepat satu dari debit atau kredit.", 422);
+      }
+    }
+    const journal = postJournal(db, {
+      tanggal: input.journalDate,
+      keterangan: input.description,
+      sumber: { tipe: "manual", id: "manual" },
+      aktor: currentActor(),
+      scope: input.branchId ? { tenantId: db.branches.find((b) => b.id === input.branchId)!.tenantId, branchId: input.branchId } : undefined,
+      lines: input.lines.map((l) => ({ akunId: l.accountId, debit: l.debit, kredit: l.kredit, memo: l.memo })),
+    });
+    const byId = new Map(db.accounts.map((a) => [a.id, a]));
+    return {
+      id: journal.id, nomor: journal.nomor, tanggal: journal.tanggal, keterangan: journal.keterangan,
+      sourceType: journal.sumber.tipe, status: journal.status,
+      total: journal.lines.reduce((s, l) => s + l.debit, 0),
+      lines: journal.lines.map((l) => ({ akun: byId.get(l.akunId), debit: l.debit, kredit: l.kredit, memo: l.memo })),
+      version: journal.version,
+    };
+  });
+}
+
+/** Mirrors the real backend's own ReverseJournal: only a "manual" or
+ *  "openingBalance" journal is reversible here (every other source type
+ *  has its own module-specific void/cancel path), dated at the ORIGINAL's
+ *  own journal_date (not "today" -- unlike the looser mocks/ledger.ts
+ *  reverseJournal helper cash vouchers use, which has no such
+ *  restriction and needs a reason this action does not collect). */
+async function reverseJournal(id: string, version: number): Promise<JournalView> {
+  await latency("write");
+  return mutate((db) => {
+    const original = db.journals.find((j) => j.id === id);
+    if (!original) throw new ApiError("Jurnal tidak ditemukan.", 404);
+    if (original.sumber.tipe !== "manual" && original.sumber.tipe !== "openingBalance") {
+      throw new ApiError("Hanya jurnal manual atau saldo awal yang dapat dibalik di sini.", 409);
+    }
+    if (original.status === "Dibatalkan") throw new ApiError("Jurnal ini sudah dibalik.", 409);
+    if (original.version !== version) {
+      throw new ApiError("Jurnal sudah berubah. Muat ulang lalu coba lagi.", 409, "STALE_VERSION");
+    }
+
+    // Returns the ORIGINAL, now marked reversed -- mirrors the real
+    // backend's own ReverseJournal, which reloads `current` (not the new
+    // reversal row) after the status update.
+    postJournal(db, {
+      scope: { tenantId: original.tenantId, branchId: original.branchId },
+      tanggal: original.tanggal,
+      keterangan: `Reversal of ${original.nomor}`,
+      sumber: original.sumber,
+      aktor: currentActor(),
+      reversalDari: original.id,
+      lines: original.lines.map((l) => ({ akunId: l.akunId, debit: l.kredit, kredit: l.debit, memo: l.memo })),
+    });
+    original.status = "Dibatalkan";
+    original.version += 1;
+
+    const byId = new Map(db.accounts.map((a) => [a.id, a]));
+    return {
+      id: original.id, nomor: original.nomor, tanggal: original.tanggal, keterangan: original.keterangan,
+      sourceType: original.sumber.tipe, status: original.status,
+      total: original.lines.reduce((s, l) => s + l.debit, 0),
+      lines: original.lines.map((l) => ({ akun: byId.get(l.akunId), debit: l.debit, kredit: l.kredit, memo: l.memo })),
+      version: original.version,
+    };
+  });
 }
 
 async function getTrialBalance(range: { from: string; to: string }): Promise<TrialBalanceView> {
@@ -420,6 +505,8 @@ export const financeApiMock: FinanceApi = {
   releaseDistributionStop,
   submitCreditNote,
   getJournals,
+  createManualJournal,
+  reverseJournal,
   getTrialBalance,
   getProfitAndLoss,
   createAccount,

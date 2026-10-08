@@ -344,6 +344,37 @@ describe("journals", () => {
     expect(journal.lines).toHaveLength(2);
     expect(journal.total).toBe(150_000);
   });
+
+  describe("manual entry", () => {
+    // Caught live: CreateManualJournalRequest.JournalDate is a real Go
+    // time.Time, unlike every other date field this adapter sends (asset
+    // and depreciation-run requests both declare theirs as a plain
+    // validated string) -- a bare "YYYY-MM-DD" fails time.Time's own JSON
+    // unmarshal, which the binding layer reports as the generic "Request
+    // body is not valid JSON" rather than a field-level error.
+    it("sends journal_date as a full RFC3339 timestamp, not a bare date", async () => {
+      send.mockResolvedValue(journalWire());
+      await financeApiHttp.createManualJournal({
+        journalDate: "2026-10-08",
+        description: "Koreksi",
+        lines: [
+          { accountId: "a-1", debit: 50_000, kredit: 0 },
+          { accountId: "a-2", debit: 0, kredit: 50_000 },
+        ],
+      });
+      const [, , body] = send.mock.calls[0];
+      expect(body.journal_date).toBe("2026-10-08T00:00:00Z");
+    });
+
+    it("sends the version to reverse a journal", async () => {
+      send.mockResolvedValue(journalWire());
+      await financeApiHttp.reverseJournal("j-0001", 2);
+      const [method, path, body] = send.mock.calls[0];
+      expect(method).toBe("post");
+      expect(path).toBe("/journals/j-0001/reverse");
+      expect(body).toEqual({ version: 2 });
+    });
+  });
 });
 
 describe("trial balance", () => {
@@ -439,5 +470,25 @@ describe("chart of accounts: create + upgrade (phase P1)", () => {
     await financeApiHttp.upgradeChart();
 
     expect(send).toHaveBeenCalledWith("post", "/accounts/chart-upgrade", { dry_run: true });
+  });
+
+  // Caught live posting a manual journal to "5-4000 Beban Umum dan
+  // Administrasi", a grouping header still selectable because `induk` was
+  // never resolved from the wire's `parent_id` (gap-closing plan, Phase E) --
+  // leafAccounts() silently excluded nothing against the real API.
+  it("resolves induk from the parent's own code, not left undefined", async () => {
+    getList.mockResolvedValue({
+      items: [
+        { id: "p1", code: "5-4000", name: "Beban Umum dan Administrasi", account_type: "expense", normal_balance: "dr", is_system: true },
+        { id: "c1", code: "5-4100", name: "Gaji Pokok Staff", account_type: "expense", normal_balance: "dr", is_system: true, parent_id: "p1" },
+      ],
+      pagination: {},
+    });
+    getOne.mockResolvedValue({ as_of: "2026-10-08", rows: [], total_debit: 0, total_credit: 0 });
+
+    const rows = await financeApiHttp.getChartOfAccounts();
+
+    expect(rows.find((r) => r.akun.kode === "5-4000")?.akun.induk).toBeUndefined();
+    expect(rows.find((r) => r.akun.kode === "5-4100")?.akun.induk).toBe("5-4000");
   });
 });

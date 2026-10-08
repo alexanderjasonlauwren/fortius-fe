@@ -23,6 +23,7 @@ import { PaymentControlPage } from "./pages/payments/PaymentControlPage";
 import { ReceivablesPage } from "./pages/receivables/ReceivablesPage";
 import { CashBankPage } from "./pages/cashbank/CashBankPage";
 import { AssetsPage } from "./pages/assets/AssetsPage";
+import { OpeningBalanceWizardPage } from "./pages/openingbalance/OpeningBalanceWizardPage";
 import { LedgerPage } from "./pages/ledger/LedgerPage";
 import { FinancialStatementsPage } from "./pages/financialstatements/FinancialStatementsPage";
 import { ReportsPage } from "./pages/reports/ReportsPage";
@@ -170,6 +171,11 @@ const router = createBrowserRouter([
       { path: "assets", element: (
         <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
           <AssetsPage />
+        </RequirePermission>
+      ) },
+      { path: "opening-balance", element: (
+        <RequirePermission permission={PERMISSIONS.FISCAL_YEARS_VIEW}>
+          <OpeningBalanceWizardPage />
         </RequirePermission>
       ) },
       { path: "ledger", element: (

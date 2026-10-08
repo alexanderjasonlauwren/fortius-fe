@@ -34,6 +34,7 @@ function journal(
     dibuatPada: tanggal,
     tenantId: "t1",
     branchId: "b1",
+    version: 1,
     lines: lines.map((l) => {
       const account = accounts.find((a) => a.kode === l.code);
       if (!account) throw new Error(`fixture: no account ${l.code}`);

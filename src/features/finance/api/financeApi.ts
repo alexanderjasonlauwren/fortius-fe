@@ -18,6 +18,7 @@ export type {
   ChartUpgradeResult,
   CreateAccountInput,
   CreateManualInvoiceInput,
+  CreateManualJournalInput,
   CreditNoteInput,
   CreditNoteView,
   FundingResult,
@@ -26,6 +27,7 @@ export type {
   InvoiceType,
   InvoiceView,
   JournalView,
+  ManualJournalLineInput,
   ManualInvoiceKitItemInput,
   ManualInvoiceLineInput,
   PaymentView,
@@ -49,6 +51,8 @@ export const fundDistributionStop = api.fundDistributionStop.bind(api);
 export const releaseDistributionStop = api.releaseDistributionStop.bind(api);
 export const submitCreditNote = api.submitCreditNote.bind(api);
 export const getJournals = api.getJournals.bind(api);
+export const createManualJournal = api.createManualJournal.bind(api);
+export const reverseJournal = api.reverseJournal.bind(api);
 export const getTrialBalance = api.getTrialBalance.bind(api);
 export const getProfitAndLoss = api.getProfitAndLoss.bind(api);
 export const getChartOfAccounts = api.getChartOfAccounts.bind(api);

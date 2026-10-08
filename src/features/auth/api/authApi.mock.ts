@@ -112,6 +112,11 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     // tenant_admin.
     PERMISSIONS.ASSETS_VIEW,
     PERMISSIONS.DEPRECIATION_RUNS_VIEW,
+    // Fiscal-year close/reopen and the opening-balance wizard (gap-closing
+    // phase, Phase E): read-only, the same tier assets/depreciation_runs
+    // above take -- closing (and especially reopening) a year, or
+    // committing an opening balance, stays with tenant_admin.
+    PERMISSIONS.FISCAL_YEARS_VIEW,
     PERMISSIONS.EXPENSES_VIEW,
     PERMISSIONS.EXPENSES_APPROVE,
     PERMISSIONS.OCR_ARCHIVE_VIEW,

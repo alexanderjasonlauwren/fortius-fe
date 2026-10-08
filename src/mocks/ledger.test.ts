@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSeedDatabase } from "./seed";
-import { createAccount, upgradeChart } from "./ledger";
+import { accountBalances, createAccount, leafAccounts, upgradeChart } from "./ledger";
 
 /**
  * Chart-of-accounts mutations (financial-statements plan, phase P1):
@@ -89,5 +89,21 @@ describe("upgradeChart", () => {
 
     upgradeChart(db, false);
     expect(db.accounts.find((a) => a.kode === "1-2100")?.tipe).toBe("Kewajiban");
+  });
+});
+
+// Mirrors the real backend's own ledger.Post guard ("Akun %s adalah akun
+// induk; posting harus ke sub-akun"), caught live posting a manual journal
+// to "5-4000 Beban Umum dan Administrasi" -- a grouping header, not a
+// postable leaf (gap-closing plan, Phase E).
+describe("leafAccounts", () => {
+  it("excludes an account another account names as its own parent", () => {
+    const db = createSeedDatabase();
+    const rows = accountBalances(db);
+
+    const result = leafAccounts(rows);
+
+    expect(result.some((r) => r.akun.kode === "5-4000")).toBe(false); // has children (5-4100, ...)
+    expect(result.some((r) => r.akun.kode === "5-4100")).toBe(true); // a real leaf
   });
 });

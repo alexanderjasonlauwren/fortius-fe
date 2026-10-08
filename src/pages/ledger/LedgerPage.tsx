@@ -1,7 +1,7 @@
 import { scopeKey } from "@/mocks/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, TriangleAlert } from "lucide-react";
+import { BookOpen, CheckCircle2, Plus, TriangleAlert, Undo2 } from "lucide-react";
 import {
   getChartOfAccounts,
   getJournals,
@@ -9,10 +9,15 @@ import {
   getTrialBalance,
   upgradeChart,
   type ChartUpgradeResult,
+  type JournalView,
 } from "@/features/finance/api/financeApi";
+import { ManualJournalDialog } from "@/features/finance/components/ManualJournalDialog";
+import { ReverseJournalDialog } from "@/features/finance/components/ReverseJournalDialog";
+import { FiscalYearSection } from "@/features/fiscalyears/components/FiscalYearSection";
 import { defaultRange } from "@/features/transactions/api/transactionApi";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { PageHeader } from "@/components/common/PageHeader";
 import {
@@ -36,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateId, formatRupiah, formatRupiahShort } from "@/lib/format";
 
-type Tab = "jurnal" | "neraca-saldo" | "laba-rugi" | "bagan";
+type Tab = "jurnal" | "neraca-saldo" | "laba-rugi" | "bagan" | "tutup-buku";
 
 export function LedgerPage() {
   const [tab, setTab] = useState<Tab>("jurnal");
@@ -46,6 +51,7 @@ export function LedgerPage() {
   // finance.read.accounts (only tenant_admin does), so the chart-of-accounts
   // tab needs its own gate or that role sees a permanently empty table.
   const canViewAccounts = useAuthStore((s) => s.hasPermission(PERMISSIONS.ACCOUNTS_VIEW));
+  const canViewFiscalYears = useAuthStore((s) => s.hasPermission(PERMISSIONS.FISCAL_YEARS_VIEW));
 
   return (
     <div className="space-y-5">
@@ -54,30 +60,32 @@ export function LedgerPage() {
         title="Buku Besar"
         description="Setiap tagihan, penerimaan, dan nota kredit memposting jurnal berpasangan ke sini. Laporan di bawah dihitung dari jurnal, bukan dari tabel operasional."
         actions={
-          <div className="flex items-end gap-2">
-            <Field label="Dari" htmlFor="l-from">
-              <TextInput
-                id="l-from"
-                type="date"
-                mono
-                className="py-1.5 text-xs"
-                value={range.from}
-                max={range.to}
-                onChange={(e) => setRange({ ...range, from: e.target.value })}
-              />
-            </Field>
-            <Field label="Sampai" htmlFor="l-to">
-              <TextInput
-                id="l-to"
-                type="date"
-                mono
-                className="py-1.5 text-xs"
-                value={range.to}
-                min={range.from}
-                onChange={(e) => setRange({ ...range, to: e.target.value })}
-              />
-            </Field>
-          </div>
+          tab !== "tutup-buku" && (
+            <div className="flex items-end gap-2">
+              <Field label="Dari" htmlFor="l-from">
+                <TextInput
+                  id="l-from"
+                  type="date"
+                  mono
+                  className="py-1.5 text-xs"
+                  value={range.from}
+                  max={range.to}
+                  onChange={(e) => setRange({ ...range, from: e.target.value })}
+                />
+              </Field>
+              <Field label="Sampai" htmlFor="l-to">
+                <TextInput
+                  id="l-to"
+                  type="date"
+                  mono
+                  className="py-1.5 text-xs"
+                  value={range.to}
+                  min={range.from}
+                  onChange={(e) => setRange({ ...range, to: e.target.value })}
+                />
+              </Field>
+            </div>
+          )
         }
         meta={
           <SegmentedControl
@@ -90,6 +98,9 @@ export function LedgerPage() {
               ...(canViewAccounts
                 ? [{ value: "bagan" as const, label: "Bagan akun" }]
                 : []),
+              ...(canViewFiscalYears
+                ? [{ value: "tutup-buku" as const, label: "Tutup Buku" }]
+                : []),
             ]}
           />
         }
@@ -99,6 +110,7 @@ export function LedgerPage() {
       {tab === "neraca-saldo" && <TrialBalanceSection range={range} />}
       {tab === "laba-rugi" && <ProfitLossSection range={range} />}
       {tab === "bagan" && canViewAccounts && <ChartSection />}
+      {tab === "tutup-buku" && canViewFiscalYears && <FiscalYearSection />}
     </div>
   );
 }
@@ -110,6 +122,8 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
     queryKey: [...scopeKey(), "journals", range],
     queryFn: () => getJournals(range),
   });
+  const [newJournalOpen, setNewJournalOpen] = useState(false);
+  const [reverseTarget, setReverseTarget] = useState<JournalView | null>(null);
 
   if (journals.isLoading) return <Skeleton className="h-96 w-full" />;
   const rows = journals.data ?? [];
@@ -119,6 +133,14 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
       <PanelHeader
         title="Jurnal umum"
         hint={`${rows.length} entri pada periode ini · entri yang sudah diposting tidak dapat diubah, hanya dibalik`}
+        actions={
+          <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>
+            <Button size="sm" onClick={() => setNewJournalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Jurnal baru
+            </Button>
+          </CanAccess>
+        }
       />
       {rows.length === 0 ? (
         <EmptyState
@@ -137,6 +159,17 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
                   </span>
                   {j.status === "Dibatalkan" && (
                     <StatusBadge variant="draft" label="Dibalik" />
+                  )}
+                  {j.status === "Diposting" && (j.sourceType === "manual" || j.sourceType === "openingBalance") && (
+                    <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>
+                      <Button
+                        variant="ghost" size="icon-xs" aria-label={`Balik ${j.nomor}`}
+                        className="hover:bg-rust-soft hover:text-rust-ink"
+                        onClick={() => setReverseTarget(j)}
+                      >
+                        <Undo2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </CanAccess>
                   )}
                 </p>
                 <p className="data text-2xs text-ink-muted">
@@ -187,6 +220,17 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
           ))}
         </ul>
       )}
+
+      <ManualJournalDialog
+        open={newJournalOpen}
+        onClose={() => setNewJournalOpen(false)}
+        onPosted={() => void journals.refetch()}
+      />
+      <ReverseJournalDialog
+        journal={reverseTarget}
+        onClose={() => setReverseTarget(null)}
+        onReversed={() => void journals.refetch()}
+      />
     </Panel>
   );
 }

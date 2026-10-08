@@ -257,6 +257,7 @@ export function postJournal(
     reversalDari: input.reversalDari,
     dibuatOleh: input.aktor,
     dibuatPada: new Date().toISOString(),
+    version: 1,
   };
   db.journals.unshift(entry);
   return entry;
@@ -283,6 +284,7 @@ export function reverseJournal(db: Database, journalId: ID, aktor: string, alasa
     reversalDari: original.id,
   });
   original.status = "Dibatalkan";
+  original.version += 1;
   return reversal;
 }
 
@@ -294,6 +296,23 @@ export interface AccountBalance {
   kredit: number;
   /** Signed by the account's normal balance, so a positive figure reads right. */
   saldo: number;
+}
+
+/**
+ * Every row with no child naming it as `induk` -- the mock's own
+ * `postJournal` has no such check (nothing stops a mock-mode post to a
+ * grouping header), but the real backend's `ledger.Post` refuses one
+ * outright ("Akun %s adalah akun induk; posting harus ke sub-akun"),
+ * caught live posting a manual journal to "5-4000 Beban Umum dan
+ * Administrasi" -- a header with real children, not a postable leaf. Every
+ * account picker that writes a journal line (manual journals, Buat
+ * tagihan's revenue account, an asset's account overrides) filters through
+ * this rather than only by account type, so that refusal is never the
+ * first thing a user sees.
+ */
+export function leafAccounts(rows: AccountBalance[]): AccountBalance[] {
+  const parentCodes = new Set(rows.map((r) => r.akun.induk).filter((k): k is string => !!k));
+  return rows.filter((r) => !parentCodes.has(r.akun.kode));
 }
 
 /** Movement per account within a window; omit dates for all time. */
