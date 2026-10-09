@@ -22,6 +22,8 @@
  */
 import { getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
+import { financeApiHttp } from "@/features/finance/api/financeApi.http";
+import { leafAccounts } from "@/mocks/ledger";
 import type { ProductEntity } from "@/types/domain";
 import type { ProductApi, ProductFilters, ProductView, StockSummary } from "./contract";
 
@@ -48,6 +50,9 @@ interface ProductResponse {
   margin_percent?: number;
   status: string;
   product_kind: string;
+  inventory_account_code?: string;
+  revenue_account_code?: string;
+  cogs_account_code?: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -110,6 +115,9 @@ function toView(row: ProductResponse): ProductView {
     stokMinimum: row.min_stock,
     aktif: row.status === "atv",
     productKind: row.product_kind === "accessory" ? "accessory" : "commodity",
+    inventoryAccountCode: row.inventory_account_code,
+    revenueAccountCode: row.revenue_account_code,
+    cogsAccountCode: row.cogs_account_code,
     // Absent (either price not yet set) reads the same as 0 here — ProductView
     // has no separate "unknown" state, unlike the response DTO it comes from.
     margin: row.margin ?? 0,
@@ -188,19 +196,58 @@ function generateCode(name: string): string {
   return `${slug}-${Date.now().toString(36).toUpperCase().slice(-6)}`;
 }
 
+/**
+ * Resolves an override's own account code to the id `*_account_id` wants --
+ * ProductEntity carries the code (what ProductResponse hands back), never
+ * the id. Refuses a parent/grouping account the same way every other
+ * account picker in this console does since the live-caught gap-closing
+ * plan Phase E bug (ledger.Post's own leaf-only posting guard).
+ */
+async function resolveAccountId(code: string | undefined): Promise<string | undefined> {
+  if (!code) return undefined;
+  // financeApiHttp directly, never the mock/http switcher -- this adapter
+  // is itself the HTTP implementation and must behave as one regardless
+  // of the ambient VITE_DATA_SOURCE, the same reasoning every other
+  // *Api.http.ts file importing another feature's concrete module follows.
+  const accounts = leafAccounts(await financeApiHttp.getChartOfAccounts());
+  const match = accounts.find((a) => a.akun.kode === code);
+  if (!match) {
+    throw new Error(`Akun "${code}" tidak ditemukan atau bukan akun sub (leaf).`);
+  }
+  return match.akun.id;
+}
+
 async function createOrUpdateProduct(
   input: Partial<ProductEntity> & { id?: string },
 ): Promise<ProductView> {
-  const weightKg = input.ukuran !== undefined ? parseWeightKg(input.ukuran) : undefined;
+  // An accessory has no weight of its own (CreateProductRequest.WeightKg's
+  // own doc) -- never parsed, not even when ukuran round-trips back as
+  // toUkuran(0) === "0 kg" (a truthy string) on every subsequent edit.
+  // Caught live, in two stages: creating an accessory with Ukuran left
+  // blank threw "tidak mengandung angka berat yang valid" (fixed by
+  // skipping an empty ukuran); re-saving that SAME accessory afterward
+  // threw again, since its own detail reads back "0 kg", not "" -- skipping
+  // by product kind, not by string emptiness, is what actually closes this.
+  const weightKg =
+    input.productKind === "accessory" ? undefined : input.ukuran ? parseWeightKg(input.ukuran) : undefined;
 
   if (!input.id) {
     const category = await resolveDefaultCategory();
+    const [inventoryAccountId, revenueAccountId, cogsAccountId] = await Promise.all([
+      resolveAccountId(input.inventoryAccountCode),
+      resolveAccountId(input.revenueAccountCode),
+      resolveAccountId(input.cogsAccountCode),
+    ]);
     const created = await send<ProductResponse>("post", "/products", {
       code: input.kode?.trim() || generateCode(input.nama ?? ""),
       name: input.nama,
       category,
       weight_kg: weightKg,
       min_stock: input.stokMinimum,
+      product_kind: input.productKind,
+      inventory_account_id: inventoryAccountId,
+      revenue_account_id: revenueAccountId,
+      cogs_account_id: cogsAccountId,
     });
     const pricedCost = !!input.hargaBeli;
     const pricedSell = !!input.hargaJual;
@@ -214,6 +261,11 @@ async function createOrUpdateProduct(
   }
 
   const current = await getOne<ProductResponse>(`/products/${input.id}`);
+  const [inventoryAccountId, revenueAccountId, cogsAccountId] = await Promise.all([
+    resolveAccountId(input.inventoryAccountCode),
+    resolveAccountId(input.revenueAccountCode),
+    resolveAccountId(input.cogsAccountCode),
+  ]);
   const updated = await send<ProductResponse>("put", `/products/${input.id}`, {
     version: current.version,
     code: input.kode,
@@ -221,6 +273,9 @@ async function createOrUpdateProduct(
     weight_kg: weightKg,
     min_stock: input.stokMinimum,
     status: input.aktif !== undefined ? (input.aktif ? "atv" : "ina") : undefined,
+    inventory_account_id: inventoryAccountId,
+    revenue_account_id: revenueAccountId,
+    cogs_account_id: cogsAccountId,
   });
   if (input.hargaBeli !== undefined) {
     await syncPricing(input.id, "cost", input.hargaBeli, current.current_cost_price ?? 0);

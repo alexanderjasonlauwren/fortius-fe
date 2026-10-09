@@ -65,6 +65,7 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     PERMISSIONS.EXPENSES_VIEW,
     PERMISSIONS.EXPENSES_CREATE,
     PERMISSIONS.EXPENSES_APPROVE,
+    PERMISSIONS.EXPENSE_CATEGORIES_VIEW,
     PERMISSIONS.OCR_CREATE,
     PERMISSIONS.OCR_VIEW,
     PERMISSIONS.OCR_VERIFY,
@@ -119,6 +120,16 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     PERMISSIONS.FISCAL_YEARS_VIEW,
     PERMISSIONS.EXPENSES_VIEW,
     PERMISSIONS.EXPENSES_APPROVE,
+    // Sub-ledger admin (gap-closing phase, Phase F): expense categories
+    // read-only (needed to see which one an expense was filed against,
+    // the same tier every expense-filing role holds); purchases full
+    // read/create/verify; suppliers read-only to pick one on a general
+    // purchase -- mirrors finance_officer's own grant exactly.
+    PERMISSIONS.EXPENSE_CATEGORIES_VIEW,
+    PERMISSIONS.SUPPLIERS_VIEW,
+    PERMISSIONS.PURCHASES_VIEW,
+    PERMISSIONS.PURCHASES_CREATE,
+    PERMISSIONS.PURCHASES_VERIFY,
     PERMISSIONS.OCR_ARCHIVE_VIEW,
     PERMISSIONS.PRODUCTS_VIEW,
     PERMISSIONS.OUTLETS_VIEW,
@@ -146,6 +157,9 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     PERMISSIONS.INVOICES_VIEW,
     PERMISSIONS.EXPENSES_VIEW,
     PERMISSIONS.EXPENSES_CREATE,
+    // Picking a category when filing an expense claim -- mirrors
+    // ops_manager/dispatcher's own real grant (gap-closing phase, Phase F).
+    PERMISSIONS.EXPENSE_CATEGORIES_VIEW,
     PERMISSIONS.OCR_CREATE,
     PERMISSIONS.OCR_VIEW,
     PERMISSIONS.OCR_VERIFY,
@@ -179,6 +193,10 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     PERMISSIONS.DELIVERIES_EXECUTE,
     PERMISSIONS.EXPENSES_VIEW,
     PERMISSIONS.EXPENSES_CREATE,
+    // Mirrors the real driver role's own finance.read.expense_categories
+    // grant (gap-closing phase, Phase F) -- needed to pick a category when
+    // filing a fuel/toll/maintenance claim.
+    PERMISSIONS.EXPENSE_CATEGORIES_VIEW,
     PERMISSIONS.OCR_CREATE,
     PERMISSIONS.OCR_VIEW,
     PERMISSIONS.OCR_VERIFY,

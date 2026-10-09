@@ -1,15 +1,12 @@
-export const EXPENSE_CATEGORIES = ["fuel", "toll", "maintenance", "petty_cash", "other"] as const;
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+/**
+ * A category's `core.expenses.category` value -- a composite FK into the
+ * tenant's own `core.expense_categories.code` (gap-closing plan, Phase F),
+ * not a fixed CHECK list, so this is a plain string, not a closed union.
+ * See `@/features/expensecategories/api` for the real category set.
+ */
+export type ExpenseCategory = string;
 export type ExpenseStatus = "pending" | "approved" | "rejected";
 export type PaymentMode = "cash" | "bank";
-
-export const EXPENSE_CATEGORY_LABEL: Record<ExpenseCategory, string> = {
-  fuel: "Bahan bakar",
-  toll: "Tol",
-  maintenance: "Pemeliharaan",
-  petty_cash: "Kas kecil",
-  other: "Lainnya",
-};
 
 export const EXPENSE_STATUS_LABEL: Record<ExpenseStatus, string> = {
   pending: "Menunggu persetujuan",

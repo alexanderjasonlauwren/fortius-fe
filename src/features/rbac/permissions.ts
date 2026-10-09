@@ -215,6 +215,31 @@ export const PERMISSIONS = {
   FISCAL_YEARS_CLOSE: "finance.create.fiscal_years",
   FISCAL_YEARS_REOPEN: "finance.update.fiscal_years",
 
+  /**
+   * Sub-ledger admin (gap-closing plan, Phase F) -- verified against the
+   * backend's own seeds/04-role-permissions/seeder.go rather than guessed.
+   * Expense categories' own READ is granted broadly (every role that can
+   * file or approve an expense needs to pick one: ops_manager, dispatcher,
+   * warehouse_staff, finance_officer, tenant_admin); its write actions stay
+   * tenant_admin-only, the same tier as the chart of accounts itself.
+   * Suppliers (vendors) follow the identical shape: finance_officer may
+   * only read the list to pick one on a purchase, never create/rename one.
+   * Purchases' own read/create/verify are finance_officer + tenant_admin;
+   * `finance.update.purchases` exists in the catalogue but no route uses
+   * it yet, so no UPDATE constant here.
+   */
+  EXPENSE_CATEGORIES_VIEW: "finance.read.expense_categories",
+  EXPENSE_CATEGORIES_CREATE: "finance.create.expense_categories",
+  EXPENSE_CATEGORIES_UPDATE: "finance.update.expense_categories",
+  EXPENSE_CATEGORIES_DELETE: "finance.delete.expense_categories",
+  SUPPLIERS_VIEW: "finance.read.suppliers",
+  SUPPLIERS_CREATE: "finance.create.suppliers",
+  SUPPLIERS_UPDATE: "finance.update.suppliers",
+  SUPPLIERS_DELETE: "finance.delete.suppliers",
+  PURCHASES_VIEW: "finance.read.purchases",
+  PURCHASES_CREATE: "finance.create.purchases",
+  PURCHASES_VERIFY: "finance.verify.purchases",
+
   // Delivery execution — what happens at the drop, recorded by whoever is
   // there. Executing is an update to the delivery row, not a verb of its own.
   DELIVERIES_VIEW: "distribution.read.deliveries",

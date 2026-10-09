@@ -159,6 +159,47 @@ describe("writing", () => {
     ).rejects.toThrow(/angka berat/);
   });
 
+  // Caught live creating an accessory product (gap-closing plan, Phase F):
+  // an accessory has no weight of its own, so the form's Ukuran field is
+  // left blank -- "" is what gets sent, not "not provided", and this used
+  // to throw the same "angka berat" error a genuine typo should.
+  it("creates an accessory with a blank ukuran, sending no weight_kg at all", async () => {
+    getOne.mockResolvedValue([{ code: "subsidi", name: "Subsidi", sort_order: 0 }]);
+    send.mockResolvedValue(wire({ product_kind: "accessory" }));
+
+    await productApiHttp.createOrUpdateProduct({
+      kode: "GLOVE-001",
+      nama: "Sarung Tangan Kerja",
+      ukuran: "",
+      stokMinimum: 0,
+      productKind: "accessory",
+    });
+
+    expect(send.mock.calls[0][2].weight_kg).toBeUndefined();
+  });
+
+  // Caught live immediately after the fix above: re-saving that SAME
+  // accessory failed again, because its own detail reads ukuran back as
+  // toUkuran(0) === "0 kg" -- truthy, so the first fix's `input.ukuran ?`
+  // check let it straight through to parseWeightKg, which refuses 0 same
+  // as any other non-positive number. Skipping by productKind, not by
+  // string emptiness, is what actually closes this for every save after
+  // the first.
+  it("never parses weight for an accessory, even when ukuran round-trips as a non-empty \"0 kg\"", async () => {
+    getOne.mockResolvedValue(wire({ id: ID, product_kind: "accessory", weight_kg: 0 }));
+    send.mockResolvedValue(wire({ product_kind: "accessory" }));
+
+    await productApiHttp.createOrUpdateProduct({
+      id: ID,
+      nama: "Sarung Tangan Kerja",
+      ukuran: "0 kg",
+      stokMinimum: 0,
+      productKind: "accessory",
+    });
+
+    expect(send.mock.calls[0][2].weight_kg).toBeUndefined();
+  });
+
   it("defaults a create to the tenant's first product category", async () => {
     getOne.mockResolvedValue([
       { code: "non_subsidi", name: "Non-Subsidi", sort_order: 1 },
@@ -198,6 +239,60 @@ describe("writing", () => {
    *  so reaching this in practice is already a bug elsewhere. */
   it("refuses a stock adjustment -- core.stock_levels has no service in this build", async () => {
     await expect(productApiHttp.changeStock(ID, 10, "test")).rejects.toThrow(/belum tersedia/);
+  });
+
+  // Gap-closing plan, Phase F: the account-override fields round-trip as
+  // codes (what ProductResponse hands back), resolved to ids only here,
+  // against leaf accounts only -- the same live-caught gap leafAccounts()
+  // closed for the manual journal/invoice/asset/cash-voucher pickers.
+  describe("account overrides", () => {
+    const PARENT_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+    const LEAF_ID = "bbbbbbbb-0000-4000-8000-000000000002";
+
+    function stubChartOfAccounts() {
+      getList.mockImplementation((path: string) => {
+        if (path === "/accounts") {
+          return Promise.resolve({
+            items: [
+              { id: PARENT_ID, code: "5-4000", name: "Beban Umum", account_type: "expense", normal_balance: "dr", is_system: true },
+              { id: LEAF_ID, code: "5-4100", name: "Gaji Pokok Staff", account_type: "expense", normal_balance: "dr", is_system: true, parent_id: PARENT_ID },
+            ],
+            pagination: {},
+          });
+        }
+        return Promise.resolve({ items: [], pagination: {} });
+      });
+      getOne.mockImplementation((path: string) => {
+        if (path === "/journals/trial-balance") {
+          return Promise.resolve({ as_of: "2026-10-09", rows: [], total_debit: 0, total_credit: 0 });
+        }
+        return Promise.resolve([{ code: "subsidi", name: "Subsidi", sort_order: 0 }]);
+      });
+    }
+
+    it("resolves a leaf account's own code to its id", async () => {
+      stubChartOfAccounts();
+      send.mockResolvedValue(wire());
+
+      await productApiHttp.createOrUpdateProduct({
+        kode: "LPG-010", nama: "LPG 10 Kg", ukuran: "10 kg", stokMinimum: 0,
+        cogsAccountCode: "5-4100",
+      });
+
+      expect(send.mock.calls[0][2].cogs_account_id).toBe(LEAF_ID);
+    });
+
+    it("refuses a parent/grouping account's code", async () => {
+      stubChartOfAccounts();
+      send.mockResolvedValue(wire());
+
+      await expect(
+        productApiHttp.createOrUpdateProduct({
+          kode: "LPG-011", nama: "LPG 11 Kg", ukuran: "11 kg", stokMinimum: 0,
+          cogsAccountCode: "5-4000",
+        }),
+      ).rejects.toThrow(/tidak ditemukan|leaf/);
+    });
   });
 
   describe("pricing", () => {

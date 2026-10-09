@@ -738,7 +738,11 @@ export type AccountRole =
   | "bebanBahanBakar"
   | "bebanTol"
   | "bebanPemeliharaan"
-  | "bebanOperasionalLainnya";
+  | "bebanOperasionalLainnya"
+  // Mirrors fortius-backend's own "payable" role (tenantprovisioning/
+  // chart.go, 2-1000 Utang Usaha) -- gap-closing plan, Phase F, the first
+  // mock posting rule to need it (a general purchase's own credit side).
+  | "hutangUsaha";
 
 export interface AccountEntity {
   id: ID;
@@ -945,7 +949,23 @@ export interface ProductEntity {
    * own Phase F) -- Phase C's "Buat tagihan" kit-item picker is this
    * field's only consumer today.
    */
+  /**
+   * Gap-closing plan, Phase F: now writable at create (immutable after --
+   * mirrors the backend's own UpdateProductRequest carrying no ProductKind
+   * field at all).
+   */
   productKind: "commodity" | "accessory";
+  /**
+   * Overrides the tenant's own inventory/revenue/cogs role account for this
+   * product specifically (financial-statements plan P3.3) -- absent means
+   * "use the role", the mock chart's own `accountByRole`. Stored as the
+   * account's own code, not id, matching the real backend's response shape
+   * (ProductResponse carries `*_account_code`, never an id) -- the HTTP
+   * adapter resolves code to id only at the create/update boundary.
+   */
+  inventoryAccountCode?: string;
+  revenueAccountCode?: string;
+  cogsAccountCode?: string;
 }
 
 export type OrderStatus =
@@ -1205,6 +1225,82 @@ export interface OpeningBalanceEntity extends Scoped {
   committedAt: string;
 }
 
+/* ── sub-ledger admin (gap-closing plan, Phase F) ────────────────────────── */
+
+/** A tenant-defined expense category -- mirrors expensecategory.
+ *  ExpenseCategoryResponse. `core.expenses.category` is a composite FK into
+ *  this table's own `code`, not a fixed CHECK list, so the create form's
+ *  category picker and this screen's own filter both have to read it live
+ *  rather than from a hardcoded enum. */
+export interface ExpenseCategoryEntity extends Scoped {
+  id: ID;
+  code: string;
+  name: string;
+  accountId: ID;
+  groupLabel: string;
+  sortOrder: number;
+  status: "atv" | "ina";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A local vendor a general purchase (no Schedule Agreement behind it) pays
+ *  -- mirrors supplier.SupplierResponse. Deliberately NOT the same concept
+ *  SupplierEntity/SupplierSection names: that one is a free-text name off
+ *  `core.schedule_agreements.supplier_name`, read through the tenant's own
+ *  configurable "Pemasok" lexicon term (SPBE/distributor) with no real
+ *  master table behind it at all. This is a real `core.suppliers` row, for
+ *  Pembelian Umum only -- the two share no row even when they happen to
+ *  read the same word in Indonesian. */
+export interface VendorEntity extends Scoped {
+  id: ID;
+  code: string;
+  name: string;
+  npwp?: string;
+  address?: string;
+  phone?: string;
+  status: "atv" | "ina";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseLine {
+  productId: ID;
+  quantity: number;
+  unitCost: number;
+  subtotal: number;
+}
+
+export type PurchasePaymentStatus = "unpaid" | "paid";
+
+/** A purchase -- mirrors purchase.PurchaseResponse. `scheduleAgreementId`
+ *  is set only for an SA-redeemed ("tebus") purchase, a creation path this
+ *  console still has no UI for (see PurchasesPage's own header); every
+ *  purchase this console creates is a general one, `supplierId` always set
+ *  to a VendorEntity row. */
+export interface PurchaseEntity extends Scoped {
+  id: ID;
+  purchaseNumber: string;
+  scheduleAgreementId?: ID;
+  supplierId: ID;
+  lines: PurchaseLine[];
+  redeemedAt: string;
+  subtotal: number;
+  taxPercentage: number;
+  taxAmount: number;
+  totalAmount: number;
+  totalQty: number;
+  paymentStatus: PurchasePaymentStatus;
+  paidAt?: string;
+  bankReference?: string;
+  notes?: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Document prefixes. Visible on every table row and printout. */
 export interface NumberingEntity {
   suratJalan: string;
@@ -1435,6 +1531,9 @@ export interface Database {
   depreciationRuns: DepreciationRunEntity[];
   fiscalYears: FiscalYearEntity[];
   openingBalances: OpeningBalanceEntity[];
+  expenseCategories: ExpenseCategoryEntity[];
+  vendors: VendorEntity[];
+  purchases: PurchaseEntity[];
   invoices: InvoiceEntity[];
   creditNotes: CreditNoteEntity[];
   /**

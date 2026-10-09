@@ -39,7 +39,7 @@ const CHART: Seed[] = [
 
   // Kewajiban
   { kode: "2-0000", nama: "KEWAJIBAN", tipe: "Kewajiban", saldoNormal: "kredit", sistem: true, aktif: true },
-  { kode: "2-1000", nama: "Utang Usaha", tipe: "Kewajiban", saldoNormal: "kredit", induk: "2-0000", sistem: true, aktif: true },
+  { kode: "2-1000", nama: "Utang Usaha", tipe: "Kewajiban", saldoNormal: "kredit", induk: "2-0000", role: "hutangUsaha", sistem: true, aktif: true },
   { kode: "2-1200", nama: "PPN Keluaran", tipe: "Kewajiban", saldoNormal: "kredit", induk: "2-0000", role: "ppnKeluaran", sistem: true, aktif: true },
 
   // Ekuitas

@@ -1723,6 +1723,9 @@ export function saveProduct(
       stokMinimum: input.stokMinimum ?? 0,
       aktif: input.aktif ?? true,
       productKind: input.productKind ?? "commodity",
+      inventoryAccountCode: input.inventoryAccountCode,
+      revenueAccountCode: input.revenueAccountCode,
+      cogsAccountCode: input.cogsAccountCode,
     };
     db.products.unshift(created);
     recordAudit(db, {

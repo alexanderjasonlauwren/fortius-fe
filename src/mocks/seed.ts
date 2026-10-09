@@ -14,6 +14,7 @@ import type {
   BranchEntity,
   TenantEntity,
   CreditNoteEntity,
+  ExpenseCategoryEntity,
   InvoiceEntity,
   JournalEntity,
   Database,
@@ -44,9 +45,10 @@ import type {
   TenantSettingsEntity,
   TransportationClaimEntity,
   UserEntity,
+  VendorEntity,
 } from "./types";
 
-export const DB_VERSION = 17;
+export const DB_VERSION = 18;
 
 /* ── deterministic RNG ─────────────────────────────────────────────────── */
 
@@ -1660,6 +1662,66 @@ function seedGeofenceRules(): GeofenceRuleEntity[] {
   ];
 }
 
+/**
+ * Gap-closing plan, Phase F: the tenant's own expense categories, grouped
+ * for the expense form's picker -- mirrors the real backend's own starting
+ * twelve (migration 60012_..._alter_core_expenses_category_fk.up.sql),
+ * same codes, same group labels, same account mapping, so a mock-mode demo
+ * and a freshly-provisioned real tenant read identically.
+ */
+function seedExpenseCategories(accounts: AccountEntity[]): ExpenseCategoryEntity[] {
+  const byCode = (kode: string) => accounts.find((a) => a.kode === kode)!.id;
+  const now = isoDate(startOfToday());
+  const scope = branchFor();
+  const rows: Array<[string, string, string, string, number]> = [
+    ["fuel", "BBM", "5-3100", "Biaya Logistik", 1],
+    ["toll", "Tol", "5-3200", "Biaya Logistik", 2],
+    ["parking", "Parkir", "5-3400", "Biaya Logistik", 3],
+    ["shipping", "Biaya Pengiriman ke Customer", "5-2000", "Biaya Logistik", 4],
+    ["maintenance", "Perbaikan & Perawatan Kendaraan", "5-3300", "HR & GA", 5],
+    ["salary", "Gaji Pokok Staff", "5-4100", "HR & GA", 6],
+    ["office", "ATK & Keperluan Kantor", "5-4200", "HR & GA", 7],
+    ["dues", "Iuran & Sumbangan", "5-4300", "HR & GA", 8],
+    ["telecom", "Telepon & Internet", "5-4400", "HR & GA", 9],
+    ["petty_cash", "Kas Kecil", "5-3900", "HR & GA", 10],
+    ["other", "Biaya Lainnya", "5-3900", "HR & GA", 11],
+    ["bank_charges", "Administrasi Bank", "5-6100", "Biaya di Luar Usaha", 12],
+  ];
+  return rows.map(([code, name, accountCode, groupLabel, sortOrder]) => ({
+    ...scope,
+    id: `expcat-${code}`,
+    code,
+    name,
+    accountId: byCode(accountCode),
+    groupLabel,
+    sortOrder,
+    status: "atv",
+    version: 1,
+    createdAt: now,
+    updatedAt: now,
+  }));
+}
+
+/**
+ * Gap-closing plan, Phase F: local vendors a general purchase pays, real
+ * master data distinct from the SA-issuing "Pemasok" names seedSupplier()
+ * seeds above (see VendorEntity's own doc). PERTAMINA mirrors the real
+ * backend's own seeded row (every SA-redeemed purchase.RecordPurchase
+ * resolves it by this exact code) -- kept even though this console's own
+ * purchase form never creates that kind of purchase, so a tenant switching
+ * between mock and API data never sees a code the real backend would also
+ * have reserved.
+ */
+function seedVendors(): VendorEntity[] {
+  const now = isoDate(startOfToday());
+  const scope = branchFor();
+  return [
+    { ...scope, id: "vnd-pertamina", code: "PERTAMINA", name: "PT. Pertamina Patra Niaga", status: "atv", version: 1, createdAt: now, updatedAt: now },
+    { ...scope, id: "vnd-001", code: "VND-001", name: "UD. Sumber Logam", address: "Jl. Industri No. 12, Salatiga", phone: "0298-123-456", status: "atv", version: 1, createdAt: now, updatedAt: now },
+    { ...scope, id: "vnd-002", code: "VND-002", name: "CV. Timbangan Jaya", npwp: "01.234.567.8-901.000", address: "Jl. Raya Tengaran No. 45", phone: "0298-654-321", status: "atv", version: 1, createdAt: now, updatedAt: now },
+  ];
+}
+
 /* ── entry point ───────────────────────────────────────────────────────── */
 
 export function createSeedDatabase(): Database {
@@ -1748,6 +1810,13 @@ export function createSeedDatabase(): Database {
     depreciationRuns: [],
     fiscalYears: [],
     openingBalances: [],
+    // Sub-ledger admin console (gap-closing plan, Phase F): the real
+    // starting categories and two demo vendors so the forms have something
+    // to pick from immediately; no purchase recorded yet at day one, the
+    // same reasoning cashVouchers/depreciationRuns above follow.
+    expenseCategories: seedExpenseCategories(accounts),
+    vendors: seedVendors(),
+    purchases: [],
     invoices,
     creditNotes,
     settings,

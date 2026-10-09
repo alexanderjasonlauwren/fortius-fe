@@ -7,10 +7,12 @@ import {
   createOrUpdateProduct,
   getProductDetail,
 } from "@/features/products/api/productApi";
+import { getChartOfAccounts } from "@/features/finance/api/financeApi";
+import { leafAccounts } from "@/mocks/ledger";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
-import { Field, TextInput, Toggle } from "@/components/common/Field";
+import { Field, SegmentedControl, SelectInput, TextInput, Toggle } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { usesApi } from "@/lib/dataSource";
 import { formatPercentId, formatRupiah } from "@/lib/format";
@@ -25,6 +27,10 @@ interface FormState {
   stok: number;
   stokMinimum: number;
   aktif: boolean;
+  productKind: "commodity" | "accessory";
+  inventoryAccountCode: string;
+  revenueAccountCode: string;
+  cogsAccountCode: string;
 }
 
 const EMPTY: FormState = {
@@ -36,6 +42,10 @@ const EMPTY: FormState = {
   stok: 0,
   stokMinimum: 0,
   aktif: true,
+  productKind: "commodity",
+  inventoryAccountCode: "",
+  revenueAccountCode: "",
+  cogsAccountCode: "",
 };
 
 export function ProductFormPage() {
@@ -50,6 +60,8 @@ export function ProductFormPage() {
     queryFn: () => getProductDetail(id!),
     enabled: isEdit,
   });
+  const accounts = useQuery({ queryKey: [...scopeKey(), "chart-of-accounts"], queryFn: getChartOfAccounts });
+  const postableAccounts = leafAccounts(accounts.data ?? []);
 
   // Seeded from the loaded product, or EMPTY while creating one. Computed
   // during render rather than pushed in by an effect, so the form never paints
@@ -66,6 +78,10 @@ export function ProductFormPage() {
       stok: p.stok,
       stokMinimum: p.stokMinimum,
       aktif: p.aktif,
+      productKind: p.productKind,
+      inventoryAccountCode: p.inventoryAccountCode ?? "",
+      revenueAccountCode: p.revenueAccountCode ?? "",
+      cogsAccountCode: p.cogsAccountCode ?? "",
     };
   });
 
@@ -139,7 +155,7 @@ export function ProductFormPage() {
                   id="nama"
                   value={form.nama}
                   invalid={!!errors.nama}
-                  placeholder="Nama produk"
+                  placeholder="LPG 3 Kg"
                   onChange={(e) => set("nama", e.target.value)}
                 />
               </Field>
@@ -249,6 +265,72 @@ export function ProductFormPage() {
             </Panel>
           </div>
         </div>
+
+        <Panel className="mt-4">
+          <PanelHeader
+            title="Jenis & Akun"
+            hint="Opsional -- kosongkan akun untuk memakai akun bawaan tenant."
+          />
+          <PanelBody className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label="Jenis"
+              htmlFor="product-kind"
+              className="sm:col-span-2"
+              hint={isEdit ? "Tidak dapat diubah setelah dibuat." : undefined}
+            >
+              {isEdit ? (
+                <p className="py-1.5 text-sm text-ink">
+                  {form.productKind === "accessory" ? "Perlengkapan" : "Komoditas"}
+                </p>
+              ) : (
+                <SegmentedControl
+                  value={form.productKind}
+                  onChange={(productKind) => set("productKind", productKind)}
+                  options={[
+                    { value: "commodity" as const, label: "Komoditas" },
+                    { value: "accessory" as const, label: "Perlengkapan" },
+                  ]}
+                />
+              )}
+            </Field>
+            <Field label="Akun persediaan" htmlFor="product-inv-account" hint="Menimpa akun 'persediaan' bawaan.">
+              <SelectInput
+                id="product-inv-account"
+                value={form.inventoryAccountCode}
+                onChange={(e) => set("inventoryAccountCode", e.target.value)}
+              >
+                <option value="">— Gunakan bawaan —</option>
+                {postableAccounts.map((a) => (
+                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} — {a.akun.nama}</option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Akun pendapatan" htmlFor="product-rev-account" hint="Menimpa akun 'pendapatan' bawaan.">
+              <SelectInput
+                id="product-rev-account"
+                value={form.revenueAccountCode}
+                onChange={(e) => set("revenueAccountCode", e.target.value)}
+              >
+                <option value="">— Gunakan bawaan —</option>
+                {postableAccounts.map((a) => (
+                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} — {a.akun.nama}</option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Akun HPP" htmlFor="product-cogs-account" hint="Menimpa akun 'hpp' bawaan.">
+              <SelectInput
+                id="product-cogs-account"
+                value={form.cogsAccountCode}
+                onChange={(e) => set("cogsAccountCode", e.target.value)}
+              >
+                <option value="">— Gunakan bawaan —</option>
+                {postableAccounts.map((a) => (
+                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} — {a.akun.nama}</option>
+                ))}
+              </SelectInput>
+            </Field>
+          </PanelBody>
+        </Panel>
 
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
           <Button asChild variant="outline" type="button">

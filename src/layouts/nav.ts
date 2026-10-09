@@ -21,6 +21,7 @@ import {
   ReceiptText,
   Route,
   Settings,
+  ShoppingCart,
   Store,
   Table2,
   Truck,
@@ -187,6 +188,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Building2,
         hint: "Daftar aset, penyusutan bulanan, dan rekonsiliasi",
         permission: PERMISSIONS.ASSETS_VIEW,
+      },
+      {
+        name: "Pembelian",
+        href: "/purchases",
+        icon: ShoppingCart,
+        hint: "Pembelian umum dari vendor lokal, di luar Schedule Agreement",
+        permission: PERMISSIONS.PURCHASES_VIEW,
       },
       {
         name: "Laporan Keuangan",
