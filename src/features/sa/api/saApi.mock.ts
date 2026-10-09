@@ -5,13 +5,14 @@
  * behind a contract so an HTTP adapter can sit beside it.
  */
 import { getActiveScope, scopeKey, scopedDb } from "@/mocks/scope";
-import { ApiError, latency, mutate, nextId, recordAudit } from "@/mocks/db";
+import { ApiError, getDb, latency, mutate, nextId, recordAudit } from "@/mocks/db";
 import {
   activateScheduleAgreement,
   applySaImport,
   createScheduleAgreement,
   deleteScheduleAgreement,
   recordSaImport,
+  setSim3lonDefaultProduct,
 } from "@/mocks/rules";
 import { buildTargetDiff, parseTargetCsv, PESAN_TANPA_BARIS } from "./targetImport";
 import { startOfToday } from "@/mocks/seed";
@@ -923,6 +924,31 @@ async function checksum(file: File): Promise<string> {
 
 import type { ScheduleAgreementApi } from "./contract";
 
+/**
+ * Walks the acting tenant's own ancestry for the nearest one that has set a
+ * default, nearest first -- the same walk `settingsApi.mock.ts`'s
+ * `getSettingsDetail` does for `settingsByTenant`, kept separate because this
+ * is its own collection (see `Database.sim3lonDefaultProductByTenant`).
+ */
+async function getSIM3LONDefaultProduct(): Promise<string | null> {
+  await latency("read");
+  const db = getDb();
+  let current: string | undefined = getActiveScope().actingTenantId;
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const row = db.sim3lonDefaultProductByTenant.find((r) => r.tenantId === current);
+    if (row) return row.code;
+    current = db.tenants.find((t) => t.id === current)?.indukId ?? undefined;
+  }
+  return null;
+}
+
+async function setSIM3LONDefaultProduct(code: string | null): Promise<string | null> {
+  await latency("write");
+  return setSim3lonDefaultProduct(code);
+}
+
 export const saApiMock: ScheduleAgreementApi = {
   getSAList,
   getSADetail,
@@ -938,4 +964,6 @@ export const saApiMock: ScheduleAgreementApi = {
   applySIM3LON,
   setPlanningCutover,
   getSIM3LONVariances,
+  getSIM3LONDefaultProduct,
+  setSIM3LONDefaultProduct,
 };

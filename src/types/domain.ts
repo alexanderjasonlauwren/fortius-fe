@@ -1547,4 +1547,13 @@ export interface Database {
   settings: SettingsEntity;
   /** Per-tenant overrides. The stored truth; `settings` above is derived. */
   settingsByTenant: TenantSettingsEntity[];
+  /**
+   * The SIM3LON Penyaluran Harian import dialog's preselected product, per
+   * tenant, inheriting up the tree the same way `settingsByTenant` does.
+   * Kept separate from `settingsByTenant` rather than folded into
+   * `SettingsEntity`: it is this one dialog's own preference, not a field any
+   * settings screen edits, and the backend holds it on a column the generic
+   * tenant-settings endpoint deliberately does not expose either.
+   */
+  sim3lonDefaultProductByTenant: { tenantId: ID; code: string | null }[];
 }

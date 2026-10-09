@@ -69,4 +69,17 @@ export interface ScheduleAgreementApi {
    * planning start date on. Computed on every read; nothing is rewritten.
    */
   getSIM3LONVariances(productId: string, month: string): Promise<SIM3LONVarianceReport>;
+
+  /**
+   * The tenant's configured preselection for the import dialog's product
+   * field, resolved through tenant_settings inheritance. `null` when
+   * neither this tenant nor an ancestor has set one -- the dialog then
+   * leaves the field for the user to choose, same as before this existed.
+   */
+  getSIM3LONDefaultProduct(): Promise<string | null>;
+  /**
+   * Replaces the acting tenant's own preference. `null` clears the override
+   * and restores inheritance.
+   */
+  setSIM3LONDefaultProduct(code: string | null): Promise<string | null>;
 }

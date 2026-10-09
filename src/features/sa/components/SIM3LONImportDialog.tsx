@@ -22,6 +22,7 @@ import { getProducts } from "@/features/products/api/productApi";
 import { scopeKey } from "@/mocks/scope";
 import { formatNumber } from "@/lib/format";
 import { supplierLabel, unitLabel } from "@/lib/lexicon";
+import { getSIM3LONDefaultProduct } from "../api/saApi";
 import { buildSIM3LONApplyReview, useSIM3LONImport } from "../hooks/useSIM3LONImport";
 import type {
   SIM3LONChangeClassification,
@@ -36,12 +37,35 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [supplierName, setSupplierName] = useState("");
-  const [productId, setProductId] = useState("");
+  // null = the user has not touched this field yet, so the tenant's
+  // configured default (below) still applies. Once they pick anything --
+  // including "Pilih produk" again -- it becomes a concrete string and the
+  // default no longer overrides it.
+  const [productIdChoice, setProductIdChoice] = useState<string | null>(null);
   const products = useQuery({
     queryKey: [...scopeKey(), "sim3lon-product-options"],
     queryFn: () => getProducts({ onlyActive: true }),
     enabled: open,
   });
+  // SIM3LON is a subsidy-monitoring feed about LPG cylinders. The kit
+  // accessories a registration package issues (APAR, Timbangan, Papan
+  // Pangkalan -- financial-statements plan P3.3) are products too, but have
+  // no business in this list, and nothing told them apart from "LPG 3 Kg"
+  // until productKind did.
+  const lpgProducts = (products.data ?? []).filter((product) => product.productKind === "commodity");
+  const defaultProduct = useQuery({
+    queryKey: [...scopeKey(), "sim3lon-default-product"],
+    queryFn: getSIM3LONDefaultProduct,
+    enabled: open,
+  });
+  // Preselects the tenant's configured default (set once via the API) so
+  // finance does not choose "LPG 3 Kg" by hand on every import. Derived at
+  // render rather than pushed into state by an effect: the field is still
+  // "untouched" until the user picks something, and the default itself may
+  // keep resolving (the query can still be loading) on the first render.
+  const autoDefaultId = lpgProducts.find((product) => product.kode === defaultProduct.data)?.id;
+  const productId = productIdChoice ?? autoDefaultId ?? "";
+  const setProductId = setProductIdChoice;
   const {
     preview,
     reconciliation,
@@ -55,7 +79,7 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
   const close = () => {
     setFile(null);
     setSupplierName("");
-    setProductId("");
+    setProductIdChoice(null);
     discard();
     onClose();
   };
@@ -104,11 +128,10 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
             <Field label="Produk" required hint="Pilih LPG 3 kg untuk contoh Penyaluran Harian ini.">
               <SelectInput value={productId} onChange={(event) => setProductId(event.target.value)}>
                 <option value="">Pilih produk</option>
-                {/* SIM3LON is a subsidy-monitoring feed that only ever concerns
-                    the 3kg cylinder -- sorted lightest-first so that option
-                    lands on top rather than wherever alphabetical order (which
-                    puts "Bright Gas" before "LPG") happens to leave it. */}
-                {[...(products.data ?? [])]
+                {/* Sorted lightest-first so LPG 3 Kg lands on top rather than
+                    wherever alphabetical order (which puts "Bright Gas"
+                    before "LPG") happens to leave it. */}
+                {[...lpgProducts]
                   .sort((a, b) => parseFloat(a.ukuran) - parseFloat(b.ukuran))
                   .map((product) => (
                     <option key={product.id} value={product.id}>{product.nama} · {product.ukuran}</option>

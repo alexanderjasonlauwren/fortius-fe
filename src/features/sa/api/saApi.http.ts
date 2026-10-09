@@ -237,6 +237,10 @@ interface ApplyResponse {
   rows_written: number;
 }
 
+interface DefaultProductResponse {
+  default_product_code: string | null;
+}
+
 interface SIM3LONPreviewResponse {
   id: string;
   status: string;
@@ -691,5 +695,17 @@ export const saApiHttp: ScheduleAgreementApi = {
       if (row.supplier_name) seen.add(row.supplier_name);
     }
     return [...seen].sort();
+  },
+
+  async getSIM3LONDefaultProduct(): Promise<string | null> {
+    const row = await getOne<DefaultProductResponse>("/sim3lon-imports/default-product");
+    return row.default_product_code;
+  },
+
+  async setSIM3LONDefaultProduct(code: string | null): Promise<string | null> {
+    const row = await send<DefaultProductResponse>("put", "/sim3lon-imports/default-product", {
+      default_product_code: code,
+    });
+    return row.default_product_code;
   },
 };

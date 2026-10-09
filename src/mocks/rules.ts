@@ -1889,6 +1889,29 @@ export function clearOverride(field: keyof Database["settings"]) {
   });
 }
 
+/**
+ * Replaces the acting tenant's own SIM3LON import default. `null` (or a
+ * blank string) clears the override and restores inheritance, the same
+ * convention `clearOverride` uses for `settingsByTenant` — kept as a
+ * separate collection rather than folded into it, mirroring the real
+ * backend's own tenant_settings column that the generic settings endpoint
+ * does not expose either.
+ */
+export function setSim3lonDefaultProduct(code: string | null) {
+  return mutate((db) => {
+    const trimmed = code?.trim();
+    const value = trimmed ? trimmed : null;
+    const tenantId = getActiveScope().actingTenantId;
+    const own = db.sim3lonDefaultProductByTenant.find((r) => r.tenantId === tenantId);
+    if (own) {
+      own.code = value;
+    } else {
+      db.sim3lonDefaultProductByTenant.push({ tenantId, code: value });
+    }
+    return value;
+  });
+}
+
 /* ── geofencing ────────────────────────────────────────────────────────── */
 
 /**

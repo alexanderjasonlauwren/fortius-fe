@@ -12,6 +12,7 @@ import type {
   AccountEntity,
   AssetEntity,
   BranchEntity,
+  ID,
   TenantEntity,
   CreditNoteEntity,
   ExpenseCategoryEntity,
@@ -48,7 +49,7 @@ import type {
   VendorEntity,
 } from "./types";
 
-export const DB_VERSION = 18;
+export const DB_VERSION = 19;
 
 /* ── deterministic RNG ─────────────────────────────────────────────────── */
 
@@ -1460,6 +1461,18 @@ function seedSettingsByTenant(): TenantSettingsEntity[] {
 }
 
 /**
+ * The SIM3LON import dialog's preselected product, per tenant. Only tnt-002
+ * (PT. Bhakta Dharma Anindita, the Salatiga LPG agent) sets one, to its own
+ * LPG 3 kg code -- the same default configured on the real backend's
+ * pt-salatiga tenant via PUT /sim3lon-imports/default-product. Every other
+ * tenant is left unset, so the dialog asks as it always has for one it was
+ * never told about.
+ */
+function seedSim3lonDefaultProductByTenant(): { tenantId: ID; code: string | null }[] {
+  return [{ tenantId: "tnt-002", code: "SKU-0001" }];
+}
+
+/**
  * The console's own defaults — the last resort beneath every tenant.
  *
  * Exported because getDb() resolves against it on every read and must start
@@ -1821,5 +1834,6 @@ export function createSeedDatabase(): Database {
     creditNotes,
     settings,
     settingsByTenant: seedSettingsByTenant(),
+    sim3lonDefaultProductByTenant: seedSim3lonDefaultProductByTenant(),
   };
 }

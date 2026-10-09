@@ -27,6 +27,8 @@ export const getSIM3LONReconciliation = api.getSIM3LONReconciliation.bind(api);
 export const applySIM3LON = api.applySIM3LON.bind(api);
 export const setPlanningCutover = api.setPlanningCutover.bind(api);
 export const getSIM3LONVariances = api.getSIM3LONVariances.bind(api);
+export const getSIM3LONDefaultProduct = api.getSIM3LONDefaultProduct.bind(api);
+export const setSIM3LONDefaultProduct = api.setSIM3LONDefaultProduct.bind(api);
 
 /**
  * Printing is a browser concern, not a data source.
