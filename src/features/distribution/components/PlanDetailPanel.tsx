@@ -532,7 +532,7 @@ export function PlanDetailPanel({
                       ? `Tambahkan ${outletLabel()} terlebih dahulu`
                       : dirty
                         ? "Simpan draf dulu — usulan disusun dari titik singgah yang tersimpan"
-                        : "Susun usulan trip. Tidak menyimpan apa pun sampai Anda simpan."
+                        : "Susun usulan trip; belum tersimpan sampai Anda menekan Simpan."
                   }
                 >
                   <Wand2 className="h-3.5 w-3.5" />
