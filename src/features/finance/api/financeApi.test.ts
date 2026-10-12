@@ -286,6 +286,58 @@ describe("payments", () => {
       expect(body.bank_account_number).toBe("1234567890");
       expect(body.bank_reference).toBe("1234567890");
     });
+
+    // RecordPaymentRequest.PaymentDate is a Go time.Time: a bare date was
+    // refused live as "Request body is not valid JSON", so no receipt could
+    // be recorded at all.
+    it("sends payment_date as an RFC 3339 timestamp, not a bare date", async () => {
+      getList.mockResolvedValue({ items: [{ id: "m-transfer", code: "bank_transfer" }], pagination: {} });
+      send.mockResolvedValue(paymentWire());
+
+      await financeApiHttp.submitPayment({
+        outletId: OUTLET_ID,
+        jumlah: 100_000,
+        tanggal: "2026-10-12",
+        bank: "BCA",
+        noRekening: "1234567890",
+      });
+
+      const [, , body] = send.mock.calls[0];
+      expect(body.payment_date).toBe("2026-10-12T00:00:00Z");
+    });
+  });
+});
+
+describe("credit notes", () => {
+  // IssueRequest.IssueDate is a Go time.Time — same live failure as payments.
+  it("sends issue_date as an RFC 3339 timestamp for today's local date", async () => {
+    vi.useFakeTimers();
+    // 01:00 WIB on 12 Oct is still 11 Oct in UTC; the note must carry the local date.
+    vi.setSystemTime(new Date(2026, 9, 12, 1, 0, 0));
+    send.mockResolvedValue({
+      id: "cn-1",
+      credit_note_number: "CN-0001",
+      outlet_id: OUTLET_ID,
+      amount: 50_000,
+      issue_date: "2026-10-12T00:00:00Z",
+      credit_status: "issued",
+      reason_code: "billing_correction",
+    });
+
+    try {
+      await financeApiHttp.submitCreditNote({
+        outletId: OUTLET_ID,
+        invoiceId: INVOICE_ID,
+        jumlah: 50_000,
+        alasan: "Selisih harga",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const [, path, body] = send.mock.calls[0];
+    expect(path).toBe("/credit-notes");
+    expect(body.issue_date).toBe("2026-10-12T00:00:00Z");
   });
 });
 

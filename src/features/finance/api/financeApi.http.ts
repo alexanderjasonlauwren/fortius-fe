@@ -27,6 +27,7 @@
  * such as `GET /payments/:id/allocations`.
  */
 import { getList, getOne, send } from "@/lib/api";
+import { toApiTimestamp, todayIso } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import type { OutletView } from "@/features/outlet/api/contract";
 import type { AccountBalance } from "@/mocks/ledger";
@@ -416,7 +417,7 @@ async function submitPayment(input: RecordPaymentInput): Promise<PaymentView> {
     bank_name: input.bank,
     bank_account_number: input.noRekening,
     bank_reference: input.noRekening,
-    payment_date: input.tanggal,
+    payment_date: toApiTimestamp(input.tanggal),
     notes: input.keterangan,
   });
   return toPaymentView(created, outlets);
@@ -567,7 +568,7 @@ async function submitCreditNote(input: CreditNoteInput): Promise<CreditNoteView>
     amount: input.jumlah,
     reason_code: "billing_correction",
     reason: input.alasan,
-    issue_date: new Date().toISOString().slice(0, 10),
+    issue_date: toApiTimestamp(todayIso()),
   });
   return toCreditNoteView(created);
 }
@@ -671,13 +672,7 @@ async function getJournals(range?: DateRange): Promise<JournalView[]> {
 async function createManualJournal(input: CreateManualJournalInput): Promise<JournalView> {
   const row = await send<JournalResponse>("post", "/journals", {
     branch_id: input.branchId,
-    // CreateManualJournalRequest.JournalDate is a real time.Time, unlike
-    // every other date field this adapter sends (asset/depreciation-run
-    // requests all declare theirs as a plain validated string) -- Go's
-    // JSON unmarshal rejects a bare "YYYY-MM-DD" against time.Time with a
-    // decode error the binding layer reports as "Request body is not
-    // valid JSON", caught live against the real API.
-    journal_date: `${input.journalDate}T00:00:00Z`,
+    journal_date: toApiTimestamp(input.journalDate),
     description: input.description,
     lines: input.lines.map((l) => ({
       account_id: l.accountId,
