@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatNumber, formatPercentId } from "@/lib/format";
-import type { DriverStatusEntity } from "@/mocks/types";
+import type { DriverStatusEntity } from "@/types/domain";
 import { unitLabel } from "@/lib/lexicon";
 
 const STATUSES: (DriverStatusEntity | "Semua")[] = [

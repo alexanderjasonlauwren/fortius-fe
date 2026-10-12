@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -19,7 +19,7 @@ import {
   Toggle,
 } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
-import type { BankNameEntity, OutletStatus } from "@/mocks/types";
+import type { BankNameEntity, OutletStatus } from "@/types/domain";
 import { outletLabel, outletLabelTitle, unitLabel } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
 import { LocationPicker } from "@/features/outlet/components/LocationPicker";

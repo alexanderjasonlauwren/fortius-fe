@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 const getOne = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api", () => ({ getOne }));
 import { sourcePlanReviewHttp } from "./sourcePlanReview.http";
-import { sourcePlanReviewMock } from "./sourcePlanReview.mock";
 import { sourcePlanMessage } from "./sourcePlanReview.contract";
 import { sourceRowsForEmptyDraft } from "./fillSourcePlan";
 import type { DistributionPlan, PlanRow } from "../types";
@@ -41,8 +40,5 @@ describe("source plan review", () => {
     const review = await sourcePlanReviewHttp.getSourcePlanReview("sa", date);
     expect(() => sourceRowsForEmptyDraft({ status: "Draft" } as DistributionPlan, [{}] as PlanRow[], review, [])).toThrow("Jangan menimpa");
     expect(() => sourceRowsForEmptyDraft({ status: "Terkonfirmasi" } as DistributionPlan, [], review, [])).toThrow("Jangan menimpa");
-  });
-  it("mock reports no source rather than invented SIM3LON allocations", async () => {
-    expect(await sourcePlanReviewMock.getSourcePlanReview("sa", date)).toEqual({ status: "no_source", date, rows: [], unresolvedRegistrationCodes: [] });
   });
 });

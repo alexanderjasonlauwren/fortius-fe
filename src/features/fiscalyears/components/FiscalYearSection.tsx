@@ -23,7 +23,7 @@ import { Panel, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { formatDateId } from "@/lib/format";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 
 export function FiscalYearSection() {
   const navigate = useNavigate();

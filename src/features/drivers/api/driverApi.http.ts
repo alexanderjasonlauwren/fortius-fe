@@ -18,8 +18,8 @@
  */
 import { getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
-import { addDays, isoDate, startOfToday } from "@/mocks/seed";
-import type { DriverStatusEntity } from "@/mocks/types";
+import { addDays, isoDate, startOfToday } from "@/lib/date";
+import type { DriverStatusEntity } from "@/types/domain";
 import type { DriverApi, DriverFilters, DriverView, DriverWriteInput } from "./contract";
 
 /** Mirrors the backend's DriverResponse. */

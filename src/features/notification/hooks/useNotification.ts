@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
@@ -11,7 +11,6 @@ import {
   markAsRead,
   markAsUnread,
   saveNotificationSettings,
-  sendTestNotification,
 } from "../api/notificationApi";
 import type { NotificationSettings, NotificationType } from "../types";
 
@@ -70,15 +69,6 @@ export function useNotification() {
     success: "Aturan notifikasi disimpan",
   });
 
-  const testMutation = useDeskMutation({
-    mutationFn: (channel: "whatsapp" | "email") => sendTestNotification(channel),
-    errorTitle: "Pesan uji gagal dikirim",
-    success: (r) => ({
-      title: "Pesan uji terkirim",
-      description: `Dikirim ke ${r.tujuan}. Pada integrasi nyata, pesan ini masuk ke perangkat penerima.`,
-    }),
-  });
-
   const all = notifications.data ?? [];
   const filtered = all.filter((n) => {
     if (activeFilter === "Semua") return true;
@@ -103,6 +93,5 @@ export function useNotification() {
     notificationSettings: notificationSettings.data,
     isLoadingSettings: notificationSettings.isLoading,
     saveSettingsMutation,
-    testMutation,
   };
 }

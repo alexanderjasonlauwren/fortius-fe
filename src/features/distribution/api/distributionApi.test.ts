@@ -14,7 +14,7 @@ const getList = vi.fn();
 const getOne = vi.fn();
 const send = vi.fn();
 const scopeState = vi.hoisted(() => ({ key: ["tenant", "branch"] }));
-vi.mock("@/mocks/scope", () => ({ scopeKey: () => scopeState.key }));
+vi.mock("@/lib/scope", () => ({ scopeKey: () => scopeState.key }));
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),

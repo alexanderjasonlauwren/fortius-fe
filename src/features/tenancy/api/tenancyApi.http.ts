@@ -7,7 +7,7 @@
  * leaves every component unaware of which source it is running against.
  */
 import { getList, getOne, send } from "@/lib/api";
-import type { ID, TenantEntity } from "@/types/domain";
+import type { BranchEntity, ID, TenantEntity } from "@/types/domain";
 import type {
   CreateTenantInput,
   CreateTenantResult,
@@ -148,4 +148,39 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
 
 export async function deactivateTenant(id: ID): Promise<void> {
   await send<null>("delete", `/tenants/${id}`);
+}
+
+/** Mirrors the backend's branch.Response. */
+interface BranchResponse {
+  id: string;
+  code: string;
+  name: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  manager_name?: string;
+  phone?: string;
+  latitude?: number;
+  longitude?: number;
+  is_default: boolean;
+  status: string;
+}
+
+export async function getBranches(actingTenantId: ID): Promise<BranchEntity[]> {
+  const page = await getList<BranchResponse>("/branches", { pageSize: 100 });
+  return page.items.map((row) => ({
+    id: row.id,
+    tenantId: actingTenantId,
+    kode: row.code,
+    nama: row.name,
+    kota: row.city ?? "",
+    provinsi: row.province ?? "",
+    alamat: row.address ?? "",
+    penanggungJawab: row.manager_name ?? "",
+    telepon: row.phone ?? "",
+    lat: row.latitude ?? 0,
+    lng: row.longitude ?? 0,
+    utama: row.is_default,
+    aktif: row.status === "atv",
+  }));
 }

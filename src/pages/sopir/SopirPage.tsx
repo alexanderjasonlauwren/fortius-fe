@@ -1,4 +1,3 @@
-import { usesApi } from "@/lib/dataSource";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -12,15 +11,13 @@ import {
   ShieldQuestion,
   Route,
   TriangleAlert,
-  Truck,
 } from "lucide-react";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import {
   arriveStop,
   completeStop,
   departStop,
-  getDriverOptions,
   getMyRun,
   holdStop,
 } from "@/features/sopir/api/sopirApi";
@@ -32,7 +29,7 @@ import { Panel, PanelBody, Meter, Skeleton } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getStatusVariant, spineFor } from "@/lib/status";
-import { Field, SelectInput, TextInput, TextareaInput, Toggle } from "@/components/common/Field";
+import { Field, TextInput, TextareaInput, Toggle } from "@/components/common/Field";
 import { useGpsStream } from "@/features/sopir/hooks/useGpsStream";
 import {
   Dialog,
@@ -63,15 +60,7 @@ import { outletLabel, unitLabel, unitLabelTitle } from "@/lib/lexicon";
 export function SopirPage() {
   const user = useAuthStore((s) => s.user);
 
-  // An account that is not itself a sopir still needs a run to look at.
-  const [dipilih, setDipilih] = useState<string>("");
-  const driverId = user?.driverId ?? dipilih;
-
-  // Against the service the run comes from the session: `GET /deliveries/mine`
-  // resolves the driver from who is signed in, so there is no id to choose and
-  // nothing to choose it from. Asking anyway left the page on a picker with an
-  // empty list — a dead end the driver could not get out of.
-  const sessionResolvesDriver = usesApi;
+  const driverId = user?.driverId ?? "";
 
   const [completing, setCompleting] = useState<RunStop | null>(null);
   const [holding, setHolding] = useState<RunStop | null>(null);
@@ -85,7 +74,6 @@ export function SopirPage() {
   const run = useQuery({
     queryKey: [...scopeKey(), "sopir-run", driverId],
     queryFn: () => getMyRun(driverId),
-    enabled: sessionResolvesDriver || !!driverId,
     // The desk moves drops too, and a stale card invites a double delivery.
     refetchInterval: 30_000,
   });
@@ -95,19 +83,12 @@ export function SopirPage() {
   // the agency's own switch, resolved server-side because this account has no
   // permission to read tenant settings directly.
   const trackingOffered =
-    usesApi &&
     !!run.data?.rekamLokasi &&
     (run.data?.stops.some((s) => s.status !== "Selesai" && s.status !== "Tertunda") ?? false);
   const tripKey = run.data?.driver
     ? `${run.data.driver.id}:${run.data.tanggal}`
     : null;
   const gpsStream = useGpsStream({ enabled: trackingOffered, tripKey });
-
-  const options = useQuery({
-    queryKey: [...scopeKey(), "sopir-driver-options"],
-    queryFn: getDriverOptions,
-    enabled: !sessionResolvesDriver && !user?.driverId,
-  });
 
   const departMutation = useDeskMutation({
     mutationFn: (deliveryId: string) => departStop(deliveryId),
@@ -178,41 +159,7 @@ export function SopirPage() {
         description={formatDateLong(new Date())}
       />
 
-      {/* Whose run is this */}
-      {!sessionResolvesDriver && !user?.driverId && (
-        <Panel spine="text-signal">
-          <PanelBody>
-            <Field
-              label="Armada"
-              htmlFor="pilih-armada"
-              hint="Akun Anda bukan akun sopir, jadi pilih armada yang ingin dilihat."
-            >
-              <SelectInput
-                id="pilih-armada"
-                value={dipilih}
-                onChange={(e) => setDipilih(e.target.value)}
-              >
-                <option value="">Pilih armada</option>
-                {(options.data ?? []).map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label} — {o.sublabel}
-                  </option>
-                ))}
-              </SelectInput>
-            </Field>
-          </PanelBody>
-        </Panel>
-      )}
-
-      {!sessionResolvesDriver && !driverId ? (
-        <Panel>
-          <EmptyState
-            icon={Truck}
-            title="Belum ada armada dipilih"
-            description="Pilih armada di atas untuk melihat rute hari ini."
-          />
-        </Panel>
-      ) : run.isLoading ? (
+      {run.isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-28 w-full" />
           {Array.from({ length: 4 }).map((_, i) => (

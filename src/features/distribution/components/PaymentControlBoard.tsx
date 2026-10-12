@@ -23,7 +23,7 @@ import {
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { formatNumber, formatRupiah, formatRupiahShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

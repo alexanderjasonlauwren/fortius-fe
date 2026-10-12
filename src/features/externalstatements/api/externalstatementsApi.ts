@@ -1,8 +1,3 @@
-/**
- * The external-statements adapter this build uses.
- */
-import { pick } from "@/lib/dataSource";
-import { externalstatementsApiMock } from "./externalstatementsApi.mock";
 import { externalstatementsApiHttp } from "./externalstatementsApi.http";
 import type { ExternalStatementsApi } from "./contract";
 
@@ -18,7 +13,7 @@ export type {
   UpsertNoteInput,
 } from "./contract";
 
-const api: ExternalStatementsApi = pick(externalstatementsApiMock, externalstatementsApiHttp);
+const api: ExternalStatementsApi = externalstatementsApiHttp;
 
 export const getTemplate = api.getTemplate.bind(api);
 export const importStatement = api.importStatement.bind(api);

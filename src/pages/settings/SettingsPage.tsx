@@ -1,37 +1,24 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { Moon, Sun, TriangleAlert } from "lucide-react";
 import {
-  Database,
-  Download,
-  Moon,
-  Play,
-  RotateCcw,
-  Sun,
-  TriangleAlert,
-} from "lucide-react";
-import {
-  exportData,
   getSettingsDetail,
   clearSettingOverride,
-  resetData,
   updateSettings,
 } from "@/features/settings/api/settingsApi";
 import {
   INHERITABLE_FIELDS,
   type InheritableFieldKey,
 } from "@/features/settings/api/fields";
-import { advanceOperations } from "@/mocks/rules";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { useTheme } from "@/hooks/useTheme";
-import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/components/common/PageHeader";
 import { InheritableField } from "@/features/settings/components/InheritableField";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
-import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import {
   Field,
   SegmentedControl,
@@ -49,7 +36,7 @@ import { NumberingSection } from "@/features/settings/components/NumberingSectio
 import { OperationsSection } from "@/features/settings/components/OperationsSection";
 import { Button } from "@/components/ui/button";
 import { cn, getInitials } from "@/lib/utils";
-import type { SettingsEntity } from "@/mocks/types";
+import type { SettingsEntity } from "@/types/domain";
 import { describeAccess, describeRoles } from "@/features/rbac/access";
 
 /**
@@ -69,15 +56,12 @@ export function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>("agen");
   const { theme, setTheme } = useTheme();
   const user = useAuthStore((state) => state.user);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const settings = useQuery({
     queryKey: [...scopeKey(), "settings", "detail"],
     queryFn: getSettingsDetail,
   });
   const [form, setForm] = useState<SettingsEntity | null>(null);
-  const [resetting, setResetting] = useState(false);
 
   /**
    * Fields this tenant has taken ownership of during THIS edit.
@@ -174,48 +158,14 @@ export function SettingsPage() {
     </InheritableField>
   );
 
-  const exportMutation = useDeskMutation({
-    mutationFn: () => exportData(),
-    errorTitle: "Ekspor gagal",
-    success: "Salinan data diunduh",
-  });
-
-  const resetMutation = useDeskMutation({
-    mutationFn: () => resetData(),
-    errorTitle: "Atur ulang gagal",
-    success: () => ({
-      title: "Data contoh dibuat ulang",
-      description: "Konsol kembali ke satu hari kerja yang segar.",
-    }),
-    onDone: () => setResetting(false),
-  });
-
   const set = <K extends keyof SettingsEntity>(key: K, value: SettingsEntity[K]) =>
     setForm((f) => (f ? { ...f, [key]: value } : f));
-
-  /** Demo control: pushes today's run forward without waiting for the clock. */
-  const runSimulation = () => {
-    let steps = 0;
-    for (let i = 0; i < 6; i++) if (advanceOperations()) steps += 1;
-    queryClient.invalidateQueries();
-    toast({
-      title:
-        steps > 0
-          ? "Simulasi hari dimajukan"
-          : "Tidak ada surat jalan yang bisa dimajukan",
-      description:
-        steps > 0
-          ? "Surat jalan hari ini bergerak beberapa langkah. Periksa papan berangkat dan monitoring."
-          : "Semua surat jalan hari ini sudah selesai, atau jadwalnya belum tiba.",
-      tone: steps > 0 ? "success" : "info",
-    });
-  };
 
   /**
    * Belt-and-braces: `if (!form)` alone cannot tell "still loading" from
    * "failed" — both leave `form` null — so a genuine error read as an
    * eternal skeleton, with nothing on screen explaining why. Found live
-   * against the API build; see mocks/scope.ts's `setActiveScope` for the
+   * against the API build; see lib/scope.ts's `setActiveScope` for the
    * root-cause fix this is deliberately kept alongside, not instead of.
    */
   if (settings.isError) {
@@ -685,88 +635,6 @@ export function SettingsPage() {
         )}
 
       </div>
-
-      {tab === "sistem" && (
-      <Panel>
-        <PanelHeader
-          title="Data & simulasi"
-          hint="Konsol ini berjalan di atas data contoh yang tersimpan di peramban Anda"
-        />
-        <PanelBody className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Action
-            icon={Play}
-            title="Majukan simulasi hari"
-            description="Menggerakkan surat jalan hari ini beberapa langkah — berguna untuk melihat papan berangkat hidup di luar jam operasional."
-            action={
-              <Button variant="outline" className="w-full" onClick={runSimulation}>
-                Jalankan simulasi
-              </Button>
-            }
-          />
-          <Action
-            icon={Download}
-            title="Unduh salinan data"
-            description="Mengekspor seluruh isi konsol sebagai berkas JSON, setara dengan cadangan basis data."
-            action={
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => exportMutation.mutate(undefined as never)}
-                disabled={exportMutation.isPending}
-              >
-                Unduh JSON
-              </Button>
-            }
-          />
-          <Action
-            icon={RotateCcw}
-            title="Atur ulang data contoh"
-            description="Menghapus seluruh perubahan Anda dan membuat ulang satu hari kerja yang segar."
-            action={
-              <Button
-                variant="destructive"
-                className="w-full"
-                onClick={() => setResetting(true)}
-              >
-                Atur ulang
-              </Button>
-            }
-          />
-        </PanelBody>
-      </Panel>
-      )}
-
-      <ConfirmDialog
-        isOpen={resetting}
-        title="Atur ulang seluruh data?"
-        message="Semua rencana, verifikasi, dan perubahan data induk yang Anda buat akan hilang."
-        details="Konsol dimuat ulang dengan satu hari kerja baru: riwayat pengiriman di belakang, rencana berjalan hari ini, dan draf untuk hari berikutnya."
-        confirmLabel="Atur ulang data"
-        isPending={resetMutation.isPending}
-        onCancel={() => setResetting(false)}
-        onConfirm={() => resetMutation.mutate(undefined as never)}
-      />
-    </div>
-  );
-}
-
-function Action({
-  icon: Icon,
-  title,
-  description,
-  action,
-}: {
-  icon: typeof Database;
-  title: string;
-  description: string;
-  action: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col rounded-md border border-line bg-panel-sunk p-4">
-      <Icon className="mb-3 h-4 w-4 text-ink-muted" strokeWidth={1.75} />
-      <p className="text-sm font-semibold text-ink">{title}</p>
-      <p className="mt-1 flex-1 text-xs leading-relaxed text-ink-muted">{description}</p>
-      <div className="mt-4">{action}</div>
     </div>
   );
 }

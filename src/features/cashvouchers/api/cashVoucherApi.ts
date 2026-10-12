@@ -1,8 +1,3 @@
-/**
- * The cash voucher adapter this build uses.
- */
-import { pick } from "@/lib/dataSource";
-import { cashVoucherApiMock } from "./cashVoucherApi.mock";
 import { cashVoucherApiHttp } from "./cashVoucherApi.http";
 import type { CashVoucherApi } from "./contract";
 
@@ -18,7 +13,7 @@ export type {
   UpdateCashVoucherInput,
 } from "./contract";
 
-const api: CashVoucherApi = pick(cashVoucherApiMock, cashVoucherApiHttp);
+const api: CashVoucherApi = cashVoucherApiHttp;
 
 export const listCashVouchers = api.listCashVouchers.bind(api);
 export const getCashVoucher = api.getCashVoucher.bind(api);

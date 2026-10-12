@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -49,7 +49,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateId, formatDateTimeId, formatNumber } from "@/lib/format";
 import type { OrderView } from "@/features/orders/api/orderApi";
-import type { OrderStatus } from "@/mocks/types";
+import type { OrderStatus } from "@/types/domain";
 import { outletLabel, outletLabelTitle, unitLabel } from "@/lib/lexicon";
 
 type Tab = OrderStatus | "Semua";

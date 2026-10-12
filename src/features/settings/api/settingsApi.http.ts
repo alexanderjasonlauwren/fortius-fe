@@ -15,7 +15,7 @@ import type {
   TenantEntity,
 } from "@/types/domain";
 import type { InheritableFieldKey } from "./fields";
-import { getActingTenant } from "@/mocks/actingTenant";
+import { getActingTenant } from "@/lib/scope";
 import { DEFAULT_SETTINGS } from "./defaults";
 
 /** Mirrors the backend's SettingsPayload. Null means "inherit". */

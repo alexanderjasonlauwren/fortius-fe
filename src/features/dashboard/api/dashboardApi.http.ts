@@ -38,7 +38,7 @@ import { getVehicles } from "@/features/vehicles/api/vehicleApi";
 import { getAgingReport, getPayments } from "@/features/finance/api/financeApi";
 import { getOrderTotals } from "@/features/orders/api/orderApi";
 import { getSAList } from "@/features/sa/api/saApi";
-import { addDays, isoDate, startOfToday } from "@/mocks/seed";
+import { addDays, isoDate, startOfToday } from "@/lib/date";
 import type { DispatchLane, DispatchRail, DispatchStop, KpiSummary, MonthlyChartPoint, OutletShare, RecentActivity } from "../types";
 import type { DashboardApi } from "./contract";
 

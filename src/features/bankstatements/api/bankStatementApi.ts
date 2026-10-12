@@ -1,8 +1,3 @@
-/**
- * The bank statement adapter this build uses.
- */
-import { pick } from "@/lib/dataSource";
-import { bankStatementApiMock } from "./bankStatementApi.mock";
 import { bankStatementApiHttp } from "./bankStatementApi.http";
 import type { BankStatementApi } from "./contract";
 
@@ -21,7 +16,7 @@ export type {
   UpdateRuleInput,
 } from "./contract";
 
-const api: BankStatementApi = pick(bankStatementApiMock, bankStatementApiHttp);
+const api: BankStatementApi = bankStatementApiHttp;
 
 export const importStatement = api.importStatement.bind(api);
 export const listImports = api.listImports.bind(api);

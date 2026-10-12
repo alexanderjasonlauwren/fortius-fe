@@ -4,7 +4,7 @@ import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelBody, PanelHeader } from "@/components/common/Panel";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { formatNumber } from "@/lib/format";
 import { applySIM3LON, getLivePenyaluranCandidates, getSIM3LONReconciliation, syncLivePenyaluran } from "../api/saApi";
 import { buildSIM3LONApplyReview } from "../hooks/useSIM3LONImport";

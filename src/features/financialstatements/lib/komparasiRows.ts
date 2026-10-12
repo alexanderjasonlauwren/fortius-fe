@@ -60,3 +60,13 @@ export function notesToRows(notes: NotesStatement): KomparasiRow[] {
   }
   return rows;
 }
+
+/** Keterangan scope key for a P&L window — must match the backend's "pl:" key. */
+export function scopeKeyPL(from: string, to: string): string {
+  return `pl:${from}..${to}`;
+}
+
+/** Keterangan scope key for a balance sheet date — matches the backend's "bs:" key. */
+export function scopeKeyBS(asOf: string): string {
+  return `bs:${asOf}`;
+}

@@ -5,7 +5,7 @@ import { Network, Plus } from "lucide-react";
 import { getTenants } from "@/features/tenancy/api/tenancyApi";
 import { useScope } from "@/features/tenancy/useScope";
 import { businessTypeLabel } from "@/features/tenancy/businessType";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { StatusBadge } from "@/components/common/StatusBadge";

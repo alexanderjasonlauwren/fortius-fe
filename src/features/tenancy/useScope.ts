@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { getDb } from "@/mocks/db";
-import { setActiveScope, subtreeOf } from "@/mocks/scope";
-import { tenantRegistry } from "./tenantRegistry";
+import { setActiveScope, subtreeOf } from "@/lib/scope";
+import { branchRegistry, setBranchRegistry, tenantRegistry } from "./tenantRegistry";
 import { useAuthStore } from "@/features/auth/store/authStore";
 
 /** "semua" in the URL means the consolidated, cross-branch view. */
@@ -26,14 +25,7 @@ export function useScope() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
-  // Raw store: the switcher must list every branch it could move to, which
-  // scopedDb would filter down to the current scope.
-  const db = getDb();
-
   // --- tenant -------------------------------------------------------------
-  // From the registry, not the store. The registry is filled by whichever
-  // adapter this build uses; reading db.tenants here wired the switcher to the
-  // mock in every build, including one talking to a real server.
   const allTenants = tenantRegistry();
   const tenants = useMemo(() => allTenants.filter((t) => t.aktif), [allTenants]);
   const rootTenant = useMemo(
@@ -55,13 +47,9 @@ export function useScope() {
   );
 
   // --- branch -------------------------------------------------------------
-  // Only branches inside the visible subtree. Switching tenant therefore
-  // changes the branch list, which is why the branch fallback below has to run
-  // against this and not against every branch in the store.
-  const branches = useMemo(
-    () => db.branches.filter((b) => b.aktif && visibleTenantIds.includes(b.tenantId)),
-    [db.branches, visibleTenantIds],
-  );
+  // The session tenant's branches, already scoped by row-level security.
+  const allBranches = branchRegistry();
+  const branches = useMemo(() => allBranches.filter((b) => b.aktif), [allBranches]);
 
   // Which branches this user may read. Empty means every branch.
   const allowedBranchIds = useMemo(
@@ -95,8 +83,8 @@ export function useScope() {
     [actingTenantId, visibleTenantIds, branchId, allowedBranchIds],
   );
 
-  // The mock store reads scope synchronously, so it must be set before any
-  // query function runs.
+  // Request paths and query keys read scope synchronously, so it must be set
+  // before any query function runs.
   setActiveScope(scope);
 
   const setBranch = useCallback(
@@ -136,11 +124,11 @@ export function useScope() {
   const setTenant = useCallback(
     (nextTenantId: string) => {
       const nextVisible = subtreeOf(tenants, nextTenantId);
-      const nextBranches = db.branches.filter(
-        (b) => b.aktif && nextVisible.includes(b.tenantId),
-      );
-      const nextBranch =
-        nextBranches.find((b) => b.utama)?.id ?? nextBranches[0]?.id ?? null;
+
+      // The previous tenant's branches are meaningless now; the layout's
+      // branch query refetches after the cache clear below, and the fallback
+      // lands on the new tenant's default branch once it arrives.
+      setBranchRegistry([]);
 
       // Same ordering rule as setBranch: the cache clear triggers an immediate
       // refetch and those queries read the scope synchronously, so the scope
@@ -148,29 +136,32 @@ export function useScope() {
       setActiveScope({
         actingTenantId: nextTenantId,
         visibleTenantIds: nextVisible,
-        branchId: nextBranch,
+        branchId: null,
         allowedBranchIds,
       });
 
       const params = new URLSearchParams(window.location.search);
       params.set("tenant", nextTenantId);
-      params.set("cabang", nextBranch ?? ALL_BRANCHES);
+      params.delete("cabang");
       setParams(params, { replace: false });
       queryClient.clear();
     },
-    [setParams, queryClient, tenants, db.branches, allowedBranchIds],
+    [setParams, queryClient, tenants, allowedBranchIds],
   );
 
-  // Keep the URL explicit, so a link always carries its full scope. Both
-  // parameters, not just the missing one: a URL with a branch and no tenant is
-  // the shape that used to be normal, and it is now ambiguous.
+  // Keep the URL explicit, so a link always carries its full scope. The
+  // branch is written only once branches have loaded: before that the
+  // fallback is "consolidated", and pinning it would stop the default branch
+  // from ever being chosen.
+  const branchesLoaded = allBranches.length > 0;
   useEffect(() => {
     if (raw && rawTenant) return;
+    if (!actingTenantId) return;
     const params = new URLSearchParams(window.location.search);
     params.set("tenant", actingTenantId);
-    params.set("cabang", branchId ?? ALL_BRANCHES);
+    if (raw || branchesLoaded) params.set("cabang", branchId ?? ALL_BRANCHES);
     setParams(params, { replace: true });
-  }, [raw, rawTenant, actingTenantId, branchId, setParams]);
+  }, [raw, rawTenant, actingTenantId, branchId, branchesLoaded, setParams]);
 
   return {
     /** The tenant writes land in. */

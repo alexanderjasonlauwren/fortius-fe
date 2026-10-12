@@ -53,7 +53,7 @@ import { getVehicles } from "@/features/vehicles/api/vehicleApi";
 import { getSettings } from "@/features/settings/api/settingsApi";
 import type { OutletView } from "@/features/outlet/api/contract";
 import { exportCsv, printDocument, timestampSuffix } from "@/lib/export";
-import { addDays, isoDate } from "@/mocks/seed";
+import { addDays, isoDate } from "@/lib/date";
 import { outletLabelTitle, unitLabel, unitLabelTitle } from "@/lib/lexicon";
 import {
   RANGE_LABEL,

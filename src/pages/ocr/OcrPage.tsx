@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Archive, Plus, ScanLine } from "lucide-react";
 import { Link } from "react-router-dom";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { createReceipt, getReceipts, verifyReceipt, type ReceiptExtraction } from "@/features/ocr/api/ocrApi";
 import type { ExpenseCategory, PaymentMode } from "@/features/expenses/api/contract";
 import { getExpenseCategories } from "@/features/expensecategories/api/expenseCategoryApi";

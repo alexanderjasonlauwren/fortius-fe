@@ -23,8 +23,8 @@ import {
 } from "@/components/ui/dialog";
 import { formatRupiah } from "@/lib/format";
 import { outletLabel } from "@/lib/lexicon";
-import { leafAccounts } from "@/mocks/ledger";
-import { scopeKey } from "@/mocks/scope";
+import { leafAccounts } from "@/features/finance/lib/accounts";
+import { scopeKey } from "@/lib/scope";
 
 type Jenis = "registration" | "other";
 

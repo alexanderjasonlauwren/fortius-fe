@@ -21,7 +21,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { Skeleton } from "@/components/common/Panel";
 import { getStatusVariant } from "@/lib/status";
 import { formatDateId, formatRupiah } from "@/lib/format";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 
 const LINE_STATUS_LABEL: Record<BankStatementLine["status"], string> = {
   unmatched: "Belum Dicocokkan",

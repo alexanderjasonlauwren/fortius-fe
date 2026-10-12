@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { Field, TextInput } from "@/components/common/Field";
 import { getMonthlyGrid } from "@/features/distribution/api/distributionApi";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

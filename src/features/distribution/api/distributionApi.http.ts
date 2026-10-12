@@ -33,7 +33,7 @@
 import { getList, getOne, send } from "@/lib/api";
 import { printDocument } from "@/lib/export";
 import { outletLabelTitle, unitLabelTitle } from "@/lib/lexicon";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { scheduleOneOrder } from "@/features/orders/api/orderApi.http";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getSettings } from "@/features/settings/api/settingsApi";

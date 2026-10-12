@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CircleDollarSign, Plus, ShoppingCart } from "lucide-react";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { getPurchases, type PurchaseView } from "@/features/purchases/api/purchaseApi";
 import type { PurchasePaymentStatus } from "@/features/purchases/api/contract";
 import { RecordPurchaseDialog } from "@/features/purchases/components/RecordPurchaseDialog";

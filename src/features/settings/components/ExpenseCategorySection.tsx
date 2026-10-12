@@ -4,7 +4,7 @@
  * own `code`, so this screen is what gives the expense form's picker
  * anything beyond the twelve categories a tenant starts with.
  */
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Tags, Trash2 } from "lucide-react";
@@ -16,7 +16,7 @@ import {
   type ExpenseCategoryView,
 } from "@/features/expensecategories/api/expenseCategoryApi";
 import { getChartOfAccounts } from "@/features/finance/api/financeApi";
-import { leafAccounts } from "@/mocks/ledger";
+import { leafAccounts } from "@/features/finance/lib/accounts";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Panel, PanelHeader } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";

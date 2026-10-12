@@ -1,15 +1,7 @@
-/**
- * The dashboard adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here
- * and a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import { dashboardApiMock } from "./dashboardApi.mock";
 import { dashboardApiHttp } from "./dashboardApi.http";
 import type { DashboardApi } from "./contract";
 
-const api: DashboardApi = pick(dashboardApiMock, dashboardApiHttp);
+const api: DashboardApi = dashboardApiHttp;
 
 export const getKpiSummary = api.getKpiSummary.bind(api);
 export const getMonthlyChart = api.getMonthlyChart.bind(api);

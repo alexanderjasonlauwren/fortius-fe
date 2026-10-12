@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 
 interface ImportBankStatementDialogProps {
   open: boolean;

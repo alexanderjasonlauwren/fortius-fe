@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { getSnapshot, sync } from "../api/sim3lonlive";
 import { isEmptySnapshot, type Sim3lonSnapshot } from "../api/contract";

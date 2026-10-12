@@ -15,8 +15,8 @@ export default defineConfig({
     // Node, not jsdom, deliberately.
     //
     // The first tests here cover pure logic that has no DOM: the permission
-    // vocabulary, the mock and HTTP adapters agreeing on one contract, the
-    // scope filter. Those are where the bugs this console has actually had
+    // vocabulary, the HTTP adapters' request and response mapping, the
+    // scope helpers. Those are where the bugs this console has actually had
     // live, and they run in milliseconds without a browser environment.
     //
     // Component tests will want jsdom and can opt in per file with

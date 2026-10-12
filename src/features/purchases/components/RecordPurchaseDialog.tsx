@@ -17,7 +17,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { formatRupiah } from "@/lib/format";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 
 interface LineRow {
   key: number;

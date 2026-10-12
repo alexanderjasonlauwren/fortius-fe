@@ -3,7 +3,6 @@ import { ArrowRight } from "lucide-react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { Panel, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { Button } from "@/components/ui/button";
-import { usesApi } from "@/lib/dataSource";
 import { formatDateId, formatRupiah, formatRupiahShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { FinanceTotal } from "../api/financeSummary.contract";
@@ -18,7 +17,7 @@ export function FinanceSummary({ summary }: { summary: ReturnType<typeof useFina
       <PanelHeader
         title="Ringkasan keuangan"
         hint={<>Bulan berjalan · <span className="data">{formatDateId(window.from)} – {formatDateId(window.to)}</span>
-          {usesApi && <span className="block mt-1">Seluruh cabang dalam cakupan akses, bukan filter cabang di atas.</span>}
+          <span className="block mt-1">Seluruh cabang dalam cakupan akses, bukan filter cabang di atas.</span>
         </>}
         actions={canSeeReceivables && (
           <Button asChild variant="ghost" size="sm">

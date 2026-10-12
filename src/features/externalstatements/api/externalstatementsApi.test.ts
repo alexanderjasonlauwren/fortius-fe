@@ -1,44 +1,6 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { labaRugiLayout } from "@/features/financialstatements/lib/layouts";
-import { evaluateImported } from "../lib/evaluate";
+import { expect, it, vi, beforeEach } from "vitest";
 
-/**
- * Two things are checked here: the TS port of the backend's
- * evaluateImported (ported line for line from
- * internal/usecase/externalstatement/evaluate.go, same golden §G3 shape
- * the backend's own evaluate_test.go proves), and the HTTP adapter's
- * request mapping, following bankAccountApi.test.ts's own pattern.
- */
-
-describe("evaluateImported", () => {
-  it("always recomputes a subtotal, ignoring a wrong imported total", () => {
-    const result = evaluateImported(labaRugiLayout, [
-      { lineCode: "pendaftaran", label: "Pendaftaran Pangkalan", amount: 0 },
-      { lineCode: "isi_tabung", label: "Penjualan Isi Tabung", amount: 287_201_400 },
-      { parentLineCode: "total_penjualan", label: "Penjualan Tabung 3 Kg", amount: 440_178_000 },
-      { lineCode: "total_penjualan", label: "Total Penjualan (printed wrong)", amount: 999_999_999 },
-    ]);
-    const totalPenjualan = result.find((r) => r.lineCode === "total_penjualan");
-    expect(totalPenjualan?.amount).toBe(727_379_400);
-  });
-
-  it("folds an extra line into its parent before the parent's own value is used elsewhere", () => {
-    const result = evaluateImported(labaRugiLayout, [
-      { lineCode: "pendaftaran", label: "Pendaftaran", amount: 0 },
-      { lineCode: "isi_tabung", label: "Isi Tabung", amount: 100 },
-      { parentLineCode: "total_penjualan", label: "Extra", amount: 50 },
-    ]);
-    const extra = result.find((r) => r.parentLineCode === "total_penjualan");
-    expect(extra?.amount).toBe(50);
-    expect(result.find((r) => r.lineCode === "total_penjualan")?.amount).toBe(150);
-  });
-
-  it("produces one row per layout line even with no import data at all", () => {
-    const result = evaluateImported(labaRugiLayout, []);
-    expect(result).toHaveLength(labaRugiLayout.lines.length);
-    expect(result.every((r) => r.amount === 0)).toBe(true);
-  });
-});
+/** The HTTP adapter's request mapping, following bankAccountApi.test.ts's pattern. */
 
 const getList = vi.fn();
 const getOne = vi.fn();

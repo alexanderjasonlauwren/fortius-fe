@@ -1,17 +1,9 @@
-/**
- * The transportation-claim adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here
- * and a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import { transportationApiMock } from "./transportationApi.mock";
 import { transportationApiHttp } from "./transportationApi.http";
 import type { TransportationClaimApi } from "./contract";
 
 export type { ClaimView, BeritaAcaraDocument, RecapReport, RecapRow } from "./contract";
 
-const api: TransportationClaimApi = pick(transportationApiMock, transportationApiHttp);
+const api: TransportationClaimApi = transportationApiHttp;
 
 export const getClaims = api.getClaims.bind(api);
 export const createClaim = api.createClaim.bind(api);

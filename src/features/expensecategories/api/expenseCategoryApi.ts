@@ -1,8 +1,3 @@
-/**
- * The expense-category adapter this build uses.
- */
-import { pick } from "@/lib/dataSource";
-import { expenseCategoryApiMock } from "./expenseCategoryApi.mock";
 import { expenseCategoryApiHttp } from "./expenseCategoryApi.http";
 import type { ExpenseCategoryApi } from "./contract";
 
@@ -13,7 +8,7 @@ export type {
   UpdateExpenseCategoryInput,
 } from "./contract";
 
-const api: ExpenseCategoryApi = pick(expenseCategoryApiMock, expenseCategoryApiHttp);
+const api: ExpenseCategoryApi = expenseCategoryApiHttp;
 
 export const getExpenseCategories = api.getExpenseCategories.bind(api);
 export const createExpenseCategory = api.createExpenseCategory.bind(api);

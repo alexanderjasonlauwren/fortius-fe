@@ -26,7 +26,6 @@ import { formatNumber, formatPercentId } from "@/lib/format";
 import type { ScheduleAgreement } from "@/features/sa/types";
 import type { UploadSAFormValues } from "@/features/sa/schema";
 import { supplierLabel, unitLabel } from "@/lib/lexicon";
-import { usesApi } from "@/lib/dataSource";
 
 export function SAManagementPage() {
   const {
@@ -97,7 +96,7 @@ export function SAManagementPage() {
         </div>}
       />
 
-      {canImport && usesApi && <LivePenyaluranPanel />}
+      {canImport && <LivePenyaluranPanel />}
 
       {isError && (
         <Panel spine="text-rust" className="flex items-center gap-3 px-5 py-3.5">

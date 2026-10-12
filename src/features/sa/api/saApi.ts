@@ -1,17 +1,9 @@
-/**
- * The schedule agreement adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here and
- * a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
 import { printDocument } from "@/lib/export";
 import { supplierLabelTitle, unitLabelTitle } from "@/lib/lexicon";
 import { saApiHttp } from "./saApi.http";
-import { saApiMock } from "./saApi.mock";
 import type { ScheduleAgreementApi } from "./contract";
 
-const api: ScheduleAgreementApi = pick(saApiMock, saApiHttp);
+const api: ScheduleAgreementApi = saApiHttp;
 
 export const getSAList = api.getSAList.bind(api);
 export const getSADetail = api.getSADetail.bind(api);

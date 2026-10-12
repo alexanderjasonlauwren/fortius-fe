@@ -1,11 +1,3 @@
-/**
- * The financial-statements adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here
- * and a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import { financialstatementsApiMock } from "./financialstatementsApi.mock";
 import { financialstatementsApiHttp } from "./financialstatementsApi.http";
 import type { FinancialStatementsApi } from "./contract";
 
@@ -29,7 +21,7 @@ export type {
   StatementWarning,
 } from "./contract";
 
-const api: FinancialStatementsApi = pick(financialstatementsApiMock, financialstatementsApiHttp);
+const api: FinancialStatementsApi = financialstatementsApiHttp;
 
 export const getProfitAndLoss = api.getProfitAndLoss.bind(api);
 export const getBalanceSheet = api.getBalanceSheet.bind(api);

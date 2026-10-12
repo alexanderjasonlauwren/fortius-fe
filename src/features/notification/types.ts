@@ -3,7 +3,7 @@ import type {
   NotificationSettings,
   ReminderRule,
   ReminderRuleKey,
-} from "@/mocks/types";
+} from "@/types/domain";
 import { outletLabel } from "@/lib/lexicon";
 
 export type { NotifChannel, NotificationSettings, ReminderRule, ReminderRuleKey };

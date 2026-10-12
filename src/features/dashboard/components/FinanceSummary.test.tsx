@@ -13,7 +13,7 @@ vi.mock("@/features/auth/store/authStore", () => ({
   useAuthStore: (selector: (store: { hasPermission: (permission: string) => boolean }) => unknown) =>
     selector({ hasPermission: (permission) => state.permissions.includes(permission) }),
 }));
-vi.mock("@/mocks/scope", () => ({ scopeKey: () => state.scope }));
+vi.mock("@/lib/scope", () => ({ scopeKey: () => state.scope }));
 vi.mock("../api/financeSummary", () => ({
   getVerifiedCash: state.cash, getMonthlyReceivables: state.receivables, getGrossMargin: state.margin,
 }));

@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { getStatusVariant, spineFor } from "@/lib/status";
 import { formatDateId, formatRupiah } from "@/lib/format";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 
 type Tab = "transaksi" | "rekening-koran" | "rekonsiliasi";
 

@@ -1,34 +1,18 @@
-import { scopeKey } from "@/mocks/scope";
-import { useResettableState } from "@/hooks/useResettableState";
+import { scopeKey } from "@/lib/scope";
 import { useQuery } from "@tanstack/react-query";
-import { getSystemConfig, saveNumbering } from "@/features/system/api/systemApi";
-import { useDeskMutation } from "@/hooks/useDeskMutation";
+import { getSystemConfig } from "@/features/system/api/systemApi";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { Field, TextInput, Toggle } from "@/components/common/Field";
-import { Button } from "@/components/ui/button";
-import type { NumberingEntity } from "@/mocks/types";
+import type { NumberingEntity } from "@/types/domain";
 import { outletLabel } from "@/lib/lexicon";
-import { usesApi } from "@/lib/dataSource";
 
-/* ── numbering ─────────────────────────────────────────────────────────── */
-
+/**
+ * Document number prefixes, read-only: `core.document_sequences` fixes them
+ * when a branch is created, and there is no endpoint to change them.
+ */
 export function NumberingSection() {
   const config = useQuery({ queryKey: [...scopeKey(), "system-config"], queryFn: getSystemConfig });
-  const [form, setForm] = useResettableState<NumberingEntity | null>([config.data], () =>
-    config.data ? { ...config.data.penomoran } : null,
-  );
-
-  const saveMutation = useDeskMutation({
-    mutationFn: (values: NumberingEntity) => saveNumbering(values),
-    errorTitle: "Penomoran tidak tersimpan",
-    success: "Penomoran dokumen disimpan",
-  });
-
-  const dirty =
-    !usesApi &&
-    !!form &&
-    !!config.data &&
-    JSON.stringify(form) !== JSON.stringify(config.data.penomoran);
+  const form = config.data?.penomoran;
 
   if (!form) return <Skeleton className="h-64 w-full" />;
 
@@ -52,26 +36,6 @@ export function NumberingSection() {
       <PanelHeader
         title="Penomoran dokumen"
         hint="Awalan yang muncul di setiap tabel dan cetakan"
-        actions={
-          dirty && (
-            <>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => config.data && setForm({ ...config.data.penomoran })}
-              >
-                Urungkan
-              </Button>
-              <Button
-                size="xs"
-                onClick={() => saveMutation.mutate(form)}
-                disabled={saveMutation.isPending}
-              >
-                Simpan
-              </Button>
-            </>
-          )
-        }
       />
       <PanelBody className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -89,14 +53,7 @@ export function NumberingSection() {
                 </>
               }
             >
-              <TextInput
-                id={`num-${f.key}`}
-                mono
-                maxLength={6}
-                disabled={usesApi}
-                value={String(form[f.key])}
-                onChange={(e) => setForm({ ...form, [f.key]: e.target.value.toUpperCase() })}
-              />
+              <TextInput id={`num-${f.key}`} mono disabled value={String(form[f.key])} readOnly />
             </Field>
           ))}
         </div>
@@ -106,22 +63,15 @@ export function NumberingSection() {
             label="Sertakan tanggal pada nomor"
             description="Nomor urut dihitung ulang setiap hari, misalnya SJ-20260804-01. Tanpa ini, nomor berjalan terus."
             checked={form.sertakanTanggal}
-            disabled={usesApi}
-            onChange={(sertakanTanggal) => setForm({ ...form, sertakanTanggal })}
+            disabled
+            onChange={() => {}}
           />
         </div>
 
-        {usesApi ? (
-          <p className="rounded-md border border-line bg-panel-sunk px-4 py-3 text-xs leading-relaxed text-ink-muted">
-            Awalan ditetapkan sistem saat cabang dibuat dan tidak dapat diubah dari
-            sini — nilai di atas adalah yang sesungguhnya dipakai.
-          </p>
-        ) : (
-          <p className="rounded-md border border-line bg-panel-sunk px-4 py-3 text-xs leading-relaxed text-ink-muted">
-            Perubahan berlaku untuk dokumen yang terbit setelah disimpan. Nomor yang
-            sudah tercetak tidak ikut berubah, sehingga arsip lama tetap cocok.
-          </p>
-        )}
+        <p className="rounded-md border border-line bg-panel-sunk px-4 py-3 text-xs leading-relaxed text-ink-muted">
+          Awalan ditetapkan sistem saat cabang dibuat dan tidak dapat diubah dari
+          sini — nilai di atas adalah yang sesungguhnya dipakai.
+        </p>
       </PanelBody>
     </Panel>
   );

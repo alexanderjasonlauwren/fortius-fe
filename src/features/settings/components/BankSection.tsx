@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Star, Trash2 } from "lucide-react";
@@ -11,7 +11,7 @@ import { Field, SegmentedControl, SelectInput, TextInput, Toggle } from "@/compo
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { BankAccountEntity, BankNameEntity } from "@/mocks/types";
+import type { BankAccountEntity, BankNameEntity } from "@/types/domain";
 import { outletLabel } from "@/lib/lexicon";
 
 const BANKS: BankNameEntity[] = ["BCA", "BNI", "Mandiri", "BRI", "BSI"];

@@ -1,8 +1,3 @@
-/**
- * The asset-register adapter this build uses.
- */
-import { pick } from "@/lib/dataSource";
-import { assetApiMock } from "./assetApi.mock";
 import { assetApiHttp } from "./assetApi.http";
 import type { AssetApi } from "./contract";
 
@@ -17,7 +12,7 @@ export type {
   UpdateAssetInput,
 } from "./contract";
 
-const api: AssetApi = pick(assetApiMock, assetApiHttp);
+const api: AssetApi = assetApiHttp;
 
 export const listAssets = api.listAssets.bind(api);
 export const getAsset = api.getAsset.bind(api);

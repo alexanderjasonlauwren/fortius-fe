@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -40,7 +40,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateId, formatRupiah, formatRupiahShort } from "@/lib/format";
-import type { BankNameEntity } from "@/mocks/types";
+import type { BankNameEntity } from "@/types/domain";
 import { outletLabel, outletLabelTitle } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
 

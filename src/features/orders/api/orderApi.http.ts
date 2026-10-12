@@ -34,7 +34,7 @@
 import { getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { outletLabelTitle, unitLabel, unitLabelTitle } from "@/lib/lexicon";
-import { isoDate, startOfToday } from "@/mocks/seed";
+import { isoDate, startOfToday } from "@/lib/date";
 import type { OrderStatus } from "@/types/domain";
 import type { OrderApi, OrderView } from "./contract";
 

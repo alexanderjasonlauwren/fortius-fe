@@ -1,4 +1,5 @@
-import { scopeKey, visibleBranches } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
+import { useScope } from "@/features/tenancy/useScope";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BarChart3, Download, Printer } from "lucide-react";
@@ -109,7 +110,7 @@ export function TransportationRecapPage() {
       { replace: true },
     );
 
-  const branches = visibleBranches();
+  const { branches } = useScope();
 
   const recap = useQuery({
     queryKey: [...scopeKey(), "transportation-recap", from, to, branchId],

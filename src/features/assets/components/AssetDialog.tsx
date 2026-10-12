@@ -26,8 +26,8 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { leafAccounts } from "@/mocks/ledger";
-import { scopeKey } from "@/mocks/scope";
+import { leafAccounts } from "@/features/finance/lib/accounts";
+import { scopeKey } from "@/lib/scope";
 
 const CLASS_LABEL: Record<AssetClass, string> = {
   building: "Bangunan",

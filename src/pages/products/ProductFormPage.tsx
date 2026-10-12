@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -8,13 +8,12 @@ import {
   getProductDetail,
 } from "@/features/products/api/productApi";
 import { getChartOfAccounts } from "@/features/finance/api/financeApi";
-import { leafAccounts } from "@/mocks/ledger";
+import { leafAccounts } from "@/features/finance/lib/accounts";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { Field, SegmentedControl, SelectInput, TextInput, Toggle } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
-import { usesApi } from "@/lib/dataSource";
 import { formatPercentId, formatRupiah } from "@/lib/format";
 import { useResettableState } from "@/hooks/useResettableState";
 
@@ -132,11 +131,7 @@ export function ProductFormPage() {
       <PageHeader
         eyebrow="Data induk"
         title={isEdit ? `Ubah ${detail.data?.nama ?? "produk"}` : "Tambah produk"}
-        description={
-          usesApi
-            ? "Harga jual dipakai untuk menghitung nilai tagihan. Stok dikelola dari modul gudang terpisah di build ini; stok minimum tetap dapat diubah di sini."
-            : "Harga jual dipakai untuk menghitung nilai tagihan, dan stok minimum memicu peringatan otomatis."
-        }
+        description="Harga jual dipakai untuk menghitung nilai tagihan. Jumlah stok belum dicatat per produk; stok minimum tetap dapat diubah di sini."
       />
 
       <form onSubmit={submit}>
@@ -227,18 +222,6 @@ export function ProductFormPage() {
             <Panel>
               <PanelHeader title="Stok" />
               <PanelBody className="space-y-4">
-                {!usesApi && (
-                  <Field label="Stok saat ini" htmlFor="stok">
-                    <TextInput
-                      id="stok"
-                      type="number"
-                      min={0}
-                      mono
-                      value={form.stok}
-                      onChange={(e) => set("stok", Number(e.target.value))}
-                    />
-                  </Field>
-                )}
                 <Field
                   label="Stok minimum"
                   htmlFor="min"

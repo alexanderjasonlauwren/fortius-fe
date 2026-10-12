@@ -12,7 +12,7 @@
  * adapter -- mapping there is what keeps every component unaware of which
  * source it is running against.
  */
-import type { AccountBalance } from "@/mocks/ledger";
+import type { AccountBalance } from "@/features/finance/lib/accounts";
 import type { BankNameEntity, CreditNoteStatus, InvoiceStatus, JournalSourceType } from "@/types/domain";
 
 export const AGING_BUCKETS = [

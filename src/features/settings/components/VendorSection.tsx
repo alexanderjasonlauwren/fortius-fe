@@ -8,7 +8,7 @@
  * though they read the same word in Indonesian. See VendorEntity's own doc
  * in @/types/domain for the full reasoning.
  */
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Factory, Pencil, Plus, Trash2 } from "lucide-react";

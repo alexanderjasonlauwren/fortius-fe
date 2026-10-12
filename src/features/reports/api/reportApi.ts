@@ -1,11 +1,3 @@
-/**
- * The reports adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here
- * and a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import { reportApiMock } from "./reportApi.mock";
 import { reportApiHttp } from "./reportApi.http";
 import type { ReportsApi } from "./contract";
 
@@ -18,7 +10,7 @@ export type {
   TopOutletRow,
 } from "./contract";
 
-const api: ReportsApi = pick(reportApiMock, reportApiHttp);
+const api: ReportsApi = reportApiHttp;
 
 export const getReportSummary = api.getReportSummary.bind(api);
 export const getDailySeries = api.getDailySeries.bind(api);

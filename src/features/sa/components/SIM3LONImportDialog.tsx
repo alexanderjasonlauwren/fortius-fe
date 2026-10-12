@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getProducts } from "@/features/products/api/productApi";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { formatNumber } from "@/lib/format";
 import { supplierLabel, unitLabel } from "@/lib/lexicon";
 import { getSIM3LONDefaultProduct } from "../api/saApi";

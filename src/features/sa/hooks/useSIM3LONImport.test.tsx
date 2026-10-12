@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
   toast: vi.fn(),
 }));
 
-vi.mock("@/mocks/scope", () => ({ scopeKey: () => state.scope }));
+vi.mock("@/lib/scope", () => ({ scopeKey: () => state.scope }));
 vi.mock("@/hooks/useToast", () => ({ useToast: () => ({ toast: state.toast }) }));
 vi.mock("../api/saApi", () => ({
   applySIM3LON: state.apply,

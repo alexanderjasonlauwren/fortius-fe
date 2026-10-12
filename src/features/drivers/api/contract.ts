@@ -14,7 +14,7 @@
  * In the demo build that pairing is `mocks/fleet.ts`; against the service it is
  * the dispatch board, which is the only place it is real.
  */
-import type { DriverEntity, DriverStatusEntity } from "@/mocks/types";
+import type { DriverEntity, DriverStatusEntity } from "@/types/domain";
 
 /**
  * A driver with the figures the screens put beside them.

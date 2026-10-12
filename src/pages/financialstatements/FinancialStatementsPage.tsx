@@ -16,8 +16,12 @@ import {
 import { StatementTable } from "@/features/financialstatements/components/StatementTable";
 import { KomparasiPanel } from "@/features/financialstatements/components/KomparasiPanel";
 import { GeneralKeterangan } from "@/features/financialstatements/components/GeneralKeterangan";
-import { notesToRows, statementToRows } from "@/features/financialstatements/lib/komparasiRows";
-import { scopeKeyBS, scopeKeyPL } from "@/features/financialstatements/lib/compare";
+import {
+  notesToRows,
+  scopeKeyBS,
+  scopeKeyPL,
+  statementToRows,
+} from "@/features/financialstatements/lib/komparasiRows";
 import { listStatements } from "@/features/externalstatements/api/externalstatementsApi";
 import { ImportStatementDialog } from "@/features/externalstatements/components/ImportStatementDialog";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
@@ -28,7 +32,7 @@ import { Field, SegmentedControl, SelectInput } from "@/components/common/Field"
 import { Button } from "@/components/ui/button";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { formatDateId, formatRupiah } from "@/lib/format";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 
 type Tab = "laba-rugi" | "neraca" | "penjelasan" | "komparasi" | "buku-besar";
 type KomparasiView = "laba-rugi" | "penjelasan" | "neraca";

@@ -23,7 +23,6 @@ import { SelectInput, TextInput } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { usesApi } from "@/lib/dataSource";
 import { useToast } from "@/hooks/useToast";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
@@ -1215,17 +1214,7 @@ function StopRow({
         </td>
 
         <td className="px-3 py-2.5">
-          {editable && !usesApi ? (
-            <TextInput
-              type="time"
-              mono
-              aria-label={`Jam pengiriman ${row.outlet}`}
-              value={row.jamPengiriman}
-              onChange={(e) =>
-                patchRow(row.id, { jamPengiriman: e.target.value })
-              }
-            />
-          ) : editable ? (
+          {editable ? (
             // The service plans a delivery date, not a clock time to type in
             // -- this cell shows the board's own ETA estimate (or "—" before
             // one exists) rather than an input nothing here persists. See

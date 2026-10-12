@@ -20,7 +20,7 @@ const state = vi.hoisted(() => ({
   createPackage: vi.fn(),
 }));
 
-vi.mock("@/mocks/scope", () => ({ scopeKey: () => ["tenant", "branch"] }));
+vi.mock("@/lib/scope", () => ({ scopeKey: () => ["tenant", "branch"] }));
 vi.mock("@/hooks/useToast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/features/auth/store/authStore", () => ({
   useAuthStore: (selector: (store: { hasPermission: () => boolean }) => unknown) =>

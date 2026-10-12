@@ -64,7 +64,7 @@ describe("permission vocabulary", () => {
     for (const code of Object.values(PERMISSIONS)) {
       if (code.startsWith("console.")) continue;
       expect(code, `${code} is not module.action.resource`).toMatch(
-        /^[a-z]+\.[a-z]+\.[a-z_]+$/,
+        /^[a-z]+\.[a-z]+\.[a-z0-9_]+$/,
       );
       expect(code, `${code} uses the console's old module:verb shape`).not.toContain(":");
     }

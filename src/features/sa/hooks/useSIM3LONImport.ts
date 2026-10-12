@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import {
   applySIM3LON,
   getSIM3LONReconciliation,

@@ -1,17 +1,9 @@
-/**
- * The driver adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here and
- * a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import { driverApiMock, getDriverSchedule as getDriverScheduleMock } from "./driverApi.mock";
 import { driverApiHttp, getDriverSchedule as getDriverScheduleHttp } from "./driverApi.http";
 import type { DriverApi } from "./contract";
 
 export type { DriverView } from "./contract";
 
-const api: DriverApi = pick(driverApiMock, driverApiHttp);
+const api: DriverApi = driverApiHttp;
 
 export const getDrivers = api.getDrivers.bind(api);
 export const getDriverDetail = api.getDriverDetail.bind(api);
@@ -26,4 +18,4 @@ export const exportDrivers = api.exportDrivers.bind(api);
  * by `driver_id` and today's `date`, the same way the dispatch board answers
  * "which stops are on which run" but keyed by driver instead of by plan.
  */
-export const getDriverSchedule = pick(getDriverScheduleMock, getDriverScheduleHttp);
+export const getDriverSchedule = getDriverScheduleHttp;

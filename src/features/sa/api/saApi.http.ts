@@ -9,7 +9,7 @@
  */
 import { getList, getOne, send, upload } from "@/lib/api";
 import type { FilterSpec } from "@/lib/listQuery";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import type {
   PlanningCutoverReport,
   SAImportApplied,

@@ -30,7 +30,7 @@ import { getList, getOne, send } from "@/lib/api";
 import { toApiTimestamp, todayIso } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import type { OutletView } from "@/features/outlet/api/contract";
-import type { AccountBalance } from "@/mocks/ledger";
+import type { AccountBalance } from "@/features/finance/lib/accounts";
 import type { AccountEntity, AccountType, InvoiceStatus } from "@/types/domain";
 import { AGING_BUCKETS } from "./contract";
 import type {

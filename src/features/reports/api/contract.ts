@@ -8,7 +8,7 @@
  * arithmetic with no data source of their own, the same reason
  * `financeApi/contract.ts` holds `AGING_BUCKETS`.
  */
-import { addDays, isoDate, startOfToday } from "@/mocks/seed";
+import { addDays, isoDate, startOfToday } from "@/lib/date";
 
 export type ReportRange = "hari-ini" | "7h" | "30h" | "bulan-ini" | "bulan-lalu";
 

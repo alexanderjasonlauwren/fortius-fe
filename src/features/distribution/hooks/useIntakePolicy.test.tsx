@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ getPolicy: vi.fn(), scope: ["tenant-a", "branch-a"], signedIn: true }));
 vi.mock("../api/intakePolicy", () => ({ getIntakePolicy: state.getPolicy }));
-vi.mock("@/mocks/scope", () => ({ scopeKey: () => state.scope }));
+vi.mock("@/lib/scope", () => ({ scopeKey: () => state.scope }));
 vi.mock("@/features/auth/store/authStore", () => ({ useAuthStore: (selector: (store: { user: object | null }) => unknown) => selector({ user: state.signedIn ? {} : null }) }));
 import { useIntakePolicy } from "./useIntakePolicy";
 function Harness() { const policy = useIntakePolicy(); return <p>{policy.allowsManualIntake ? "manual-enabled" : "manual-disabled"}</p>; }

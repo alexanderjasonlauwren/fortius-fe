@@ -1,11 +1,3 @@
-/**
- * The geofence adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here and
- * a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import { geofenceApiMock } from "./geofenceApi.mock";
 import { geofenceApiHttp } from "./geofenceApi.http";
 import type { GeofenceApi } from "./contract";
 
@@ -17,7 +9,7 @@ export type {
   LatLng,
 } from "./contract";
 
-const api: GeofenceApi = pick(geofenceApiMock, geofenceApiHttp);
+const api: GeofenceApi = geofenceApiHttp;
 
 export const getGeofenceRules = api.getGeofenceRules.bind(api);
 export const createOrUpdateGeofenceRule = api.createOrUpdateGeofenceRule.bind(api);

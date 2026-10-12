@@ -23,7 +23,7 @@
 import { getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { outletLabel } from "@/lib/lexicon";
-import type { BankNameEntity, OutletEntity, OutletStatus } from "@/mocks/types";
+import type { BankNameEntity, OutletEntity, OutletStatus } from "@/types/domain";
 import type { OutletApi, OutletFilters, OutletView } from "./contract";
 
 /** Mirrors the backend's OutletResponse. */

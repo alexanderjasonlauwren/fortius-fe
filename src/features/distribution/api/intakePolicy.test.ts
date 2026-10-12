@@ -3,14 +3,11 @@ import { NAV_GROUPS, isAvailableForIntake, navGroupsFor } from "@/layouts/nav";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { allowsManualIntake } from "./intakePolicy.contract";
 
-const state = vi.hoisted(() => ({ getOne: vi.fn(), actingTenantId: "child", db: { settingsByTenant: [] as { tenantId: string; values: { orderIntakeMode?: "manual" | "external_schedule" } }[], tenants: [{ id: "root", indukId: null }, { id: "child", indukId: "root" }, { id: "sibling", indukId: "root" }] } }));
+const state = vi.hoisted(() => ({ getOne: vi.fn() }));
 vi.mock("@/lib/api", () => ({ getOne: state.getOne }));
-vi.mock("@/mocks/db", () => ({ getDb: () => state.db }));
-vi.mock("@/mocks/scope", () => ({ getActiveScope: () => ({ actingTenantId: state.actingTenantId }) }));
 import { intakePolicyHttp } from "./intakePolicy.http";
-import { intakePolicyMock } from "./intakePolicy.mock";
 
-beforeEach(() => { state.getOne.mockReset(); state.actingTenantId = "child"; state.db.settingsByTenant = []; });
+beforeEach(() => { state.getOne.mockReset(); });
 describe("manual intake availability", () => {
   it.each(["manual", "external_schedule"] as const)("reads the signed-session policy %s without a tenant override", async (mode) => {
     state.getOne.mockResolvedValue({ order_intake_mode: mode });
@@ -33,13 +30,5 @@ describe("manual intake availability", () => {
     expect(isAvailableForIntake(order, "manual")).toBe(true);
     expect(navGroupsFor([PERMISSIONS.ORDERS_VIEW], "manual").flatMap((group) => group.items).some((item) => item.href === "/orders")).toBe(true);
     expect(navGroupsFor([], "manual").flatMap((group) => group.items).some((item) => item.href === "/orders")).toBe(false);
-  });
-  it("mock policy inherits only the acting tenant ancestors and permits explicit override", async () => {
-    state.db.settingsByTenant = [{ tenantId: "root", values: { orderIntakeMode: "external_schedule" } }, { tenantId: "sibling", values: { orderIntakeMode: "manual" } }];
-    expect(await intakePolicyMock.getIntakePolicy()).toBe("external_schedule");
-    state.db.settingsByTenant.push({ tenantId: "child", values: { orderIntakeMode: "manual" } });
-    expect(await intakePolicyMock.getIntakePolicy()).toBe("manual");
-    state.db.settingsByTenant = [];
-    expect(await intakePolicyMock.getIntakePolicy()).toBe("manual");
   });
 });

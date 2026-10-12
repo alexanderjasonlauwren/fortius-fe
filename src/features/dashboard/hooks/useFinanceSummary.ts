@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { resolveRange } from "@/features/reports/api/contract";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { getGrossMargin, getMonthlyReceivables, getVerifiedCash } from "../api/financeSummary";
 
 export function useFinanceSummary() {

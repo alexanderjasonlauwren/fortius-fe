@@ -23,7 +23,7 @@
 import { getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { financeApiHttp } from "@/features/finance/api/financeApi.http";
-import { leafAccounts } from "@/mocks/ledger";
+import { leafAccounts } from "@/features/finance/lib/accounts";
 import type { ProductEntity } from "@/types/domain";
 import type { ProductApi, ProductFilters, ProductView, StockSummary } from "./contract";
 

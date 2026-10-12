@@ -1,15 +1,3 @@
-/**
- * The distribution planning adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here and
- * a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import {
-  addApprovedOrders as addApprovedOrdersMock,
-  distributionApiMock,
-  printRouteSheet as printRouteSheetMock,
-} from "./distributionApi.mock";
 import {
   addApprovedOrders as addApprovedOrdersHttp,
   distributionApiHttp,
@@ -17,7 +5,7 @@ import {
 } from "./distributionApi.http";
 import type { DistributionApi } from "./contract";
 
-const api: DistributionApi = pick(distributionApiMock, distributionApiHttp);
+const api: DistributionApi = distributionApiHttp;
 
 export const getPlanList = api.getPlanList.bind(api);
 export const getPlan = api.getPlan.bind(api);
@@ -46,7 +34,7 @@ export const dispatchTrip = api.dispatchTrip.bind(api);
  * implementation of this -- it calls straight into `orderApi.http.ts`'s own
  * `scheduleOneOrder`, so there is exactly one place this request is made.
  */
-export const addApprovedOrders = pick(addApprovedOrdersMock, addApprovedOrdersHttp);
+export const addApprovedOrders = addApprovedOrdersHttp;
 
 /**
  * The address gap that kept this mock-only is closed: `printRouteSheetHttp`
@@ -54,4 +42,4 @@ export const addApprovedOrders = pick(addApprovedOrdersMock, addApprovedOrdersHt
  * is real and stays a "—", the same placeholder the live planning screen
  * already shows for it.
  */
-export const printRouteSheet = pick(printRouteSheetMock, printRouteSheetHttp);
+export const printRouteSheet = printRouteSheetHttp;

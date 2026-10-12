@@ -1,13 +1,5 @@
-/**
- * The finance adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here and
- * a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
 import { exportExcel, timestampSuffix, type ExcelColumn } from "@/lib/export";
 import { outletLabelTitle } from "@/lib/lexicon";
-import { financeApiMock } from "./financeApi.mock";
 import { financeApiHttp } from "./financeApi.http";
 import type { AgingRow, FinanceApi } from "./contract";
 
@@ -36,7 +28,7 @@ export type {
   TrialBalanceView,
 } from "./contract";
 
-const api: FinanceApi = pick(financeApiMock, financeApiHttp);
+const api: FinanceApi = financeApiHttp;
 
 export const getInvoices = api.getInvoices.bind(api);
 export const getAgingReport = api.getAgingReport.bind(api);

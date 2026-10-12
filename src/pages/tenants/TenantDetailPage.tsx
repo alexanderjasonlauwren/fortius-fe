@@ -4,7 +4,7 @@ import { ChevronRight, LogIn } from "lucide-react";
 import { deactivateTenant, getTenant } from "@/features/tenancy/api/tenancyApi";
 import { useScope } from "@/features/tenancy/useScope";
 import { businessTypeLabel } from "@/features/tenancy/businessType";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { Button } from "@/components/ui/button";

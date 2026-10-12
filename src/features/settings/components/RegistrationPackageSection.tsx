@@ -6,7 +6,7 @@
  * "no delete, only a status flag" shape bank statement rules already
  * follow.
  */
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Star, Trash2 } from "lucide-react";

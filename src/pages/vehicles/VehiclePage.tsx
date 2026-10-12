@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Pencil, Plus, Trash2, Truck } from "lucide-react";
@@ -27,7 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatDateId, formatNumber } from "@/lib/format";
 import { unitLabel } from "@/lib/lexicon";
-import type { VehicleStatusEntity } from "@/mocks/types";
+import type { VehicleStatusEntity } from "@/types/domain";
 
 const STATUSES: (VehicleStatusEntity | "Semua")[] = ["Semua", "Aktif", "Perawatan", "Nonaktif"];
 

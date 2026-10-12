@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useSearchParams } from "react-router-dom";
 import { reportRangeFromParam } from "@/features/reports/api/contract";
 import { useQuery } from "@tanstack/react-query";

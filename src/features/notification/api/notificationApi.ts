@@ -1,15 +1,7 @@
-/**
- * The notification adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here
- * and a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import { notificationApiMock } from "./notificationApi.mock";
 import { notificationApiHttp } from "./notificationApi.http";
 import type { NotificationApi } from "./contract";
 
-const api: NotificationApi = pick(notificationApiMock, notificationApiHttp);
+const api: NotificationApi = notificationApiHttp;
 
 export const getNotifications = api.getNotifications.bind(api);
 export const getUnreadCount = api.getUnreadCount.bind(api);
@@ -20,4 +12,3 @@ export const deleteNotification = api.deleteNotification.bind(api);
 export const clearReadNotifications = api.clearReadNotifications.bind(api);
 export const getNotificationSettings = api.getNotificationSettings.bind(api);
 export const saveNotificationSettings = api.saveNotificationSettings.bind(api);
-export const sendTestNotification = api.sendTestNotification.bind(api);

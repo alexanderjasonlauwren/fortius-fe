@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { isoDate, startOfToday } from "@/mocks/seed";
+import { isoDate, startOfToday } from "@/lib/date";
 
 /**
  * The HTTP adapter's composition of the now-real orders/reports/finance/sa

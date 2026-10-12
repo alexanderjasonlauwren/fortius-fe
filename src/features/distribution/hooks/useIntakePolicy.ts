@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { getIntakePolicy } from "../api/intakePolicy";
 import { allowsManualIntake } from "../api/intakePolicy.contract";

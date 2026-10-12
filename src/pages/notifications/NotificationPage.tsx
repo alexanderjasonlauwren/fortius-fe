@@ -9,7 +9,6 @@ import {
   Mail,
   MessageSquare,
   Monitor,
-  Send,
   SlidersHorizontal,
   Trash2,
   TriangleAlert,
@@ -36,7 +35,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateId, formatDateTimeId, relativeTime } from "@/lib/format";
-import type { UserEntity } from "@/mocks/types";
+import type { UserEntity } from "@/types/domain";
 import { outletLabel } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
 
@@ -91,7 +90,6 @@ export function NotificationPage() {
     notificationSettings,
     isLoadingSettings,
     saveSettingsMutation,
-    testMutation,
   } = useNotification();
 
   const [form, setForm] = useResettableState<NotificationSettings | null>(
@@ -539,16 +537,6 @@ export function NotificationPage() {
                         }
                       />
                     </Field>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled={testMutation.isPending}
-                      onClick={() => testMutation.mutate("whatsapp")}
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      Kirim uji WhatsApp
-                    </Button>
                   </>
                 )}
 
@@ -568,16 +556,6 @@ export function NotificationPage() {
                         }
                       />
                     </Field>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled={testMutation.isPending}
-                      onClick={() => testMutation.mutate("email")}
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      Kirim uji email
-                    </Button>
                   </>
                 )}
 

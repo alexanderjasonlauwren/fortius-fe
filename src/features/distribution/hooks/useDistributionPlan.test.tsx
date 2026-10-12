@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 const state = vi.hoisted(() => ({ review: vi.fn(), create: vi.fn(), createSource: vi.fn(), save: vi.fn(), apply: vi.fn(), toast: vi.fn(), plans: [] as unknown[], scope: ["tenant", "branch"], intakeMode: "external_schedule" }));
-vi.mock("@/mocks/scope", () => ({ scopeKey: () => state.scope }));
+vi.mock("@/lib/scope", () => ({ scopeKey: () => state.scope }));
 vi.mock("@/hooks/useToast", () => ({ useToast: () => ({ toast: state.toast }) }));
 vi.mock("./useIntakePolicy", () => ({ useIntakePolicy: () => ({ data: state.intakeMode, allowsManualIntake: state.intakeMode === "manual" }) }));
 vi.mock("../api/sourcePlanReview", () => ({ getSourcePlanReview: state.review }));

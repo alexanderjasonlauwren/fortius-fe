@@ -3,14 +3,13 @@ import { Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
-import { useOpsClock } from "@/hooks/useOpsClock";
 import { useSidebarShortcut, useSidebarStore } from "@/hooks/useSidebar";
 import { useScope } from "@/features/tenancy/useScope";
-import { getTenants } from "@/features/tenancy/api/tenancyApi";
-import { setTenantRegistry } from "@/features/tenancy/tenantRegistry";
+import { getBranches, getTenants } from "@/features/tenancy/api/tenancyApi";
+import { setBranchRegistry, setTenantRegistry } from "@/features/tenancy/tenantRegistry";
 import { getSettings } from "@/features/settings/api/settingsApi";
 import { hydrateLexicon, setLexicon } from "@/lib/lexicon";
-import { scopeKey } from "@/mocks/scope";
+import { getActingTenant, scopeKey } from "@/lib/scope";
 import { cn } from "@/lib/utils";
 
 export function DashboardLayout() {
@@ -29,6 +28,15 @@ export function DashboardLayout() {
   });
   if (tenantList.data) setTenantRegistry(tenantList.data);
 
+  // Same pattern for branches. A tenant switch empties the registry and clears
+  // the cache, so this refetches for the new tenant.
+  const branchList = useQuery({
+    queryKey: ["branches", "registry"],
+    queryFn: () => getBranches(getActingTenant()),
+    staleTime: 5 * 60_000,
+  });
+  if (branchList.data) setBranchRegistry(branchList.data);
+
   const scope = useScope();
   const { branchId } = scope;
 
@@ -45,8 +53,6 @@ export function DashboardLayout() {
   hydrateLexicon(scope.tenant?.id ?? "");
   if (settings.data) setLexicon(settings.data.istilah, scope.tenant?.id ?? "");
 
-  // Keeps today's run moving while the console is open.
-  useOpsClock();
   useSidebarShortcut();
 
   // Lock the page behind the mobile drawer. (The drawer closes itself: every

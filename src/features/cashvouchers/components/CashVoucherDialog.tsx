@@ -25,8 +25,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { formatRupiah } from "@/lib/format";
-import { leafAccounts } from "@/mocks/ledger";
-import { scopeKey } from "@/mocks/scope";
+import { leafAccounts } from "@/features/finance/lib/accounts";
+import { scopeKey } from "@/lib/scope";
 
 /** Account codes the quick templates pre-select -- confirmed to exist on
  *  both the real chart (tenantprovisioning/chart.go) and the mock's own

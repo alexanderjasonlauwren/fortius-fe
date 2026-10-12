@@ -8,7 +8,7 @@ import { getAssetSchedule, type AssetView } from "@/features/assets/api/assetApi
 import { Skeleton } from "@/components/common/Panel";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatRupiah } from "@/lib/format";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 
 /** "2026-10" -> "Okt 2026", via UTC so a date-only string never drifts a
  *  day across a timezone the way `new Date("2026-10-01")` + `.getDate()`
