@@ -15,7 +15,7 @@ import type {
 } from "./contract";
 
 const DAYS = 30;
-const FAKULTATIF_DAYS = new Set([6, 13, 20, 27]); // Sundays-ish, as SIM3LON marks
+const MARKED_DAYS = new Set([6, 13, 20, 27]);
 
 function matrixRow(
   idRegistrasi: string,
@@ -25,15 +25,15 @@ function matrixRow(
 ): MatrixRow {
   const days = Array.from({ length: DAYS }, (_, i) => {
     const day = i + 1;
-    const fakultatif = FAKULTATIF_DAYS.has(day);
+    const marked = MARKED_DAYS.has(day);
     // A simple believable rhythm: deliver on ~every third normal day.
-    const delivering = !fakultatif && day % 3 === 2;
+    const delivering = !marked && day % 3 === 2;
     return {
       day,
-      fakultatif,
-      status: fakultatif ? null : delivering ? 2 : 0,
+      dayFlag: marked ? 1 : 0,
+      status: marked ? null : delivering ? 2 : 0,
       qty: delivering ? perNormal : 0,
-      flag: fakultatif ? 1 : 0,
+      flag: marked ? 1 : 0,
     };
   });
   const totalNormal = days.reduce((s, d) => s + d.qty, 0);
@@ -61,7 +61,7 @@ function matrixSection(label: string): Section {
     kind: "matrix",
     days: Array.from({ length: DAYS }, (_, i) => ({
       day: i + 1,
-      fakultatif: FAKULTATIF_DAYS.has(i + 1),
+      dayFlag: MARKED_DAYS.has(i + 1) ? 1 : 0,
     })),
     rows,
     recordsTotal: rows.length,

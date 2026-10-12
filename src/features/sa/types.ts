@@ -308,3 +308,15 @@ export interface SIM3LONApplyReview {
   expectedPredecessorBatchId: string | null;
   acceptedPlans: Array<{ planId: string; expectedVersion: number }>;
 }
+
+export interface SIM3LONLiveCandidate {
+  id: string;
+  period: string;
+  fetchedAt: string;
+  status: string;
+  duplicate: boolean;
+  checksum: string;
+  outletCount: number;
+  appliedToSA: boolean;
+  reviewReason?: string;
+}

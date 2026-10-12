@@ -52,6 +52,39 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
+describe("live Penyaluran candidate mapping", () => {
+  const candidate = {
+    id: "11111111-1111-4111-8111-111111111111",
+    period: "2026-10",
+    fetched_at: "2026-10-11T03:00:00Z",
+    status: "parsed",
+    duplicate: false,
+    checksum_sha256: "abc123",
+    outlet_count: 17,
+    applied_to_sa: false,
+    review_reason: "Historical Penyaluran changed",
+  };
+
+  it("keeps the persisted review reason and applied state", async () => {
+    getOne.mockResolvedValue([candidate]);
+    const [mapped] = await saApiHttp.getLivePenyaluranCandidates("2026-10");
+    expect(mapped).toMatchObject({
+      fetchedAt: candidate.fetched_at,
+      checksum: "abc123",
+      outletCount: 17,
+      appliedToSA: false,
+      reviewReason: candidate.review_reason,
+    });
+  });
+
+  it("uses the long bridge timeout for manual sync", async () => {
+    send.mockResolvedValue(candidate);
+    const mapped = await saApiHttp.syncLivePenyaluran("2026-10");
+    expect(send).toHaveBeenCalledWith("post", "/integrations/sim3lon/sa-sync?period=2026-10", undefined, { timeout: 120_000 });
+    expect(mapped.appliedToSA).toBe(false);
+  });
+});
+
 describe("mapping the wire shape onto the domain", () => {
   it("carries the quota numbers across", async () => {
     getList.mockResolvedValue({ items: [wire()], pagination: {} });

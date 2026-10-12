@@ -5,11 +5,11 @@ import type { MatrixDayCell, MatrixSection } from "../api/contract";
  * The pangkalan x day distribution grid, reflecting SIM3LON's own layout:
  * one row per pangkalan, a cell per day of the month, then the period totals.
  *
- * A delivered day shows its quantity; a fakultatif day is tinted; an empty
- * normal day is left blank so the delivered days stand out at a glance.
+ * A day marked by SIM3LON is tinted. The day marker is separate from
+ * the period's Total Fakultatif quantity.
  */
 function cellClass(cell: MatrixDayCell): string {
-  if (cell.fakultatif) return "bg-panel-sunk text-ink-muted/60";
+  if (cell.dayFlag === 1 || cell.fakultatif === true) return "bg-panel-sunk text-ink-muted/60";
   if (cell.qty > 0) return "bg-emerald-500/10 font-semibold text-emerald-700 dark:text-emerald-300";
   return "text-ink-muted/40";
 }
@@ -33,9 +33,9 @@ export function PenyaluranMatrix({ section }: { section: MatrixSection }) {
                 key={d.day}
                 className={cn(
                   "data px-1.5 py-2 text-center font-medium",
-                  d.fakultatif && "text-amber-600 dark:text-amber-400",
+                  (d.dayFlag === 1 || d.fakultatif === true) && "text-amber-600 dark:text-amber-400",
                 )}
-                title={d.fakultatif ? "Hari fakultatif" : undefined}
+                title={d.dayFlag === 1 || d.fakultatif === true ? "Hari bertanda di SIM3LON" : undefined}
               >
                 {String(d.day).padStart(2, "0")}
               </th>
@@ -61,7 +61,7 @@ export function PenyaluranMatrix({ section }: { section: MatrixSection }) {
                   key={cell.day}
                   className={cn("data px-1.5 py-1.5 text-center", cellClass(cell))}
                 >
-                  {cell.qty > 0 ? cell.qty : cell.fakultatif ? "·" : ""}
+                  {cell.qty > 0 ? cell.qty : cell.dayFlag === 1 || cell.fakultatif === true ? "·" : ""}
                 </td>
               ))}
               <td className="data px-2 py-1.5 text-right font-semibold text-ink">

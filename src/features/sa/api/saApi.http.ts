@@ -18,6 +18,7 @@ import type {
   SAImportDiff,
   SAImportSummary,
   SIM3LONApplied,
+  SIM3LONLiveCandidate,
   SIM3LONApplyReview,
   SIM3LONPreview,
   SIM3LONReconciliationPreview,
@@ -78,6 +79,27 @@ interface ImportSummaryResponse {
     remaining_qty: number;
     opening_qty?: number;
   }>;
+}
+
+interface SIM3LONLiveCandidateResponse {
+  id: string;
+  period: string;
+  fetched_at: string;
+  status: string;
+  duplicate: boolean;
+  checksum_sha256: string;
+  outlet_count: number;
+  applied_to_sa: boolean;
+  review_reason?: string;
+}
+
+function toLiveCandidate(row: SIM3LONLiveCandidateResponse): SIM3LONLiveCandidate {
+  return {
+    id: row.id, period: row.period, fetchedAt: row.fetched_at,
+    status: row.status, duplicate: row.duplicate, checksum: row.checksum_sha256,
+    outletCount: row.outlet_count, appliedToSA: row.applied_to_sa,
+    reviewReason: row.review_reason,
+  };
 }
 
 /**
@@ -662,6 +684,25 @@ export const saApiHttp: ScheduleAgreementApi = {
       outletTargetsWritten: applied.outlet_targets_written,
       dailyTargetsWritten: applied.daily_targets_written,
     };
+  },
+
+  async syncLivePenyaluran(period: string): Promise<SIM3LONLiveCandidate> {
+    const originScope = scopeKey();
+    const candidate = await send<SIM3LONLiveCandidateResponse>(
+      "post", `/integrations/sim3lon/sa-sync?period=${encodeURIComponent(period)}`, undefined,
+      { timeout: 120_000 },
+    );
+    assertScope(originScope);
+    return toLiveCandidate(candidate);
+  },
+
+  async getLivePenyaluranCandidates(period: string): Promise<SIM3LONLiveCandidate[]> {
+    const originScope = scopeKey();
+    const candidates = await getOne<SIM3LONLiveCandidateResponse[]>(
+      `/integrations/sim3lon/sa-candidates?period=${encodeURIComponent(period)}`,
+    );
+    assertScope(originScope);
+    return candidates.map(toLiveCandidate);
   },
 
   async setPlanningCutover(planningStartDate: string, dryRun: boolean): Promise<PlanningCutoverReport> {

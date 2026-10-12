@@ -962,6 +962,8 @@ export const saApiMock: ScheduleAgreementApi = {
   previewSIM3LON,
   getSIM3LONReconciliation,
   applySIM3LON,
+  syncLivePenyaluran: async () => { throw new Error("Sinkronisasi SA langsung memerlukan koneksi API."); },
+  getLivePenyaluranCandidates: async () => { throw new Error("Kandidat Penyaluran langsung memerlukan koneksi API."); },
   setPlanningCutover,
   getSIM3LONVariances,
   getSIM3LONDefaultProduct,

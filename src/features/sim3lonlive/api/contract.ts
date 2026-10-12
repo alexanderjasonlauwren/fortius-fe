@@ -16,12 +16,16 @@ export interface Wilayah {
 
 export interface MatrixDayHeader {
   day: number;
-  fakultatif: boolean;
+  dayFlag: number;
+  /** Older cached snapshots used this name for the source day marker. */
+  fakultatif?: boolean;
 }
 
 export interface MatrixDayCell {
   day: number;
-  fakultatif: boolean;
+  dayFlag: number;
+  /** Older cached snapshots used this name for the source day marker. */
+  fakultatif?: boolean;
   /** SIM3LON status code for the day, or null when the day has no plan/entry. */
   status: number | null;
   qty: number;

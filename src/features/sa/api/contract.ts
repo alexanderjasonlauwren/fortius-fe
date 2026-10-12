@@ -15,6 +15,7 @@ import type {
   SAImportBatch,
   SAImportSummary,
   SIM3LONApplied,
+  SIM3LONLiveCandidate,
   SIM3LONApplyReview,
   SIM3LONPreview,
   SIM3LONReconciliationPreview,
@@ -58,6 +59,8 @@ export interface ScheduleAgreementApi {
   previewSIM3LON(file: File, supplierName: string, productId: string): Promise<SIM3LONPreview>;
   getSIM3LONReconciliation(batchId: string): Promise<SIM3LONReconciliationPreview>;
   applySIM3LON(batchId: string, review?: SIM3LONApplyReview): Promise<SIM3LONApplied>;
+  syncLivePenyaluran(period: string): Promise<SIM3LONLiveCandidate>;
+  getLivePenyaluranCandidates(period: string): Promise<SIM3LONLiveCandidate[]>;
   /**
    * Sets the date the default branch starts planning in the system. Earlier
    * SIM3LON days become the Base quota's opening balance. `dryRun` reports the
