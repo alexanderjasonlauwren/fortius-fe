@@ -1,4 +1,5 @@
 import { scopeKey } from "@/lib/scope";
+import { AttachmentsButton } from "@/features/attachments/components/AttachmentsButton";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -417,20 +418,24 @@ function InvoiceSection() {
       header: "",
       align: "right",
       width: "1%",
-      render: (row) =>
-        row.sisa > 0 ? (
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => {
-              setForm({ jumlah: 0, alasan: "" });
-              setCreditNote(row);
-            }}
-          >
-            <StickyNote className="h-3 w-3" />
-            Nota kredit
-          </Button>
-        ) : null,
+      render: (row) => (
+        <div className="flex items-center justify-end gap-1">
+          {row.sisa > 0 && (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => {
+                setForm({ jumlah: 0, alasan: "" });
+                setCreditNote(row);
+              }}
+            >
+              <StickyNote className="h-3 w-3" />
+              Nota kredit
+            </Button>
+          )}
+          <AttachmentsButton ownerType="invoice" ownerId={row.id} label={row.nomor} />
+        </div>
+      ),
     },
   ];
 

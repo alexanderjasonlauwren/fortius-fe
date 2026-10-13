@@ -101,6 +101,19 @@ describe("invoice status", () => {
     expect(inv.status).toBe("Lunas");
   });
 
+  it("shows the surat jalan number a delivery invoice bills, and a dash otherwise", async () => {
+    getList.mockResolvedValue({
+      items: [
+        invoiceWire({ delivery_number: "SJ-SLT-20261001-0004" }),
+        invoiceWire({ delivery_id: undefined, invoice_type: "other" }),
+      ],
+      pagination: {},
+    });
+    const [delivery, other] = await financeApiHttp.getInvoices();
+    expect(delivery.suratJalan).toBe("SJ-SLT-20261001-0004");
+    expect(other.suratJalan).toBe("—");
+  });
+
   it("maps overdue and partial to their own console statuses", async () => {
     getList.mockResolvedValue({
       items: [invoiceWire({ payment_status: "overdue" })],
@@ -189,24 +202,28 @@ describe("payments", () => {
     expect(p.belumDialokasikan).toBe(60_000);
   });
 
-  /**
-   * No route returns which invoices a receipt was applied to (see
-   * financeApi.http.ts's own header) -- alokasi carries one synthetic line
-   * so `.length === 0` still means "nothing applied", the one thing
-   * PaymentPage actually branches on, without inventing invoice numbers.
-   */
-  it("keeps alokasi empty only when nothing has been applied yet", async () => {
+  /** The receipts list names the invoices each receipt paid, from the
+   *  allocation lines the list now returns. */
+  it("names the invoices a receipt was applied to, and none when unapplied", async () => {
     getList.mockResolvedValue({
-      items: [paymentWire({ allocated: 0 })],
+      items: [
+        paymentWire({
+          allocated: 70_000,
+          allocations: [
+            { id: "x1", invoice_id: "inv-1", invoice_number: "INV-SLT-0001", amount: 50_000 },
+            { id: "x2", invoice_id: "inv-2", invoice_number: "INV-SLT-0002", amount: 20_000 },
+          ],
+        }),
+        paymentWire({ allocated: 0 }),
+      ],
       pagination: {},
     });
-    expect((await financeApiHttp.getPayments())[0].alokasi).toEqual([]);
-
-    getList.mockResolvedValue({
-      items: [paymentWire({ allocated: 30_000 })],
-      pagination: {},
-    });
-    expect((await financeApiHttp.getPayments())[0].alokasi).toHaveLength(1);
+    const [applied, unapplied] = await financeApiHttp.getPayments();
+    expect(applied.alokasi).toEqual([
+      { invoiceId: "inv-1", nomor: "INV-SLT-0001", jumlah: 50_000 },
+      { invoiceId: "inv-2", nomor: "INV-SLT-0002", jumlah: 20_000 },
+    ]);
+    expect(unapplied.alokasi).toEqual([]);
   });
 
   /**
@@ -375,26 +392,43 @@ describe("journals", () => {
     expect(getList).toHaveBeenCalledTimes(1);
   });
 
-  it("fetches each journal's own detail to recover lines the list never carries", async () => {
+  it("reads each journal's lines and source off the list, with no request per journal", async () => {
     getList.mockResolvedValueOnce({
-      items: [journalWire({ id: "j-0001", lines: null })],
+      items: [
+        journalWire({
+          id: "j-0001",
+          source_type: "purchase",
+          source_id: "p-1",
+          source_number: "PB-0007",
+          lines: [
+            { account_id: "a-1", account_code: "1-1311", account_name: "Persediaan", debit: 150_000, credit: 0 },
+            { account_id: "a-2", account_code: "2-1000", account_name: "Utang Usaha", debit: 0, credit: 150_000 },
+          ],
+        }),
+      ],
       pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
     });
-    getOne.mockResolvedValueOnce(
-      journalWire({
-        id: "j-0001",
-        lines: [
-          { account_id: "a-1", account_code: "5-1000", account_name: "HPP", debit: 150_000, credit: 0 },
-          { account_id: "a-2", account_code: "1-1311", account_name: "Persediaan", debit: 0, credit: 150_000 },
-        ],
-      }),
-    );
 
     const [journal] = await financeApiHttp.getJournals();
 
-    expect(getOne).toHaveBeenCalledWith("/journals/j-0001");
+    expect(getOne).not.toHaveBeenCalled();
     expect(journal.lines).toHaveLength(2);
     expect(journal.total).toBe(150_000);
+    expect(journal).toMatchObject({ sourceType: "purchase", sourceId: "p-1", sourceNumber: "PB-0007" });
+  });
+
+  it("keeps an expense or transport claim journal apart from a manual one", async () => {
+    getList.mockResolvedValueOnce({
+      items: [
+        journalWire({ id: "j-1", source_type: "expense" }),
+        journalWire({ id: "j-2", source_type: "transportation_claim" }),
+      ],
+      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+    });
+    const journals = await financeApiHttp.getJournals();
+    // Read as "manual" these were offered the reverse action, which the
+    // backend then refused.
+    expect(journals.map((j) => j.sourceType)).toEqual(["expense", "transportationClaim"]);
   });
 
   describe("manual entry", () => {
@@ -430,46 +464,64 @@ describe("journals", () => {
 });
 
 describe("trial balance", () => {
-  /**
-   * A contra account (sales_returns) shares its account_type with a normal
-   * revenue account but increases on the opposite side -- signing every row
-   * by account_type alone would show a return as negative revenue reducing
-   * the total twice. Reading normal_balance off /accounts is what this
-   * exists to get right instead.
-   */
-  it("signs a contra account's balance using its own normal_balance, not its type", async () => {
-    getList.mockResolvedValue({
-      items: [
-        { id: "a1", code: "4-1000", name: "Penjualan", account_type: "revenue", normal_balance: "cr", is_system: true },
-        { id: "a2", code: "4-2000", name: "Retur Penjualan", account_type: "revenue", normal_balance: "dr", is_system: true },
-      ],
-      pagination: {},
-    });
-    getOne.mockResolvedValue({
-      as_of: "2026-09-01",
-      rows: [
-        { account_code: "4-1000", account_name: "Penjualan", account_type: "revenue", debit: 0, credit: 1_000_000 },
-        { account_code: "4-2000", account_name: "Retur Penjualan", account_type: "revenue", debit: 50_000, credit: 0 },
-      ],
-      total_debit: 50_000,
-      total_credit: 1_000_000,
-    });
+  const row = (code: string, type: string, debit: number, credit: number, role?: string) => ({
+    account_id: `id-${code}`, account_code: code, account_name: code, account_type: type, account_role: role,
+    opening_debit: 0, opening_credit: 0, debit, credit, closing_debit: debit, closing_credit: credit,
+  });
+  const totals = { opening_debit: 0, opening_credit: 0, debit: 0, credit: 0, closing_debit: 0, closing_credit: 0 };
 
-    const tb = await financeApiHttp.getTrialBalance({ from: "2026-09-01", to: "2026-09-30" });
-    const retur = tb.rows.find((r) => r.akun.kode === "4-2000")!;
-    // Debit-normal: saldo is debit - credit, positive when it is really a
-    // debit balance, not negated the way a naive "revenue is credit-normal"
-    // rule would compute it.
-    expect(retur.saldo).toBe(50_000);
+  it("asks the statement engine for the whole range, not a point in time", async () => {
+    getOne.mockResolvedValue({ rows: [], totals, balanced: true });
+    await financeApiHttp.getTrialBalance({ from: "2026-09-01", to: "2026-09-30" });
+    expect(getOne.mock.calls[0][0]).toBe(
+      "/financial-statements/trial-balance?date_from=2026-09-01&date_to=2026-09-30",
+    );
+    // The trial balance no longer needs /accounts, which finance_officer
+    // cannot read.
+    expect(getList).not.toHaveBeenCalled();
   });
 
-  it("sends the range's end date as as_of, since the ledger's trial balance is a point in time", async () => {
-    getList.mockResolvedValue({ items: [], pagination: {} });
-    getOne.mockResolvedValue({ as_of: "2026-09-30", rows: [], total_debit: 0, total_credit: 0 });
+  it("keeps opening, movement and closing on their own sides", async () => {
+    getOne.mockResolvedValue({
+      rows: [{ ...row("1-1000", "asset", 200, 50), opening_debit: 1_000, closing_debit: 1_150, closing_credit: 0 }],
+      totals: { ...totals, opening_debit: 1_000, closing_debit: 1_150 },
+      balanced: false,
+    });
+    const tb = await financeApiHttp.getTrialBalance({ from: "2026-09-01", to: "2026-09-30" });
+    expect(tb.rows[0]).toMatchObject({
+      saldoAwalDebit: 1_000, saldoAwalKredit: 0, debit: 200, kredit: 50,
+      saldoAkhirDebit: 1_150, saldoAkhirKredit: 0,
+    });
+    expect(tb.totals.saldoAkhirDebit).toBe(1_150);
+    expect(tb.seimbang).toBe(false);
+  });
+});
 
-    await financeApiHttp.getTrialBalance({ from: "2026-09-01", to: "2026-09-30" });
+describe("profit and loss from the trial balance", () => {
+  const row = (code: string, type: string, debit: number, credit: number, role?: string) => ({
+    account_id: `id-${code}`, account_code: code, account_name: code, account_type: type, account_role: role,
+    opening_debit: 0, opening_credit: 0, debit, credit, closing_debit: 0, closing_credit: 0,
+  });
 
-    expect(getOne.mock.calls[0][0]).toBe("/journals/trial-balance?as_of=2026-09-30");
+  it("nets a sales return against revenue and takes only HPP out of gross profit", async () => {
+    getOne.mockResolvedValue({
+      rows: [
+        row("1-1000", "asset", 1_000_000, 0),
+        row("4-1000", "revenue", 0, 1_000_000, "revenue"),
+        row("4-2000", "revenue", 50_000, 0, "sales_returns"),
+        row("5-1000", "expense", 600_000, 0, "cogs"),
+        row("5-3100", "expense", 100_000, 0),
+      ],
+      totals: {}, balanced: true,
+    });
+    const pl = await financeApiHttp.getProfitAndLoss({ from: "2026-09-01", to: "2026-09-30" });
+    expect(pl.totalPendapatan).toBe(950_000);
+    expect(pl.pendapatan.find((r) => r.akun.kode === "4-2000")!.saldo).toBe(-50_000);
+    expect(pl.labaKotor).toBe(350_000);
+    expect(pl.totalBeban).toBe(700_000);
+    expect(pl.labaBersih).toBe(250_000);
+    // Balance-sheet accounts are not part of the laba rugi.
+    expect([...pl.pendapatan, ...pl.beban].some((r) => r.akun.kode === "1-1000")).toBe(false);
   });
 });
 

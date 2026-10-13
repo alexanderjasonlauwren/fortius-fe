@@ -1,4 +1,5 @@
-import { getList, getOne, type Page } from "@/lib/api";
+import { getList, type Page } from "@/lib/api";
+import { financeApiHttp } from "@/features/finance/api/financeApi.http";
 import type { FinanceSummaryApi, FinanceTotal, FinanceWindow } from "./financeSummary.contract";
 
 interface PaymentRow {
@@ -53,11 +54,10 @@ export const financeSummaryHttp: FinanceSummaryApi = {
       .reduce((sum, row) => sum + Math.max(0, row.outstanding_amount), 0));
   },
   async getGrossMargin(window) {
-    // Only the aggregate is needed, not the account catalogue fetched by the
-    // full ledger adapter (which would introduce another permission).
-    const response = await getOne<{ gross_profit: number }>(
-      `/journals/profit-and-loss?date_from=${window.from}&date_to=${window.to}`,
-    );
-    return { complete: true, amount: response.gross_profit };
+    // The same laba kotor the ledger and the year-close show: derived from
+    // the trial balance, which needs no account catalogue (and so no
+    // finance.read.accounts) because each row carries its own type and role.
+    const pl = await financeApiHttp.getProfitAndLoss(window);
+    return { complete: true, amount: pl.labaKotor };
   },
 };

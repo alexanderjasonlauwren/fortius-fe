@@ -86,6 +86,10 @@ export const PERMISSIONS = {
    */
   INVOICES_CREATE: "finance.create.invoices",
   INVOICES_EXPORT: "finance.export.invoices",
+  /** Credit notes -- read here only to gate their attachments so far
+   *  (accounting parity P2); the credit note list arrives in P3. */
+  CREDIT_NOTES_VIEW: "finance.read.credit_notes",
+  CREDIT_NOTES_CREATE: "finance.create.credit_notes",
   JOURNALS_VIEW: "finance.read.journals",
   /**
    * "Jurnal umum" manual entry, and the "Balik jurnal" reversal that rides

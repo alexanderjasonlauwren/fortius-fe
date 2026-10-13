@@ -263,8 +263,8 @@ describe("writing", () => {
         return Promise.resolve({ items: [], pagination: {} });
       });
       getOne.mockImplementation((path: string) => {
-        if (path === "/journals/trial-balance") {
-          return Promise.resolve({ as_of: "2026-10-09", rows: [], total_debit: 0, total_credit: 0 });
+        if (path.startsWith("/financial-statements/trial-balance")) {
+          return Promise.resolve({ rows: [], totals: {}, balanced: true });
         }
         return Promise.resolve([{ code: "subsidi", name: "Subsidi", sort_order: 0 }]);
       });

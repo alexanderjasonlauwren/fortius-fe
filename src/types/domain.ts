@@ -788,7 +788,13 @@ export type JournalSourceType =
   // "opening_balance" source_types. Both are the two source_types
   // ReverseJournalRequest itself names as reversible, alongside "manual".
   | "closing"
-  | "openingBalance";
+  | "openingBalance"
+  // The rest of the backend's CHECK: expense and transport-fee claim
+  // postings, and the SIM3LON cutover's opening revenue. Mapped to "manual"
+  // until the ledger showed each journal's source (accounting parity P2).
+  | "expense"
+  | "transportationClaim"
+  | "sim3lonOpening";
 
 /**
  * A posted journal is immutable. Corrections are made by posting a reversal,

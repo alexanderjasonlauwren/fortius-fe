@@ -8,29 +8,20 @@
  * screens built against the mock keep working unchanged against the real
  * service.
  *
- * # Two known gaps, deliberately not papered over
- *
- * **Surat jalan.** `InvoiceResponse` carries `delivery_id`, a UUID, not the
- * delivery's own document number -- resolving it would mean one extra
- * request per row. `suratJalan` reads "—" here rather than the UUID, which
- * is honest about what the list endpoint actually returns.
- *
- * **Which invoices a receipt was applied to.** `PaymentResponse` carries
- * `allocated`, the total applied -- correct, and `belumDialokasikan` uses it
- * directly. But no route returns the allocation *lines* themselves; the
- * only one that touches them is `POST /payments/:id/allocations`, which
- * creates and returns nothing to read back. So `alokasi` cannot name which
- * invoices were paid in this build; it carries one synthetic line summing
- * the allocated amount so `alokasi.length === 0` still means "nothing
- * applied yet" (the one thing PaymentPage actually branches on), rather than
- * showing invoice numbers the API cannot supply. A real fix needs a route
- * such as `GET /payments/:id/allocations`.
+ * An invoice carries its surat jalan number (`delivery_number`) and a
+ * receipt its allocation lines with invoice numbers -- both were gaps this
+ * file used to paper over with "—" and a synthetic line, closed by the
+ * accounting parity plan's P2.
  */
 import { getList, getOne, send } from "@/lib/api";
 import { toApiTimestamp, todayIso } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import type { OutletView } from "@/features/outlet/api/contract";
 import type { AccountBalance } from "@/features/finance/lib/accounts";
+import {
+  profitAndLossFromTrialBalance,
+  type TrialBalanceRow,
+} from "@/features/finance/lib/trialBalance";
 import type { AccountEntity, AccountType, InvoiceStatus } from "@/types/domain";
 import { AGING_BUCKETS } from "./contract";
 import type {
@@ -83,6 +74,8 @@ interface InvoiceResponse {
   // plan P5 / gap-closing plan Phase C) -- see InvoiceResponse's own doc:
   // DeliveryID is nil for either.
   delivery_id?: string;
+  /** The surat jalan number of the delivery this invoice bills. */
+  delivery_number?: string;
   invoice_type: string;
   lines: InvoiceLineResponse[];
   subtotal: number;
@@ -157,8 +150,7 @@ function toInvoiceView(
     outletId: row.outlet_id,
     outlet: outlet?.nama ?? "—",
     kecamatan: outlet?.kecamatan ?? "—",
-    // See this file's header: not resolvable without a per-row request.
-    suratJalan: "—",
+    suratJalan: row.delivery_number ?? "—",
     invoiceType: row.invoice_type === "registration" || row.invoice_type === "other"
       ? row.invoice_type
       : "delivery",
@@ -315,6 +307,7 @@ interface PaymentResponse {
   rejection_reason?: string;
   notes?: string;
   allocated: number;
+  allocations?: { invoice_id: string; invoice_number: string; amount: number }[];
   version: number;
   created_at: string;
   updated_at: string;
@@ -357,12 +350,11 @@ function toPaymentView(row: PaymentResponse, outlets: Map<string, OutletView>): 
     // core.payments.bank_account_number_encrypted's own column comment.
     noRekening: row.bank_account_last4 ? `•••• ${row.bank_account_last4}` : "—",
     status: PAYMENT_STATUS_LABEL[row.payment_status] ?? row.payment_status,
-    // See this file's header: which invoices were paid is not resolvable
-    // from any route this build can call, only the total.
-    alokasi:
-      row.allocated > 0
-        ? [{ invoiceId: "", nomor: "(lihat tagihan)", jumlah: row.allocated }]
-        : [],
+    alokasi: (row.allocations ?? []).map((a) => ({
+      invoiceId: a.invoice_id,
+      nomor: a.invoice_number,
+      jumlah: a.amount,
+    })),
     keterangan: row.notes,
     diverifikasiOleh: row.verified_at ? "Terverifikasi" : undefined,
   };
@@ -592,6 +584,8 @@ interface JournalResponse {
   source_type: string;
   journal_status: string;
   lines: JournalLineResponse[];
+  source_id?: string;
+  source_number?: string;
   version: number;
 }
 
@@ -604,7 +598,8 @@ interface JournalResponse {
 const SOURCE_TYPE: Record<string, JournalView["sourceType"]> = {
   invoice: "invoice", payment: "payment", credit_note: "creditNote", delivery: "delivery",
   manual: "manual", purchase: "purchase", cash_voucher: "cashVoucher", depreciation: "depreciation",
-  closing: "closing", opening_balance: "openingBalance",
+  closing: "closing", opening_balance: "openingBalance", expense: "expense",
+  transportation_claim: "transportationClaim", sim3lon_opening: "sim3lonOpening",
 };
 
 function toJournalView(row: JournalResponse): JournalView {
@@ -615,6 +610,8 @@ function toJournalView(row: JournalResponse): JournalView {
     tanggal: row.journal_date.slice(0, 10),
     keterangan: row.description,
     sourceType: SOURCE_TYPE[row.source_type] ?? "manual",
+    sourceId: row.source_id,
+    sourceNumber: row.source_number,
     status: row.journal_status === "reversed" ? "Dibatalkan" : "Diposting",
     total: lines.reduce((s, l) => s + l.debit, 0),
     lines: lines.map((l) => ({
@@ -658,15 +655,9 @@ async function getJournals(range?: DateRange): Promise<JournalView[]> {
     items.push(...page.items);
     if (!page.pagination.has_next) break;
   }
-  // ListJournals never carries lines (same N+1-avoidance the registration
-  // packages list applies to its own items) -- the detail read is the only
-  // place they're real. The ledger's own date-range view is what this page
-  // is for, so it fetches every row's detail rather than showing accounts
-  // with no amounts against them.
-  const withLines = await Promise.all(
-    items.map((item) => getOne<JournalResponse>(`/journals/${item.id}`)),
-  );
-  return withLines.map(toJournalView);
+  // The list carries each journal's lines and its source document, so the
+  // range is one request per page -- it used to be one more per journal.
+  return items.map(toJournalView);
 }
 
 async function createManualJournal(input: CreateManualJournalInput): Promise<JournalView> {
@@ -737,14 +728,12 @@ function toAccountEntity(row: AccountResponse, idToCode: Map<string, string>): A
 }
 
 /**
- * Swallows a 403 rather than letting it fail the trial balance or P&L
- * outright. Only tenant_admin holds `finance.read.accounts` -- confirmed
- * live: signed in as finance_officer, GET /accounts answered 403 while
- * finance_officer legitimately holds `finance.read.journals` and must still
- * see a working trial balance and P&L. `toAccountBalances`/`toPnlRows` fall
- * back to signing by account_type when no account row is available; the
- * chart of accounts itself (which genuinely needs this list) is gated on
- * `PERMISSIONS.ACCOUNTS_VIEW` at the LedgerPage tab, not here.
+ * Swallows a 403 rather than failing its caller outright. Only tenant_admin
+ * holds `finance.read.accounts` -- confirmed live: signed in as
+ * finance_officer, GET /accounts answered 403. The trial balance and P&L no
+ * longer read it at all (each row carries its own type and role); the chart
+ * of accounts, which genuinely needs it, is gated on
+ * `PERMISSIONS.ACCOUNTS_VIEW` at the LedgerPage tab.
  */
 async function fetchAccounts(): Promise<AccountResponse[]> {
   try {
@@ -758,180 +747,125 @@ async function fetchAccounts(): Promise<AccountResponse[]> {
   }
 }
 
-/** asset/expense increase on the debit side, everything else on credit --
- *  mirrors the backend's own normalBalance (internal/usecase/account/services.go),
- *  used only when the account itself could not be read to ask directly. */
-function defaultNormalBalance(accountType: string): "dr" | "cr" {
-  return accountType === "asset" || accountType === "expense" ? "dr" : "cr";
-}
-
 interface TrialBalanceRowResponse {
+  account_id: string;
   account_code: string;
   account_name: string;
   account_type: string;
+  account_role?: string;
+  opening_debit: number;
+  opening_credit: number;
   debit: number;
   credit: number;
+  closing_debit: number;
+  closing_credit: number;
+}
+
+interface TrialBalanceTotalsResponse {
+  opening_debit: number;
+  opening_credit: number;
+  debit: number;
+  credit: number;
+  closing_debit: number;
+  closing_credit: number;
 }
 
 interface TrialBalanceResponse {
-  as_of: string;
   rows: TrialBalanceRowResponse[];
-  total_debit: number;
-  total_credit: number;
+  totals: TrialBalanceTotalsResponse;
+  balanced: boolean;
+}
+
+function toTrialBalanceRow(r: TrialBalanceRowResponse): TrialBalanceRow {
+  const tipe = ACCOUNT_TYPE[r.account_type] ?? "Aset";
+  return {
+    // Enough of the account to render and to split the P&L by; the trial
+    // balance deliberately does not need /accounts, which only tenant_admin
+    // may read (see fetchAccounts).
+    akun: {
+      id: r.account_id,
+      kode: r.account_code,
+      nama: r.account_name,
+      tipe,
+      saldoNormal: tipe === "Aset" || tipe === "Beban" ? "debit" : "kredit",
+      sistem: false,
+      aktif: true,
+    },
+    role: r.account_role || undefined,
+    saldoAwalDebit: r.opening_debit,
+    saldoAwalKredit: r.opening_credit,
+    debit: r.debit,
+    kredit: r.credit,
+    saldoAkhirDebit: r.closing_debit,
+    saldoAkhirKredit: r.closing_credit,
+  };
 }
 
 /**
- * Signs each row by the account's own `normal_balance` when it can be read
- * -- a contra account (sales_returns) shares its account_type with a normal
- * one and only the account itself knows which side it actually increases
- * on. Falls back to `defaultNormalBalance(account_type)` when `/accounts`
- * could not be read at all (see fetchAccounts's own comment) -- wrong only
- * for the rare contra account, and still signed, rather than every row
- * defaulting to debit-normal and every liability/equity/revenue balance
- * coming out negated.
- */
-function toAccountBalances(
-  rows: TrialBalanceRowResponse[],
-  accounts: Map<string, AccountResponse>,
-  idToCode: Map<string, string>,
-): AccountBalance[] {
-  return rows.map((r) => {
-    const account = accounts.get(r.account_code);
-    const normalBalance = account?.normal_balance ?? defaultNormalBalance(r.account_type);
-    const saldo = normalBalance === "dr" ? r.debit - r.credit : r.credit - r.debit;
-    return {
-      akun: account
-        ? toAccountEntity(account, idToCode)
-        : {
-            id: r.account_code,
-            kode: r.account_code,
-            nama: r.account_name,
-            tipe: ACCOUNT_TYPE[r.account_type] ?? "Aset",
-            saldoNormal: normalBalance === "dr" ? "debit" : "kredit",
-            sistem: false,
-            aktif: true,
-          },
-      debit: r.debit,
-      kredit: r.credit,
-      saldo,
-    };
-  });
-}
-
-/**
- * The ledger's own trial balance is lifetime-to-date **as of one date**
- * (`GET /journals/trial-balance?as_of=`), not a movement-within-a-range
- * figure the way the mock's `trialBalance(db, {from, to})` is. LedgerPage
- * shares one date-range control across all four tabs, so on this tab "Dari"
- * has no effect against the real API -- only "Sampai" is sent, as `as_of`.
+ * The Neraca Saldo for a range: opening balance, movement and closing
+ * balance per account, on the same rules as the Neraca (closing journals
+ * excluded; revenue and expense open from 1 January). Replaces the ledger's
+ * own `/journals/trial-balance`, which ignored "Dari" and counted closing
+ * journals, so it disagreed with the Neraca after a year was closed.
  */
 async function getTrialBalance(range: { from: string; to: string }): Promise<TrialBalanceView> {
-  const [response, accountRows] = await Promise.all([
-    getOne<TrialBalanceResponse>(`/journals/trial-balance?as_of=${range.to}`),
-    fetchAccounts(),
-  ]);
-  const accounts = new Map(accountRows.map((a) => [a.code, a]));
-  const idToCode = new Map(accountRows.map((a) => [a.id, a.code]));
-  const rows = toAccountBalances(response.rows, accounts, idToCode).filter(
-    (r) => r.debit !== 0 || r.kredit !== 0,
+  const response = await getOne<TrialBalanceResponse>(
+    `/financial-statements/trial-balance?date_from=${range.from}&date_to=${range.to}`,
   );
+  const t = response.totals;
   return {
-    rows,
-    totalDebit: response.total_debit,
-    totalKredit: response.total_credit,
+    rows: response.rows.map(toTrialBalanceRow),
+    totals: {
+      saldoAwalDebit: t.opening_debit,
+      saldoAwalKredit: t.opening_credit,
+      debit: t.debit,
+      kredit: t.credit,
+      saldoAkhirDebit: t.closing_debit,
+      saldoAkhirKredit: t.closing_credit,
+    },
+    seimbang: response.balanced,
   };
 }
 
-interface ProfitAndLossRowResponse {
-  account_code: string;
-  account_name: string;
-  amount: number;
-}
-
-interface ProfitAndLossResponse {
-  revenue: ProfitAndLossRowResponse[];
-  total_revenue: number;
-  cogs: ProfitAndLossRowResponse[];
-  total_cogs: number;
-  gross_profit: number;
-  expenses: ProfitAndLossRowResponse[];
-  total_expenses: number;
-  net_income: number;
-}
-
-function toPnlRows(
-  rows: ProfitAndLossRowResponse[],
-  accounts: Map<string, AccountResponse>,
-  idToCode: Map<string, string>,
-): AccountBalance[] {
-  return rows.map((r) => {
-    const account = accounts.get(r.account_code);
-    return {
-      akun: account
-        ? toAccountEntity(account, idToCode)
-        : {
-            id: r.account_code,
-            kode: r.account_code,
-            nama: r.account_name,
-            tipe: "Beban",
-            saldoNormal: "debit",
-            sistem: false,
-            aktif: true,
-          },
-      // The backend already nets revenue and expense rows to one signed
-      // amount per account; debit/credit turnover is not broken out here,
-      // unlike the trial balance's own rows.
-      debit: 0,
-      kredit: 0,
-      saldo: r.amount,
-    };
-  });
-}
-
+/** The laba rugi for a range, from the trial balance's movement -- see
+ *  profitAndLossFromTrialBalance for why there is no second P&L engine. */
 async function getProfitAndLoss(range: { from: string; to: string }): Promise<ProfitAndLossView> {
-  const [response, accountRows] = await Promise.all([
-    getOne<ProfitAndLossResponse>(
-      `/journals/profit-and-loss?date_from=${range.from}&date_to=${range.to}`,
-    ),
-    fetchAccounts(),
-  ]);
-  const accounts = new Map(accountRows.map((a) => [a.code, a]));
-  const idToCode = new Map(accountRows.map((a) => [a.id, a.code]));
-  return {
-    pendapatan: toPnlRows(response.revenue, accounts, idToCode),
-    beban: toPnlRows([...response.cogs, ...response.expenses], accounts, idToCode),
-    totalPendapatan: response.total_revenue,
-    totalBeban: response.total_cogs + response.total_expenses,
-    labaKotor: response.gross_profit,
-    labaBersih: response.net_income,
-  };
+  const tb = await getTrialBalance(range);
+  return profitAndLossFromTrialBalance(tb.rows);
 }
 
+/**
+ * Every account in the chart with its current balance: balance-sheet
+ * accounts lifetime, revenue and expense this year -- the trial balance's
+ * closing column from 1 January to today.
+ *
+ * The balances are a courtesy: most callers want the account list for a
+ * picker, and a role that may read the chart but not the statements must
+ * still get it, so a refused trial balance leaves every balance at zero
+ * rather than failing the picker.
+ */
 async function getChartOfAccounts(): Promise<AccountBalance[]> {
+  const today = todayIso();
   const [accountRows, tb] = await Promise.all([
     fetchAccounts(),
-    getOne<TrialBalanceResponse>("/journals/trial-balance"),
+    getTrialBalance({ from: `${today.slice(0, 4)}-01-01`, to: today }).catch(() => null),
   ]);
-  const accounts = new Map(accountRows.map((a) => [a.code, a]));
   const idToCode = new Map(accountRows.map((a) => [a.id, a.code]));
-  const balances = toAccountBalances(tb.rows, accounts, idToCode);
-  const balanceByCode = new Map(balances.map((b) => [b.akun.kode, b]));
+  const closingByCode = new Map((tb?.rows ?? []).map((r) => [r.akun.kode, r]));
 
-  // Every account in the chart, not only the ones with lifetime movement --
-  // mocks/ledger.ts's own accountBalances includes untouched accounts too,
-  // and ChartSection is the "every account exists" screen, unlike the trial
-  // balance which only shows ones with a nonzero figure.
   return accountRows
     .filter((a) => !a.code.endsWith("-0000"))
-    .map(
-      (a) =>
-        balanceByCode.get(a.code) ?? {
-          akun: toAccountEntity(a, idToCode),
-          debit: 0,
-          kredit: 0,
-          saldo: 0,
-        },
-    );
+    .map((a) => {
+      const row = closingByCode.get(a.code);
+      const debit = row?.saldoAkhirDebit ?? 0;
+      const kredit = row?.saldoAkhirKredit ?? 0;
+      return {
+        akun: toAccountEntity(a, idToCode),
+        debit,
+        kredit,
+        saldo: a.normal_balance === "dr" ? debit - kredit : kredit - debit,
+      };
+    });
 }
 
 const ACCOUNT_TYPE_REVERSE: Record<CreateAccountInput["tipe"], string> = {

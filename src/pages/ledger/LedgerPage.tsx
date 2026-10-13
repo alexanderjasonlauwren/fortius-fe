@@ -1,6 +1,8 @@
 import { scopeKey } from "@/lib/scope";
+import { AttachmentsButton } from "@/features/attachments/components/AttachmentsButton";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { BookOpen, CheckCircle2, Plus, TriangleAlert, Undo2 } from "lucide-react";
 import {
   getChartOfAccounts,
@@ -11,6 +13,7 @@ import {
   type ChartUpgradeResult,
   type JournalView,
 } from "@/features/finance/api/financeApi";
+import { JOURNAL_SOURCE_LABEL, journalSourceHref } from "@/features/finance/lib/journalSource";
 import { ManualJournalDialog } from "@/features/finance/components/ManualJournalDialog";
 import { ReverseJournalDialog } from "@/features/finance/components/ReverseJournalDialog";
 import { FiscalYearSection } from "@/features/fiscalyears/components/FiscalYearSection";
@@ -160,6 +163,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
                   {j.status === "Dibatalkan" && (
                     <StatusBadge variant="draft" label="Dibalik" />
                   )}
+                  <AttachmentsButton ownerType="journal" ownerId={j.id} label={j.nomor} />
                   {j.status === "Diposting" && (j.sourceType === "manual" || j.sourceType === "openingBalance") && (
                     <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>
                       <Button
@@ -177,6 +181,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
                 </p>
               </div>
               <p className="mt-0.5 text-sm text-ink">{j.keterangan}</p>
+              <JournalSource journal={j} />
 
               {/* Three columns of mono amounts with no break opportunity in a
                   digit-grouped number: without a scroller this overflows the
@@ -235,6 +240,26 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
   );
 }
 
+/** What posted this journal, linked to where that document is worked on. */
+function JournalSource({ journal }: { journal: JournalView }) {
+  if (journal.sourceType === "manual") return null;
+  const label = JOURNAL_SOURCE_LABEL[journal.sourceType];
+  const href = journalSourceHref(journal.sourceType, journal.sourceId);
+  const text = journal.sourceNumber ? `${label} · ${journal.sourceNumber}` : label;
+  return (
+    <p className="mt-1 text-2xs text-ink-muted">
+      Sumber:{" "}
+      {href ? (
+        <Link to={href} className="data font-medium text-ink underline-offset-2 hover:underline">
+          {text}
+        </Link>
+      ) : (
+        <span className="data font-medium text-ink">{text}</span>
+      )}
+    </p>
+  );
+}
+
 /* ── trial balance ─────────────────────────────────────────────────────── */
 
 function TrialBalanceSection({
@@ -248,7 +273,11 @@ function TrialBalanceSection({
   });
 
   if (tb.isLoading || !tb.data) return <Skeleton className="h-96 w-full" />;
-  const seimbang = Math.abs(tb.data.totalDebit - tb.data.totalKredit) < 0.01;
+  const { rows, totals, seimbang } = tb.data;
+  const selisih = Math.abs(totals.saldoAkhirDebit - totals.saldoAkhirKredit);
+  const amount = (n: number) => (n > 0 ? formatRupiah(n) : "—");
+  const head = "label px-3 py-2 text-right text-2xs text-ink-muted";
+  const cell = "data px-3 py-2 text-right text-sm text-ink";
 
   return (
     <>
@@ -264,89 +293,83 @@ function TrialBalanceSection({
               <>
                 <span className="font-semibold">Buku besar seimbang.</span>{" "}
                 <span className="text-ink-muted">
-                  Total debit dan kredit sama, jadi laporan di bawah dapat
-                  dipercaya.
+                  Saldo awal, mutasi, dan saldo akhir sama di sisi debit dan
+                  kredit, jadi laporan dapat dipercaya.
                 </span>
               </>
             ) : (
               <>
-                <span className="font-semibold">
-                  Buku besar tidak seimbang.
-                </span>{" "}
-                <span className="text-ink-muted">
-                  Selisih{" "}
-                  {formatRupiah(
-                    Math.abs(tb.data.totalDebit - tb.data.totalKredit),
-                  )}
-                  .
-                </span>
+                <span className="font-semibold">Buku besar tidak seimbang.</span>{" "}
+                <span className="text-ink-muted">Selisih saldo akhir {formatRupiah(selisih)}.</span>
               </>
             )}
           </p>
           <span className="data text-xs text-ink-muted">
-            D {formatRupiahShort(tb.data.totalDebit)} · K{" "}
-            {formatRupiahShort(tb.data.totalKredit)}
+            Mutasi D {formatRupiahShort(totals.debit)} · K {formatRupiahShort(totals.kredit)}
           </span>
         </PanelBody>
       </Panel>
 
       <Panel>
-        <PanelHeader title="Neraca saldo" hint="Mutasi periode terpilih" />
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-line bg-panel-sunk">
-                <th className="label px-5 py-2.5 text-2xs text-ink-muted">
-                  Akun
-                </th>
-                <th className="label px-5 py-2.5 text-right text-2xs text-ink-muted">
-                  Debit
-                </th>
-                <th className="label px-5 py-2.5 text-right text-2xs text-ink-muted">
-                  Kredit
-                </th>
-                <th className="label px-5 py-2.5 text-right text-2xs text-ink-muted">
-                  Saldo
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {tb.data.rows.map((r) => (
-                <tr key={r.akun.id} className="border-b border-line">
-                  <td className="px-5 py-2.5 text-sm text-ink">
-                    <span className="data text-xs text-ink-muted">
-                      {r.akun.kode}
-                    </span>{" "}
-                    {r.akun.nama}
-                  </td>
-                  <td className="data px-5 py-2.5 text-right text-sm text-ink">
-                    {r.debit > 0 ? formatRupiah(r.debit) : "—"}
-                  </td>
-                  <td className="data px-5 py-2.5 text-right text-sm text-ink">
-                    {r.kredit > 0 ? formatRupiah(r.kredit) : "—"}
-                  </td>
-                  <td className="data px-5 py-2.5 text-right text-sm font-semibold text-ink">
-                    {formatRupiah(r.saldo)}
-                  </td>
+        <PanelHeader
+          title="Neraca saldo"
+          hint="Saldo awal sebelum “Dari”, mutasi dalam periode, saldo akhir per “Sampai” · pendapatan dan beban dihitung sejak 1 Januari"
+        />
+        {rows.length === 0 ? (
+          <EmptyState
+            icon={BookOpen}
+            title="Belum ada saldo atau mutasi"
+            description="Akun muncul di sini setelah ada jurnal sebelum atau dalam periode ini."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[48rem] text-left">
+              <thead>
+                <tr className="bg-panel-sunk">
+                  <th rowSpan={2} className="label border-b border-line px-5 py-2 text-2xs text-ink-muted">
+                    Akun
+                  </th>
+                  <th colSpan={2} className="label px-3 pt-2 text-center text-2xs text-ink-muted">Saldo awal</th>
+                  <th colSpan={2} className="label px-3 pt-2 text-center text-2xs text-ink-muted">Mutasi</th>
+                  <th colSpan={2} className="label px-3 pt-2 text-center text-2xs text-ink-muted">Saldo akhir</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot className="border-t-2 border-ink">
-              <tr>
-                <td className="px-5 py-3 text-xs font-semibold text-ink">
-                  Total
-                </td>
-                <td className="data px-5 py-3 text-right text-xs font-semibold text-ink">
-                  {formatRupiah(tb.data.totalDebit)}
-                </td>
-                <td className="data px-5 py-3 text-right text-xs font-semibold text-ink">
-                  {formatRupiah(tb.data.totalKredit)}
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+                <tr className="border-b border-line bg-panel-sunk">
+                  {["Debit", "Kredit", "Debit", "Kredit", "Debit", "Kredit"].map((label, i) => (
+                    <th key={i} className={head}>{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.akun.id} className="border-b border-line">
+                    <td className="px-5 py-2 text-sm text-ink">
+                      <span className="data text-xs text-ink-muted">{r.akun.kode}</span> {r.akun.nama}
+                    </td>
+                    <td className={cell}>{amount(r.saldoAwalDebit)}</td>
+                    <td className={cell}>{amount(r.saldoAwalKredit)}</td>
+                    <td className={cell}>{amount(r.debit)}</td>
+                    <td className={cell}>{amount(r.kredit)}</td>
+                    <td className={cn(cell, "font-semibold")}>{amount(r.saldoAkhirDebit)}</td>
+                    <td className={cn(cell, "font-semibold")}>{amount(r.saldoAkhirKredit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t-2 border-ink">
+                <tr>
+                  <td className="px-5 py-3 text-xs font-semibold text-ink">Total</td>
+                  {[
+                    totals.saldoAwalDebit, totals.saldoAwalKredit, totals.debit,
+                    totals.kredit, totals.saldoAkhirDebit, totals.saldoAkhirKredit,
+                  ].map((n, i) => (
+                    <td key={i} className="data px-3 py-3 text-right text-xs font-semibold text-ink">
+                      {formatRupiah(n)}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </Panel>
     </>
   );

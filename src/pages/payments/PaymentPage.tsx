@@ -1,4 +1,5 @@
 import { scopeKey } from "@/lib/scope";
+import { AttachmentsButton } from "@/features/attachments/components/AttachmentsButton";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -193,6 +194,7 @@ export function PaymentPage() {
       width: "1%",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
+          <AttachmentsButton ownerType="payment" ownerId={row.id} label={row.nomor} />
           {row.belumDialokasikan > 0.5 && row.status !== "Ditolak" && (
             <Button size="xs" variant="outline" onClick={() => setAllocating(row)}>
               <Split className="h-3 w-3" />

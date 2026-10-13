@@ -13,6 +13,7 @@
  * source it is running against.
  */
 import type { AccountBalance } from "@/features/finance/lib/accounts";
+import type { TrialBalanceRow, TrialBalanceTotals } from "@/features/finance/lib/trialBalance";
 import type { BankNameEntity, CreditNoteStatus, InvoiceStatus, JournalSourceType } from "@/types/domain";
 
 export const AGING_BUCKETS = [
@@ -196,6 +197,9 @@ export interface JournalView {
   tanggal: string;
   keterangan: string;
   sourceType: JournalSourceType;
+  /** The document that posted this journal, when it is not the journal itself. */
+  sourceId?: string;
+  sourceNumber?: string;
   status: "Diposting" | "Dibatalkan";
   lines: JournalLineView[];
   total: number;
@@ -226,9 +230,9 @@ export interface DateRange {
 }
 
 export interface TrialBalanceView {
-  rows: AccountBalance[];
-  totalDebit: number;
-  totalKredit: number;
+  rows: TrialBalanceRow[];
+  totals: TrialBalanceTotals;
+  seimbang: boolean;
 }
 
 export interface ProfitAndLossView {
