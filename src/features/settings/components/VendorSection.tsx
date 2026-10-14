@@ -18,7 +18,8 @@ import { Panel, PanelHeader } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Field, TextInput, Toggle } from "@/components/common/Field";
+import { Field, SearchInput, TextInput, Toggle } from "@/components/common/Field";
+import { vendorMatches } from "@/features/suppliers/lib/search";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
@@ -30,15 +31,42 @@ interface VendorForm {
   npwp: string;
   address: string;
   phone: string;
+  email: string;
+  contactPerson: string;
+  /** Blank means no default term: a bill is due on its own date. */
+  paymentTermsDays: string;
+  bankName: string;
+  bankAccountNumber: string;
+  bankAccountHolder: string;
   status: "atv" | "ina";
 }
 
-const EMPTY: VendorForm = { code: "", name: "", npwp: "", address: "", phone: "", status: "atv" };
+const EMPTY: VendorForm = {
+  code: "", name: "", npwp: "", address: "", phone: "", email: "", contactPerson: "", paymentTermsDays: "",
+  bankName: "", bankAccountNumber: "", bankAccountHolder: "", status: "atv",
+};
+
+/** The form's contact, terms and bank fields as the API takes them. On an
+ *  edit a blank is sent, which clears the field; terms stay as they are when
+ *  blank, since 0 is a real term (due on receipt). */
+function details(v: VendorForm, editing: boolean) {
+  const text = (s: string) => (editing ? s : s.trim() || undefined);
+  return {
+    email: text(v.email),
+    contactPerson: text(v.contactPerson),
+    paymentTermsDays: v.paymentTermsDays.trim() === "" ? undefined : Number(v.paymentTermsDays),
+    bankName: text(v.bankName),
+    bankAccountNumber: text(v.bankAccountNumber),
+    bankAccountHolder: text(v.bankAccountHolder),
+  };
+}
 
 export function VendorSection() {
   const list = useQuery({ queryKey: [...scopeKey(), "vendors"], queryFn: getVendors });
   const [editing, setEditing] = useState<VendorForm | null>(null);
   const [pendingDelete, setPendingDelete] = useState<VendorView | null>(null);
+  const [search, setSearch] = useState("");
+  const rows = (list.data ?? []).filter((v) => vendorMatches(v, search));
 
   const saveMutation = useDeskMutation({
     mutationFn: (values: VendorForm) =>
@@ -47,9 +75,10 @@ export function VendorSection() {
             id: values.id,
             version: values.version!,
             name: values.name,
-            npwp: values.npwp || undefined,
-            address: values.address || undefined,
-            phone: values.phone || undefined,
+            npwp: values.npwp,
+            address: values.address,
+            phone: values.phone,
+            ...details(values, true),
             status: values.status,
           })
         : createVendor({
@@ -58,6 +87,7 @@ export function VendorSection() {
             npwp: values.npwp || undefined,
             address: values.address || undefined,
             phone: values.phone || undefined,
+            ...details(values, false),
           }),
     errorTitle: "Vendor tidak tersimpan",
     success: (row) => ({ title: `${row.name} tersimpan` }),
@@ -74,7 +104,13 @@ export function VendorSection() {
   const open = (row?: VendorView) => {
     setEditing(
       row
-        ? { id: row.id, version: row.version, code: row.code, name: row.name, npwp: row.npwp ?? "", address: row.address ?? "", phone: row.phone ?? "", status: row.status }
+        ? {
+            id: row.id, version: row.version, code: row.code, name: row.name, npwp: row.npwp ?? "", address: row.address ?? "",
+            phone: row.phone ?? "", email: row.email ?? "", contactPerson: row.contactPerson ?? "",
+            paymentTermsDays: row.paymentTermsDays != null ? String(row.paymentTermsDays) : "",
+            bankName: row.bankName ?? "", bankAccountNumber: row.bankAccountNumber ?? "", bankAccountHolder: row.bankAccountHolder ?? "",
+            status: row.status,
+          }
         : { ...EMPTY },
     );
   };
@@ -96,12 +132,20 @@ export function VendorSection() {
       header: "Kontak",
       render: (row) => (
         <>
-          <span className="data block text-xs text-ink">{row.phone || "—"}</span>
-          <span className="block text-2xs text-ink-muted">{row.npwp || "—"}</span>
+          <span className="block text-xs text-ink">{row.contactPerson || "—"}</span>
+          <span className="data block text-2xs text-ink-muted">{[row.phone, row.email].filter(Boolean).join(" · ") || "—"}</span>
         </>
       ),
     },
-    { key: "alamat", header: "Alamat", render: (row) => <span className="text-xs text-ink-muted">{row.address || "—"}</span> },
+    {
+      key: "bayar", header: "Pembayaran",
+      render: (row) => (
+        <>
+          <span className="block text-xs text-ink">{row.paymentTermsDays != null ? `Net ${row.paymentTermsDays} hari` : "—"}</span>
+          <span className="data block text-2xs text-ink-muted">{row.bankName ? `${row.bankName} ${row.bankAccountNumber ?? ""}` : ""}</span>
+        </>
+      ),
+    },
     {
       key: "status",
       header: "Status",
@@ -133,15 +177,18 @@ export function VendorSection() {
           title="Vendor"
           hint="Dipakai saat mencatat pembelian umum (bukan lewat Schedule Agreement)."
           actions={
-            <Button size="sm" onClick={() => open()}>
-              <Plus className="h-3.5 w-3.5" />
-              Tambah vendor
-            </Button>
+            <div className="flex items-center gap-2">
+              <SearchInput value={search} onChange={setSearch} placeholder="Nama, kode, kontak" className="w-48" />
+              <Button size="sm" onClick={() => open()}>
+                <Plus className="h-3.5 w-3.5" />
+                Tambah vendor
+              </Button>
+            </div>
           }
         />
         <DataTable
           columns={columns}
-          data={list.data ?? []}
+          data={rows}
           isLoading={list.isLoading}
           rowKey={(row) => row.id}
           spineFor={(row) => (row.status === "atv" ? "text-pine" : "text-draft")}
@@ -182,6 +229,25 @@ export function VendorSection() {
                 <Field label="Alamat" htmlFor="vnd-address" className="sm:col-span-2">
                   <TextInput id="vnd-address" value={editing.address} onChange={(e) => setEditing({ ...editing, address: e.target.value })} />
                 </Field>
+                <Field label="Kontak" htmlFor="vnd-contact">
+                  <TextInput id="vnd-contact" maxLength={200} value={editing.contactPerson} onChange={(e) => setEditing({ ...editing, contactPerson: e.target.value })} />
+                </Field>
+                <Field label="Email" htmlFor="vnd-email">
+                  <TextInput id="vnd-email" type="email" maxLength={255} value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
+                </Field>
+                <Field label="Termin bayar (hari)" htmlFor="vnd-terms" hint="Jatuh tempo tagihan baru = tanggal tagihan + termin.">
+                  <TextInput id="vnd-terms" type="number" min={0} max={365} mono value={editing.paymentTermsDays}
+                    onChange={(e) => setEditing({ ...editing, paymentTermsDays: e.target.value })} />
+                </Field>
+                <Field label="Bank" htmlFor="vnd-bank">
+                  <TextInput id="vnd-bank" maxLength={100} value={editing.bankName} placeholder="BCA" onChange={(e) => setEditing({ ...editing, bankName: e.target.value })} />
+                </Field>
+                <Field label="No. rekening" htmlFor="vnd-acct">
+                  <TextInput id="vnd-acct" mono maxLength={50} value={editing.bankAccountNumber} onChange={(e) => setEditing({ ...editing, bankAccountNumber: e.target.value })} />
+                </Field>
+                <Field label="Atas nama" htmlFor="vnd-holder">
+                  <TextInput id="vnd-holder" maxLength={200} value={editing.bankAccountHolder} onChange={(e) => setEditing({ ...editing, bankAccountHolder: e.target.value })} />
+                </Field>
                 {editing.id && (
                   <div className="sm:col-span-2 border-t border-line">
                     <Toggle
@@ -199,7 +265,8 @@ export function VendorSection() {
               <Button variant="outline" type="button" onClick={() => setEditing(null)}>
                 Batal
               </Button>
-              <Button type="submit" disabled={saveMutation.isPending || !editing?.code.trim() || !editing?.name.trim()}>
+              <Button type="submit" disabled={saveMutation.isPending || !editing?.code.trim() || !editing?.name.trim() ||
+                (!!editing?.paymentTermsDays.trim() && !(Number(editing.paymentTermsDays) >= 0 && Number(editing.paymentTermsDays) <= 365))}>
                 Simpan vendor
               </Button>
             </DialogFooter>

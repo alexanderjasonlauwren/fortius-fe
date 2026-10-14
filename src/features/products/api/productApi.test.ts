@@ -371,3 +371,39 @@ describe("writing", () => {
     });
   });
 });
+
+describe("unit, brand, barcode, description (parity P3)", () => {
+  it("reads them back", async () => {
+    getOne.mockResolvedValue(wire({ unit_id: "u-1", brand: "Pertamina", barcode: "899", description: "Tabung hijau" }));
+    const p = await productApiHttp.getProductDetail("p-1");
+    expect(p).toMatchObject({ unitId: "u-1", merek: "Pertamina", barcode: "899", deskripsi: "Tabung hijau" });
+  });
+
+  it("sends them trimmed on create, leaving blanks out", async () => {
+    getOne.mockResolvedValue([{ code: "subsidi", name: "Subsidi", sort_order: 0 }]);
+    send.mockResolvedValue(wire());
+    await productApiHttp.createOrUpdateProduct({
+      kode: "LPG-9", nama: "LPG 9", ukuran: "9 kg", stokMinimum: 0,
+      unitId: "u-1", merek: " Pertamina ", barcode: "", deskripsi: "  ",
+    });
+    const body = send.mock.calls[0][2];
+    expect(body).toMatchObject({ unit_id: "u-1", brand: "Pertamina" });
+    expect(body.barcode).toBeUndefined();
+    expect(body.description).toBeUndefined();
+  });
+
+  it("clears a field on edit by sending it empty", async () => {
+    getOne.mockResolvedValue(wire({ version: 4, brand: "Lama" }));
+    send.mockResolvedValue(wire());
+    await productApiHttp.createOrUpdateProduct({ id: "p-1", nama: "LPG 3 Kg", ukuran: "3 kg", stokMinimum: 0, merek: "" });
+    const [method, , body] = send.mock.calls[0];
+    expect(method).toBe("put");
+    expect(body.brand).toBe("");
+  });
+
+  it("lists units", async () => {
+    getOne.mockResolvedValue([{ id: "u-1", name: "Tabung", abbreviation: "tbg" }]);
+    expect(await productApiHttp.getUnits()).toEqual([{ id: "u-1", name: "Tabung", abbreviation: "tbg" }]);
+    expect(getOne).toHaveBeenCalledWith("/products/units");
+  });
+});

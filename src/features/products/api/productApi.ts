@@ -1,7 +1,7 @@
 import { productApiHttp } from "./productApi.http";
 import type { ProductApi } from "./contract";
 
-export type { ProductFilters, ProductView, StockSummary } from "./contract";
+export type { ProductFilters, ProductView, StockSummary, UnitOption } from "./contract";
 
 const api: ProductApi = productApiHttp;
 
@@ -12,3 +12,4 @@ export const removeProduct = api.removeProduct.bind(api);
 export const changeStock = api.changeStock.bind(api);
 export const getStockSummary = api.getStockSummary.bind(api);
 export const exportProducts = api.exportProducts.bind(api);
+export const getUnits = api.getUnits.bind(api);

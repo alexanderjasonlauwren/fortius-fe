@@ -16,6 +16,13 @@ export interface VendorView {
   npwp?: string;
   address?: string;
   phone?: string;
+  email?: string;
+  contactPerson?: string;
+  /** Default term for a new bill: due date = bill date + this many days. */
+  paymentTermsDays?: number;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolder?: string;
   status: "atv" | "ina";
   version: number;
   createdAt: string;
@@ -28,6 +35,13 @@ export interface CreateVendorInput {
   npwp?: string;
   address?: string;
   phone?: string;
+  email?: string;
+  contactPerson?: string;
+  /** Default term for a new bill: due date = bill date + this many days. */
+  paymentTermsDays?: number;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolder?: string;
 }
 
 export interface UpdateVendorInput {
@@ -37,6 +51,13 @@ export interface UpdateVendorInput {
   npwp?: string;
   address?: string;
   phone?: string;
+  email?: string;
+  contactPerson?: string;
+  /** Default term for a new bill: due date = bill date + this many days. */
+  paymentTermsDays?: number;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolder?: string;
   status?: "atv" | "ina";
 }
 

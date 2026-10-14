@@ -117,7 +117,12 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Vendor" htmlFor="pur-supplier" required>
-              <SelectInput id="pur-supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+              <SelectInput id="pur-supplier" value={supplierId} onChange={(e) => {
+                setSupplierId(e.target.value);
+                // A vendor with terms sets the due date; it stays editable.
+                const terms = vendors.data?.find((v) => v.id === e.target.value)?.paymentTermsDays;
+                if (terms != null) setDueDate(addDaysIso(date, terms));
+              }}>
                 <option value="">— Pilih —</option>
                 {(vendors.data ?? []).filter((v) => v.status === "atv").map((v) => (
                   <option key={v.id} value={v.id}>{v.code} — {v.name}</option>

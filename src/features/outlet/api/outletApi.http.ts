@@ -42,6 +42,7 @@ interface OutletResponse {
   district?: string;
   city: string;
   province: string;
+  postal_code?: string;
   latitude?: number;
   longitude?: number;
   license_expires_at?: string;
@@ -95,6 +96,10 @@ function toView(row: OutletResponse): OutletView {
     alamat: row.address,
     kecamatan: row.district ?? "—",
     kota: row.city,
+    provinsi: row.province || undefined,
+    kodePos: row.postal_code,
+    npwp: row.npwp,
+    email: row.email,
     // ST_MakePoint takes longitude first and every mapping API says "lat, lng".
     // Both are read by name here rather than by position, which is the one
     // thing that stops an outlet in Central Java appearing off the coast of
@@ -148,9 +153,10 @@ function toWire(input: Partial<OutletEntity>, forUpdate: boolean) {
   };
 
   put("code", input.kode);
-  // branch_id is deliberately not sent. The service files an outlet against the
-  // tenant's default branch when none is named, and each PT in this deployment
-  // has one -- so a form field for it would have exactly one possible answer.
+  // A new outlet is filed under the branch the console is scoped to; with
+  // none (consolidated) the service uses the tenant's default branch. Never
+  // sent on update: moving an outlet between branches is not this form's job.
+  if (!forUpdate && input.branchId) put("branch_id", input.branchId);
   put("name", input.nama);
   put("owner_name", input.penanggungJawab);
   put("phone", input.telepon);
@@ -159,6 +165,17 @@ function toWire(input: Partial<OutletEntity>, forUpdate: boolean) {
   put("address", input.alamat);
   put("district", input.kecamatan);
   put("city", input.kota);
+  // Billing details: a blank is left out on create and sent empty on update,
+  // which is how a field is cleared.
+  const billing = (key: string, value: string | undefined) => {
+    if (value === undefined) return;
+    const trimmed = value.trim();
+    if (trimmed || forUpdate) put(key, trimmed);
+  };
+  billing("province", input.provinsi);
+  billing("postal_code", input.kodePos);
+  billing("npwp", input.npwp);
+  billing("email", input.email);
   // 0,0 is this form's sentinel for "no pin yet" (see LocationPicker and
   // EMPTY.lat/lng), not a real point -- sending it would write a geography
   // point off the coast of Africa that the route optimizer would then treat

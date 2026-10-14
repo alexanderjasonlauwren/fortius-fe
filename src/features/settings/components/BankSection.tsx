@@ -13,6 +13,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { BankAccountEntity, BankNameEntity } from "@/types/domain";
 import { outletLabel } from "@/lib/lexicon";
+import { Link } from "react-router-dom";
+import { getTrialBalance } from "@/features/finance/api/financeApi";
+import { balancesByCode } from "@/features/bankaccounts/lib/ledgerBalance";
+import { useAuthStore } from "@/features/auth/store/authStore";
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import { formatRupiah } from "@/lib/format";
+import { todayIso } from "@/lib/date";
 
 const BANKS: BankNameEntity[] = ["BCA", "BNI", "Mandiri", "BRI", "BSI"];
 
@@ -43,6 +50,14 @@ export function BankSection() {
   const list = useQuery({ queryKey: [...scopeKey(), "bank-accounts"], queryFn: getBankAccounts });
   const [editing, setEditing] = useState<BankForm | null>(null);
   const [pendingDelete, setPendingDelete] = useState<BankAccountEntity | null>(null);
+  // What each account holds in the books, from the trial balance to date --
+  // only for someone who may read the statements.
+  const canSeeBalances = useAuthStore((s) => s.hasPermission(PERMISSIONS.FINANCIAL_STATEMENTS_VIEW));
+  const balances = useQuery({
+    queryKey: [...scopeKey(), "bank-accounts", "ledger-balances"],
+    queryFn: async () => balancesByCode((await getTrialBalance({ from: "2000-01-01", to: todayIso() })).rows),
+    enabled: canSeeBalances,
+  });
 
   const saveMutation = useDeskMutation({
     mutationFn: (values: BankForm) => saveBankAccount(values),
@@ -89,6 +104,12 @@ export function BankSection() {
             </p>
           </PanelBody>
         ) : (
+          <>
+          <p className="border-b border-line px-5 py-2 text-xs text-ink-muted">
+            Setiap rekening punya akun buku besarnya sendiri. Saldo saat mulai memakai aplikasi dicatat lewat{" "}
+            <Link to="/opening-balance" className="font-medium text-ink underline-offset-2 hover:underline">Saldo Awal</Link>;
+            sesudahnya, saldo bergerak lewat penerimaan, pembayaran, dan voucher kas &amp; bank.
+          </p>
           <ul className="divide-y divide-line">
             {(list.data ?? []).map((a) => (
               <li
@@ -115,6 +136,14 @@ export function BankSection() {
                     {a.kind === "bank" && a.cabang && ` · KCP ${a.cabang}`}
                   </p>
                 </div>
+                <div className="text-right">
+                  <p className="data text-2xs text-ink-muted">Akun {a.ledgerAccountCode}</p>
+                  {canSeeBalances && (
+                    <p className="data text-sm text-ink">
+                      {balances.data ? formatRupiah(balances.data.get(a.ledgerAccountCode) ?? 0) : "…"}
+                    </p>
+                  )}
+                </div>
                 <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
@@ -137,6 +166,7 @@ export function BankSection() {
               </li>
             ))}
           </ul>
+          </>
         )}
       </Panel>
 

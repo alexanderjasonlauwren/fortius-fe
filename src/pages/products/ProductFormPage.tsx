@@ -6,13 +6,14 @@ import { ArrowLeft, Loader2, Save } from "lucide-react";
 import {
   createOrUpdateProduct,
   getProductDetail,
+  getUnits,
 } from "@/features/products/api/productApi";
 import { getChartOfAccounts } from "@/features/finance/api/financeApi";
 import { leafAccounts } from "@/features/finance/lib/accounts";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
-import { Field, SegmentedControl, SelectInput, TextInput, Toggle } from "@/components/common/Field";
+import { Field, SegmentedControl, SelectInput, TextareaInput, TextInput, Toggle } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { formatPercentId, formatRupiah } from "@/lib/format";
 import { useResettableState } from "@/hooks/useResettableState";
@@ -30,6 +31,10 @@ interface FormState {
   inventoryAccountCode: string;
   revenueAccountCode: string;
   cogsAccountCode: string;
+  unitId: string;
+  deskripsi: string;
+  merek: string;
+  barcode: string;
 }
 
 const EMPTY: FormState = {
@@ -45,6 +50,10 @@ const EMPTY: FormState = {
   inventoryAccountCode: "",
   revenueAccountCode: "",
   cogsAccountCode: "",
+  unitId: "",
+  deskripsi: "",
+  merek: "",
+  barcode: "",
 };
 
 export function ProductFormPage() {
@@ -60,6 +69,8 @@ export function ProductFormPage() {
     enabled: isEdit,
   });
   const accounts = useQuery({ queryKey: [...scopeKey(), "chart-of-accounts"], queryFn: getChartOfAccounts });
+  // Units are global (a kilogram does not vary by agency): no scope key.
+  const units = useQuery({ queryKey: ["product-units"], queryFn: getUnits, staleTime: Infinity });
   const postableAccounts = leafAccounts(accounts.data ?? []);
 
   // Seeded from the loaded product, or EMPTY while creating one. Computed
@@ -81,6 +92,10 @@ export function ProductFormPage() {
       inventoryAccountCode: p.inventoryAccountCode ?? "",
       revenueAccountCode: p.revenueAccountCode ?? "",
       cogsAccountCode: p.cogsAccountCode ?? "",
+      unitId: p.unitId ?? "",
+      deskripsi: p.deskripsi ?? "",
+      merek: p.merek ?? "",
+      barcode: p.barcode ?? "",
     };
   });
 
@@ -176,6 +191,27 @@ export function ProductFormPage() {
                   placeholder="3 kg"
                   onChange={(e) => set("ukuran", e.target.value)}
                 />
+              </Field>
+
+              <Field label="Satuan" htmlFor="satuan" hint="Satuan hitung: tabung, pcs, kg.">
+                <SelectInput id="satuan" value={form.unitId} onChange={(e) => set("unitId", e.target.value)}>
+                  <option value="">— Belum dipilih —</option>
+                  {(units.data ?? []).map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>
+                  ))}
+                </SelectInput>
+              </Field>
+
+              <Field label="Merek" htmlFor="merek">
+                <TextInput id="merek" maxLength={100} value={form.merek} placeholder="Pertamina" onChange={(e) => set("merek", e.target.value)} />
+              </Field>
+
+              <Field label="Barcode" htmlFor="barcode">
+                <TextInput id="barcode" mono maxLength={100} value={form.barcode} onChange={(e) => set("barcode", e.target.value)} />
+              </Field>
+
+              <Field label="Deskripsi" htmlFor="deskripsi" className="sm:col-span-2">
+                <TextareaInput id="deskripsi" rows={2} maxLength={2000} value={form.deskripsi} onChange={(e) => set("deskripsi", e.target.value)} />
               </Field>
 
               <Field label="Harga beli" htmlFor="beli" error={errors.hargaBeli}>

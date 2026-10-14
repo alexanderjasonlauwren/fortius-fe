@@ -106,3 +106,23 @@ describe("deleteVendor", () => {
     expect(send).toHaveBeenCalledWith("delete", `/suppliers/${ID}`);
   });
 });
+
+describe("contact, terms and bank (parity P3)", () => {
+  const row = {
+    id: "v-1", code: "VND-1", name: "UD. Sumber Logam", status: "atv", version: 2, created_at: "", updated_at: "",
+    email: "a@b.test", contact_person: "Pak Hadi", payment_terms_days: 14,
+    bank_name: "BRI", bank_account_number: "0012", bank_account_holder: "UD. Sumber Logam",
+  };
+
+  it("reads them back", async () => {
+    getList.mockResolvedValue({ items: [row] });
+    const [v] = await vendorApiHttp.getVendors();
+    expect(v).toMatchObject({ email: "a@b.test", contactPerson: "Pak Hadi", paymentTermsDays: 14, bankName: "BRI", bankAccountNumber: "0012", bankAccountHolder: "UD. Sumber Logam" });
+  });
+
+  it("sends them on update, a blank as blank so the backend clears it", async () => {
+    send.mockResolvedValue(row);
+    await vendorApiHttp.updateVendor({ id: "v-1", version: 2, email: "", paymentTermsDays: 30, bankName: "BCA" });
+    expect(send.mock.calls[0][2]).toMatchObject({ version: 2, email: "", payment_terms_days: 30, bank_name: "BCA" });
+  });
+});

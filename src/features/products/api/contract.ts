@@ -35,6 +35,12 @@ export interface ProductView extends ProductEntity {
   stokTersedia: boolean;
 }
 
+export interface UnitOption {
+  id: string;
+  name: string;
+  abbreviation: string;
+}
+
 export interface ProductFilters {
   search?: string;
   onlyLowStock?: boolean;
@@ -60,5 +66,7 @@ export interface ProductApi {
   /** Mock-only in this build — see `productApi.http.ts`'s own note. */
   changeStock(id: string, delta: number, alasan: string): Promise<ProductView>;
   getStockSummary(): Promise<StockSummary>;
+  /** The global measurement units a product's unit names. */
+  getUnits(): Promise<UnitOption[]>;
   exportProducts(): Promise<number>;
 }

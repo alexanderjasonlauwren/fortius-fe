@@ -120,6 +120,12 @@ export interface OutletEntity extends Scoped {
   alamat: string;
   kecamatan: string;
   kota: string;
+  /** Billing details for the pangkalan as a customer (accounting parity P3):
+   *  printed on its invoices and statements. */
+  provinsi?: string;
+  kodePos?: string;
+  npwp?: string;
+  email?: string;
   lat: number;
   lng: number;
   penanggungJawab: string;
@@ -973,6 +979,12 @@ export interface ProductEntity {
    * field at all).
    */
   productKind: "commodity" | "accessory";
+  /** The measurement unit (core.units): tabung, kg, pcs... -- what `satuan`
+   *  reads from. Accounting parity P3. */
+  unitId?: string;
+  deskripsi?: string;
+  merek?: string;
+  barcode?: string;
   /**
    * Overrides the tenant's own inventory/revenue/cogs role account for this
    * product specifically (financial-statements plan P3.3) -- absent means

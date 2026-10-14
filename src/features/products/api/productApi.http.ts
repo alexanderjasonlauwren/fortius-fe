@@ -25,7 +25,7 @@ import { exportCsv, timestampSuffix } from "@/lib/export";
 import { financeApiHttp } from "@/features/finance/api/financeApi.http";
 import { leafAccounts } from "@/features/finance/lib/accounts";
 import type { ProductEntity } from "@/types/domain";
-import type { ProductApi, ProductFilters, ProductView, StockSummary } from "./contract";
+import type { ProductApi, ProductFilters, ProductView, StockSummary, UnitOption } from "./contract";
 
 const PAGE_SIZE = 100;
 
@@ -115,6 +115,10 @@ function toView(row: ProductResponse): ProductView {
     stokMinimum: row.min_stock,
     aktif: row.status === "atv",
     productKind: row.product_kind === "accessory" ? "accessory" : "commodity",
+    unitId: row.unit_id,
+    deskripsi: row.description,
+    merek: row.brand,
+    barcode: row.barcode,
     inventoryAccountCode: row.inventory_account_code,
     revenueAccountCode: row.revenue_account_code,
     cogsAccountCode: row.cogs_account_code,
@@ -213,6 +217,30 @@ async function resolveAccountId(code: string | undefined): Promise<string | unde
   return match.akun.id;
 }
 
+/**
+ * Unit, description, brand and barcode, trimmed. A blank field is left out
+ * when creating, and sent as "" when editing: the backend reads an absent
+ * field as "unchanged", so leaving it out would keep the old value.
+ */
+function descriptiveFields(input: Partial<ProductEntity>, editing: boolean) {
+  const text = (v: string | undefined) => {
+    if (v === undefined) return undefined;
+    const t = v.trim();
+    return t || (editing ? "" : undefined);
+  };
+  return {
+    unit_id: input.unitId || undefined,
+    description: text(input.deskripsi),
+    brand: text(input.merek),
+    barcode: text(input.barcode),
+  };
+}
+
+async function getUnits(): Promise<UnitOption[]> {
+  const rows = await getOne<{ id: string; name: string; abbreviation: string }[]>("/products/units");
+  return (rows ?? []).map((u) => ({ id: u.id, name: u.name, abbreviation: u.abbreviation }));
+}
+
 async function createOrUpdateProduct(
   input: Partial<ProductEntity> & { id?: string },
 ): Promise<ProductView> {
@@ -241,6 +269,7 @@ async function createOrUpdateProduct(
       weight_kg: weightKg,
       min_stock: input.stokMinimum,
       product_kind: input.productKind,
+      ...descriptiveFields(input, false),
       inventory_account_id: inventoryAccountId,
       revenue_account_id: revenueAccountId,
       cogs_account_id: cogsAccountId,
@@ -268,6 +297,7 @@ async function createOrUpdateProduct(
     name: input.nama,
     weight_kg: weightKg,
     min_stock: input.stokMinimum,
+    ...descriptiveFields(input, true),
     status: input.aktif !== undefined ? (input.aktif ? "atv" : "ina") : undefined,
     inventory_account_id: inventoryAccountId,
     revenue_account_id: revenueAccountId,
@@ -332,4 +362,5 @@ export const productApiHttp: ProductApi = {
   changeStock,
   getStockSummary,
   exportProducts,
+  getUnits,
 };
