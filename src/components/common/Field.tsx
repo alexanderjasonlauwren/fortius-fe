@@ -291,6 +291,9 @@ export function SegmentedControl<T extends string>({
         return (
           <button
             key={option.value}
+            // Not a submit button: segmented choices sit inside forms, where
+            // a typeless button submits the form on every click.
+            type="button"
             role="tab"
             aria-selected={active}
             onClick={() => onChange(option.value)}

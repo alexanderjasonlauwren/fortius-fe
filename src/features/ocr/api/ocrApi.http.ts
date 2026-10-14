@@ -1,15 +1,19 @@
-import { getList, send } from "@/lib/api";
+import { apiClient, getList, getOne, send, upload } from "@/lib/api";
 import type { ExpenseCategory } from "@/features/expenses/api/contract";
-import type { CreateReceiptInput, OcrApi, ReceiptExtraction, VerifyReceiptInput, VerifyReceiptResult } from "./contract";
+import type { OcrApi, ReceiptExtraction, ReceiptStatus, ReviewReceiptInput, ReviewReceiptResult, UploadReceiptInput } from "./contract";
 
 interface ExtractionResponse {
   id: string;
   merchant_name?: string;
   txn_date?: string;
   total_amount?: number;
-  engine?: string;
-  overall_confidence?: number;
   created_at: string;
+  file_name?: string;
+  has_file?: boolean;
+  last_status?: Exclude<ReceiptStatus, "pending">;
+  last_note?: string;
+  expense_id?: string;
+  expense_number?: string;
 }
 
 interface ArchiveResponse {
@@ -26,57 +30,54 @@ interface VerificationResponse {
   expense_error?: string;
 }
 
-async function getReceipts(): Promise<ReceiptExtraction[]> {
-  const [extractions, archive] = await Promise.all([
-    getList<ExtractionResponse>("/ocr/extractions", { pageSize: 100, sort: [{ field: "created_at", direction: "desc" }] }),
-    getList<ArchiveResponse>("/ocr/archive", { pageSize: 100, sort: [{ field: "archived_at", direction: "desc" }] }),
-  ]);
-  const archivedByExtraction = new Map(archive.items.map((row) => [row.extraction_id, row]));
-  return extractions.items.map((row) => {
-    const archived = archivedByExtraction.get(row.id);
-    return {
-      id: row.id,
-      merchantName: row.merchant_name,
-      txnDate: row.txn_date,
-      totalAmount: row.total_amount,
-      engine: row.engine,
-      overallConfidence: row.overall_confidence,
-      createdAt: row.created_at,
-      status: archived ? "approved" : "pending",
-      category: archived?.category,
-    };
-  });
-}
-
-async function createReceipt(input: CreateReceiptInput): Promise<ReceiptExtraction> {
-  const row = await send<ExtractionResponse>("post", "/ocr/inbox", {
-    file_name: input.fileName,
-    source_channel: "upload",
-    merchant_name: input.merchantName || undefined,
-    txn_date: input.txnDate || undefined,
-    total_amount: input.totalAmount || undefined,
-  });
+function toReceipt(row: ExtractionResponse, category?: ExpenseCategory): ReceiptExtraction {
   return {
     id: row.id,
-    fileName: input.fileName,
+    fileName: row.file_name,
+    hasFile: !!row.has_file,
     merchantName: row.merchant_name,
     txnDate: row.txn_date,
     totalAmount: row.total_amount,
-    engine: row.engine,
-    overallConfidence: row.overall_confidence,
     createdAt: row.created_at,
-    status: "pending",
+    status: row.last_status ?? "pending",
+    note: row.last_note,
+    category,
+    expenseId: row.expense_id,
+    expenseNumber: row.expense_number,
   };
 }
 
-async function verifyReceipt(input: VerifyReceiptInput): Promise<VerifyReceiptResult> {
+async function getReceipts(search?: string): Promise<ReceiptExtraction[]> {
+  const [extractions, archive] = await Promise.all([
+    getList<ExtractionResponse>("/ocr/extractions", {
+      pageSize: 100, search: search?.trim() || undefined, sort: [{ field: "created_at", direction: "desc" }],
+    }),
+    getList<ArchiveResponse>("/ocr/archive", { pageSize: 100, sort: [{ field: "archived_at", direction: "desc" }] }),
+  ]);
+  const categoryOf = new Map(archive.items.map((row) => [row.extraction_id, row.category]));
+  return extractions.items.map((row) => toReceipt(row, categoryOf.get(row.id)));
+}
+
+async function uploadReceipt(input: UploadReceiptInput): Promise<ReceiptExtraction> {
+  const fields: Record<string, string> = {};
+  if (input.merchantName?.trim()) fields.merchant_name = input.merchantName.trim();
+  if (input.txnDate) fields.txn_date = input.txnDate;
+  if (input.totalAmount) fields.total_amount = String(input.totalAmount);
+  const row = await upload<ExtractionResponse>("/ocr/inbox/upload", input.file, "file", undefined, fields);
+  return toReceipt(row);
+}
+
+async function reviewReceipt(input: ReviewReceiptInput): Promise<ReviewReceiptResult> {
+  const approving = input.outcome === "approved";
   const result = await send<VerificationResponse>("post", `/ocr/extractions/${input.id}/verify`, {
-    verification_status: "approved",
-    category: input.category,
-    create_expense: input.createExpense ? {
-      payment_mode: input.paymentMode,
-      incurred_at: input.incurredAt,
-      description: input.description || undefined,
+    verification_status: input.outcome,
+    note: input.note?.trim() || undefined,
+    category: approving ? input.category : undefined,
+    create_expense: approving && input.expense ? {
+      payment_mode: input.expense.paymentMode,
+      bank_account_id: input.expense.bankAccountId || undefined,
+      incurred_at: input.expense.incurredAt,
+      description: input.expense.description || undefined,
     } : undefined,
   });
   return {
@@ -87,4 +88,10 @@ async function verifyReceipt(input: VerifyReceiptInput): Promise<VerifyReceiptRe
   };
 }
 
-export const ocrApiHttp: OcrApi = { getReceipts, createReceipt, verifyReceipt };
+/** Resolved against the API's origin, as attachment links are. */
+async function receiptFileUrl(id: string): Promise<string> {
+  const { url } = await getOne<{ url: string }>(`/ocr/extractions/${id}/file`);
+  return new URL(url, apiClient.defaults.baseURL).href;
+}
+
+export const ocrApiHttp: OcrApi = { getReceipts, uploadReceipt, reviewReceipt, receiptFileUrl };

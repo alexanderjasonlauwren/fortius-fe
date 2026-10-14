@@ -5,6 +5,7 @@
  * (accounting parity P3).
  */
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Ban, Check, Pencil, Plus, ReceiptText, Undo2, X } from "lucide-react";
 import { scopeKey } from "@/lib/scope";
@@ -39,7 +40,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function ExpensePage() {
-  const [search, setSearch] = useState("");
+  // ?q= opens the list on one expense, e.g. from the receipt it was filed from.
+  const [params] = useSearchParams();
+  const [search, setSearch] = useState(params.get("q") ?? "");
   const [status, setStatus] = useState<ExpenseStatus | "Semua">("Semua");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
