@@ -43,6 +43,7 @@ import type {
   InvoiceFilters,
   InvoiceView,
   JournalView,
+  PaymentMethodView,
   PaymentView,
   ProfitAndLossView,
   RecordPaymentInput,
@@ -413,12 +414,18 @@ async function getPayments(status?: string, search?: string): Promise<PaymentVie
     .map((r) => toPaymentView(r, outlets));
 }
 
-/** The tenant's payment methods, so a receipt can be recorded without a
- *  method picker the console does not have yet -- see submitPayment. */
-async function resolvePaymentMethodId(): Promise<string> {
+async function getPaymentMethods(): Promise<PaymentMethodView[]> {
   const page = await getList<PaymentMethodResponse>("/payment-methods", { pageSize: PAGE_SIZE });
-  const bankTransfer = page.items.find((m) => m.code === "bank_transfer");
-  const chosen = bankTransfer ?? page.items[0];
+  return page.items
+    .filter((m) => m.status !== "ina")
+    .sort((x, y) => x.sort_order - y.sort_order)
+    .map((m) => ({ id: m.id, kode: m.code, nama: m.name, butuhReferensi: m.requires_reference }));
+}
+
+/** Bank transfer, or the first method -- for a caller that names none. */
+async function defaultPaymentMethodId(): Promise<string> {
+  const methods = await getPaymentMethods();
+  const chosen = methods.find((m) => m.kode === "bank_transfer") ?? methods[0];
   if (!chosen) {
     throw new Error("Tidak ada metode pembayaran terdaftar untuk tenant ini.");
   }
@@ -426,18 +433,18 @@ async function resolvePaymentMethodId(): Promise<string> {
 }
 
 /**
- * The console's record-receipt form collects a sender bank name and account
- * number, not a payment method or a transaction reference -- there is no
- * method picker yet (payment_methods is Step 1c's addition, still without
- * console UI). Every receipt this build records goes in as `bank_transfer`,
- * and the account number the form already collects doubles as the
- * transaction reference `bank_transfer` requires, since the form has
- * nothing else to send for it. Both are real limitations of the current
- * form, not of the API.
+ * Records a receipt and, when the form allocated it, applies it in the
+ * same step -- the bookkeeper's one action. The two are separate requests
+ * (record, then allocate); a failure applying leaves a recorded,
+ * unallocated receipt, which the list flags and Alokasikan finishes.
+ *
+ * The reference is the bank's transaction number from the slip. A form
+ * that has none falls back to the sender account number, which is what
+ * every receipt carried before the field existed.
  */
 async function submitPayment(input: RecordPaymentInput): Promise<PaymentView> {
   const [paymentMethodId, outlets] = await Promise.all([
-    resolvePaymentMethodId(),
+    input.metodeId ? Promise.resolve(input.metodeId) : defaultPaymentMethodId(),
     outletsById(),
   ]);
   const created = await send<PaymentResponse>("post", "/payments", {
@@ -446,11 +453,14 @@ async function submitPayment(input: RecordPaymentInput): Promise<PaymentView> {
     payment_method_id: paymentMethodId,
     bank_name: input.bank,
     bank_account_number: input.noRekening,
-    bank_reference: input.noRekening,
+    bank_reference: input.referensi?.trim() || input.noRekening,
     payment_date: toApiTimestamp(input.tanggal),
     notes: input.keterangan,
+    destination_bank_account_id: input.rekeningTujuanId || undefined,
   });
-  return toPaymentView(created, outlets);
+  const lines = (input.alokasi ?? []).filter((a) => a.jumlah > 0);
+  if (lines.length === 0) return toPaymentView(created, outlets);
+  return submitAllocation(created.id, lines);
 }
 
 async function submitAllocation(
@@ -987,6 +997,7 @@ export const financeApiHttp: FinanceApi = {
   getPayments,
   getOpenInvoices,
   createManualInvoice,
+  getPaymentMethods,
   submitPayment,
   submitAllocation,
   submitPaymentDecision,

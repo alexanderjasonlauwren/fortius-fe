@@ -350,6 +350,34 @@ describe("payments", () => {
       expect(body.bank_reference).toBe("1234567890");
     });
 
+    it("sends the chosen method, the slip's reference and the deposit account", async () => {
+      send.mockResolvedValue(paymentWire());
+      getList.mockResolvedValue({ items: [], pagination: {} });
+      await financeApiHttp.submitPayment({
+        outletId: OUTLET_ID, jumlah: 100_000, tanggal: "2026-09-01", bank: "BCA", noRekening: "1234567890",
+        metodeId: "m-giro", referensi: " TRX-889 ", rekeningTujuanId: "ba-1",
+      });
+      const [, , body] = send.mock.calls[0];
+      expect(body).toMatchObject({
+        payment_method_id: "m-giro", bank_reference: "TRX-889", destination_bank_account_id: "ba-1",
+      });
+      // A chosen method needs no lookup.
+      expect(getList.mock.calls.some(([path]) => path === "/payment-methods")).toBe(false);
+    });
+
+    it("applies the receipt to the invoices chosen in the same form, skipping empty lines", async () => {
+      send.mockResolvedValueOnce(paymentWire({ id: "pay-9" })).mockResolvedValueOnce(paymentWire({ id: "pay-9", allocated: 60_000 }));
+      getList.mockResolvedValue({ items: [], pagination: {} });
+      await financeApiHttp.submitPayment({
+        outletId: OUTLET_ID, jumlah: 100_000, tanggal: "2026-09-01", bank: "BCA", noRekening: "1",
+        metodeId: "m-transfer",
+        alokasi: [{ invoiceId: "inv-1", jumlah: 60_000 }, { invoiceId: "inv-2", jumlah: 0 }],
+      });
+      expect(send.mock.calls[1]).toEqual(["post", "/payments/pay-9/allocations", {
+        lines: [{ invoice_id: "inv-1", amount: 60_000 }],
+      }]);
+    });
+
     // RecordPaymentRequest.PaymentDate is a Go time.Time: a bare date was
     // refused live as "Request body is not valid JSON", so no receipt could
     // be recorded at all.

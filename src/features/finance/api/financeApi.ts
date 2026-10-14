@@ -26,6 +26,7 @@ export type {
   ManualJournalLineInput,
   ManualInvoiceKitItemInput,
   ManualInvoiceLineInput,
+  PaymentMethodView,
   PaymentView,
   ProfitAndLossView,
   RecordPaymentInput,
@@ -40,6 +41,7 @@ export const getPayments = api.getPayments.bind(api);
 export const getOpenInvoices = api.getOpenInvoices.bind(api);
 export const createManualInvoice = api.createManualInvoice.bind(api);
 export const submitPayment = api.submitPayment.bind(api);
+export const getPaymentMethods = api.getPaymentMethods.bind(api);
 export const submitAllocation = api.submitAllocation.bind(api);
 export const submitPaymentDecision = api.submitPaymentDecision.bind(api);
 export const getOutletReceipts = api.getOutletReceipts.bind(api);

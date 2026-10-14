@@ -162,6 +162,20 @@ export interface RecordPaymentInput {
   rekeningTujuanId?: string;
   buktiTransfer?: string;
   keterangan?: string;
+  /** Payment method; omitted means bank transfer. */
+  metodeId?: string;
+  /** The bank's transaction reference, from the transfer slip. */
+  referensi?: string;
+  /** Invoices this receipt pays, applied in the same step. */
+  alokasi?: AllocationLine[];
+}
+
+export interface PaymentMethodView {
+  id: string;
+  kode: string;
+  nama: string;
+  /** The method needs a transaction reference (a transfer, a giro). */
+  butuhReferensi: boolean;
 }
 
 export interface AllocationLine {
@@ -301,6 +315,8 @@ export interface FinanceApi {
   /** "Buat tagihan" (financial-statements plan P5 / gap-closing plan
    *  Phase C): a registration or other manual invoice. */
   createManualInvoice(input: CreateManualInvoiceInput): Promise<InvoiceView>;
+  getPaymentMethods(): Promise<PaymentMethodView[]>;
+  /** Records a receipt, then applies it to input.alokasi when given. */
   submitPayment(input: RecordPaymentInput): Promise<PaymentView>;
   submitAllocation(paymentId: string, alokasi: AllocationLine[]): Promise<PaymentView>;
   submitPaymentDecision(

@@ -3,9 +3,10 @@ import { AttachmentsButton } from "@/features/attachments/components/Attachments
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Plus, Split, Wallet, XCircle } from "lucide-react";
+import { Ban, CheckCircle2, Plus, Split, Wallet, XCircle } from "lucide-react";
 import {
   getOpenInvoices,
+  getPaymentMethods,
   getPayments,
   submitAllocation,
   submitPayment,
@@ -14,6 +15,7 @@ import {
 } from "@/features/finance/api/financeApi";
 import { getOutletOptions } from "@/features/distribution/api/distributionApi";
 import { getOutletDetail } from "@/features/outlet/api/outletApi";
+import { getBankAccounts } from "@/features/bankaccounts/api/bankAccountApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
@@ -62,6 +64,9 @@ export function PaymentPage() {
     action: "verify" | "reject";
   } | null>(null);
   const [alasan, setAlasan] = useState("");
+  // Rejecting a receipt that was already verified is its void: the same
+  // backend action, reversing the journal it posted.
+  const voiding = decision?.action === "reject" && decision.payment.status === "Terverifikasi";
   const [allocating, setAllocating] = useState<PaymentView | null>(null);
   // Arriving from Verifikasi Pembayaran's "Alokasikan" dialog with no receipt yet
   // recorded: ?outlet=<id> opens this dialog with that outlet pre-selected,
@@ -84,7 +89,7 @@ export function PaymentPage() {
     errorTitle: "Verifikasi gagal",
     success: (p) => ({
       title:
-        p.status === "Terverifikasi" ? `${p.nomor} diverifikasi` : `${p.nomor} ditolak`,
+        p.status === "Terverifikasi" ? `${p.nomor} diverifikasi` : `${p.nomor} ditolak / dibatalkan`,
       description:
         p.status === "Terverifikasi"
           ? `${formatRupiah(p.jumlah)} masuk ke buku besar dan mengurangi piutang.`
@@ -201,7 +206,24 @@ export function PaymentPage() {
               Alokasikan
             </Button>
           )}
+          {row.status === "Terverifikasi" && (
+            <CanAccess permission={PERMISSIONS.PAYMENTS_REJECT}>
+              <Button
+                size="xs"
+                variant="ghost"
+                aria-label={`Batalkan ${row.nomor}`}
+                className="hover:bg-rust-soft hover:text-rust-ink"
+                onClick={() => {
+                  setAlasan("");
+                  setDecision({ payment: row, action: "reject" });
+                }}
+              >
+                <Ban className="h-3 w-3" />
+              </Button>
+            </CanAccess>
+          )}
           {row.status === "Menunggu Verifikasi" && (
+            <>
             <CanAccess permission={PERMISSIONS.PAYMENTS_VERIFY}>
               <Button
                 size="xs"
@@ -210,6 +232,8 @@ export function PaymentPage() {
                 <CheckCircle2 className="h-3 w-3" />
                 Verifikasi
               </Button>
+            </CanAccess>
+            <CanAccess permission={PERMISSIONS.PAYMENTS_REJECT}>
               <Button
                 size="xs"
                 variant="ghost"
@@ -222,6 +246,7 @@ export function PaymentPage() {
                 <XCircle className="h-3 w-3" />
               </Button>
             </CanAccess>
+            </>
           )}
         </div>
       ),
@@ -299,14 +324,18 @@ export function PaymentPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {decision?.action === "reject"
-                ? `Tolak ${decision?.payment.nomor}`
-                : `Verifikasi ${decision?.payment.nomor}`}
+              {decision?.action === "verify"
+                ? `Verifikasi ${decision?.payment.nomor}`
+                : voiding
+                  ? `Batalkan ${decision?.payment.nomor}`
+                  : `Tolak ${decision?.payment.nomor}`}
             </DialogTitle>
             <DialogDescription>
-              {decision?.action === "reject"
-                ? "Alokasi ke tagihan dibatalkan dan piutang kembali terbuka."
-                : "Kas diakui di buku besar dan piutang berkurang sebesar alokasinya."}
+              {decision?.action === "verify"
+                ? "Kas diakui di buku besar dan piutang berkurang sebesar alokasinya."
+                : voiding
+                  ? "Untuk penerimaan yang sudah diverifikasi tetapi ternyata batal (transfer ditarik, giro tolak). Jurnalnya dibalik hari ini dan tagihan yang dilunasinya terbuka kembali."
+                  : "Alokasi ke tagihan dibatalkan dan piutang kembali terbuka."}
             </DialogDescription>
           </DialogHeader>
 
@@ -337,7 +366,7 @@ export function PaymentPage() {
           )}
 
           <Field
-            label={decision?.action === "reject" ? "Alasan penolakan" : "Catatan"}
+            label={decision?.action === "reject" ? (voiding ? "Alasan pembatalan" : "Alasan penolakan") : "Catatan"}
             htmlFor="alasan"
             required={decision?.action === "reject"}
           >
@@ -373,7 +402,7 @@ export function PaymentPage() {
                 })
               }
             >
-              {decision?.action === "reject" ? "Tolak penerimaan" : "Verifikasi"}
+              {decision?.action === "reject" ? (voiding ? "Batalkan penerimaan" : "Tolak penerimaan") : "Verifikasi"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -564,17 +593,27 @@ function RecordPaymentDialog({
     jumlah: 0,
     tanggal: todayIso(),
     keterangan: "",
+    metodeId: "",
+    referensi: "",
+    rekeningTujuanId: "",
   });
 
   const outlet = useQuery({
     queryKey: [...scopeKey(), "outlet-options"],
     queryFn: getOutletOptions,
   });
+  const methods = useQuery({ queryKey: [...scopeKey(), "payment-methods"], queryFn: getPaymentMethods, enabled: open });
+  const accounts = useQuery({ queryKey: [...scopeKey(), "bank-accounts"], queryFn: getBankAccounts, enabled: open });
 
   const selectedOutlet = useQuery({
     queryKey: [...scopeKey(), "outlet-detail", rest.outletId],
     queryFn: () => getOutletDetail(rest.outletId),
     enabled: !!rest.outletId,
+  });
+  const openInvoices = useQuery({
+    queryKey: [...scopeKey(), "open-invoices", rest.outletId],
+    queryFn: () => getOpenInvoices(rest.outletId),
+    enabled: open && !!rest.outletId,
   });
 
   // Recomputed during render, not in an effect (see useResettableState's own
@@ -589,36 +628,77 @@ function RecordPaymentDialog({
     bank: (selectedOutlet.data?.bank ?? "BNI") as BankNameEntity,
     noRekening: selectedOutlet.data?.noRekening ?? "",
   }));
+  // Allocations belong to one pangkalan's invoices; choosing another
+  // pangkalan starts them over.
+  const [alokasi, setAlokasi] = useResettableState<Record<string, number>>([rest.outletId], () => ({}));
 
   const form = { ...rest, ...bankInfo };
   const setForm = (next: typeof form) => {
-    setRest({
-      outletId: next.outletId,
-      jumlah: next.jumlah,
-      tanggal: next.tanggal,
-      keterangan: next.keterangan,
-    });
-    setBankInfo({ bank: next.bank, noRekening: next.noRekening });
+    const { bank, noRekening, ...others } = next;
+    setRest(others);
+    setBankInfo({ bank, noRekening });
+  };
+
+  const activeAccounts = (accounts.data ?? []).filter((a) => a.aktif);
+  const defaultAccount = activeAccounts.find((a) => a.utama && a.kind === "bank") ?? activeAccounts[0];
+  const methodList = methods.data ?? [];
+  const method =
+    methodList.find((m) => m.id === form.metodeId) ??
+    methodList.find((m) => m.kode === "bank_transfer") ??
+    methodList[0];
+  const needsReference = !!method?.butuhReferensi;
+
+  const dialokasikan = Object.values(alokasi).reduce((t, v) => t + (v || 0), 0);
+  const sisaAlokasi = form.jumlah - dialokasikan;
+  /** Oldest invoice first -- the standard way to apply cash. */
+  const autoApply = () => {
+    let budget = form.jumlah;
+    const next: Record<string, number> = {};
+    for (const inv of openInvoices.data ?? []) {
+      if (budget <= 0) break;
+      const take = Math.min(budget, inv.sisa);
+      next[inv.id] = Math.round(take);
+      budget -= take;
+    }
+    setAlokasi(next);
   };
 
   const mutation = useDeskMutation({
-    mutationFn: () => submitPayment(form),
+    mutationFn: () =>
+      submitPayment({
+        ...form,
+        metodeId: method?.id,
+        rekeningTujuanId: form.rekeningTujuanId || defaultAccount?.id,
+        alokasi: Object.entries(alokasi)
+          .filter(([, v]) => v > 0)
+          .map(([invoiceId, jumlah]) => ({ invoiceId, jumlah })),
+      }),
     errorTitle: "Penerimaan tidak tercatat",
     success: (p) => ({
       title: `${p.nomor} dicatat`,
-      description: `Alokasikan ke tagihan agar piutang ${outletLabel()} berkurang.`,
+      description:
+        p.belumDialokasikan > 0.5
+          ? `Sisa ${formatRupiah(p.belumDialokasikan)} belum dialokasikan ke tagihan.`
+          : "Seluruhnya sudah dialokasikan ke tagihan.",
     }),
     onDone: () => onOpenChange(false),
   });
 
+  const canSubmit =
+    !!form.outletId &&
+    form.jumlah > 0 &&
+    !!form.tanggal &&
+    sisaAlokasi >= 0 &&
+    (!needsReference || !!form.referensi.trim() || !!form.noRekening.trim());
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Catat penerimaan kas</DialogTitle>
           <DialogDescription>
-            Untuk transfer yang masuk ke rekening agen. Setelah dicatat, alokasikan
-            ke tagihan yang dilunasi.
+            Uang yang masuk dari {outletLabel()}. Pilih tagihan yang dilunasi di bawah, atau
+            alokasikan nanti dari daftar.
           </DialogDescription>
         </DialogHeader>
 
@@ -655,13 +735,38 @@ function RecordPaymentDialog({
               onChange={(e) => setForm({ ...form, tanggal: e.target.value })}
             />
           </Field>
+          <Field label="Metode" htmlFor="p-metode" required>
+            <SelectInput
+              id="p-metode"
+              value={method?.id ?? ""}
+              onChange={(e) => setForm({ ...form, metodeId: e.target.value })}
+            >
+              {methodList.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nama}
+                </option>
+              ))}
+            </SelectInput>
+          </Field>
+          <Field label="Masuk ke rekening" htmlFor="p-tujuan" hint="Rekening agen yang menerima uangnya.">
+            <SelectInput
+              id="p-tujuan"
+              value={form.rekeningTujuanId || defaultAccount?.id || ""}
+              onChange={(e) => setForm({ ...form, rekeningTujuanId: e.target.value })}
+            >
+              {activeAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.kind === "cash" ? "Kas" : a.bank} · {a.nomorRekening}
+                  {a.atasNama ? ` · ${a.atasNama}` : ""}
+                </option>
+              ))}
+            </SelectInput>
+          </Field>
           <Field label="Bank pengirim" htmlFor="p-bank">
             <SelectInput
               id="p-bank"
               value={form.bank}
-              onChange={(e) =>
-                setForm({ ...form, bank: e.target.value as BankNameEntity })
-              }
+              onChange={(e) => setForm({ ...form, bank: e.target.value as BankNameEntity })}
             >
               {BANKS.map((b) => (
                 <option key={b} value={b}>
@@ -670,7 +775,7 @@ function RecordPaymentDialog({
               ))}
             </SelectInput>
           </Field>
-          <Field label="No. rekening" htmlFor="p-rek">
+          <Field label="No. rekening pengirim" htmlFor="p-rek">
             <TextInput
               id="p-rek"
               mono
@@ -678,7 +783,21 @@ function RecordPaymentDialog({
               onChange={(e) => setForm({ ...form, noRekening: e.target.value })}
             />
           </Field>
-          <Field label="Keterangan" htmlFor="p-ket" className="sm:col-span-2">
+          <Field
+            label="No. referensi transfer"
+            htmlFor="p-ref"
+            required={needsReference}
+            hint="Dari bukti transfer atau mutasi rekening."
+          >
+            <TextInput
+              id="p-ref"
+              mono
+              maxLength={255}
+              value={form.referensi}
+              onChange={(e) => setForm({ ...form, referensi: e.target.value })}
+            />
+          </Field>
+          <Field label="Keterangan" htmlFor="p-ket">
             <TextInput
               id="p-ket"
               value={form.keterangan}
@@ -687,12 +806,64 @@ function RecordPaymentDialog({
           </Field>
         </div>
 
+        {form.outletId && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-semibold text-ink-muted">Lunasi tagihan</span>
+              <span className={cn("text-ink-muted", sisaAlokasi < 0 && "font-semibold text-rust-ink")}>
+                Belum dialokasikan{" "}
+                <span className="data font-semibold">{formatRupiah(sisaAlokasi)}</span>
+              </span>
+              <Button size="xs" variant="outline" onClick={autoApply} disabled={form.jumlah <= 0}>
+                Terapkan otomatis (tertua dulu)
+              </Button>
+            </div>
+            <div className="max-h-56 overflow-auto rounded-md border border-line">
+              {(openInvoices.data ?? []).length === 0 ? (
+                <p className="px-4 py-6 text-center text-xs text-ink-muted">
+                  Tidak ada tagihan terbuka; penerimaan dicatat sebagai uang muka {outletLabel()}.
+                </p>
+              ) : (
+                <table className="w-full text-left">
+                  <tbody>
+                    {(openInvoices.data ?? []).map((inv) => (
+                      <tr key={inv.id} className="border-b border-line last:border-b-0">
+                        <td className="px-3 py-1.5">
+                          <span className="data block text-xs text-ink">{inv.nomor}</span>
+                          <span className="data text-2xs text-ink-muted">
+                            jatuh tempo {formatDateId(inv.jatuhTempo)}
+                          </span>
+                        </td>
+                        <td className="data px-3 py-1.5 text-right text-xs text-ink">
+                          {formatRupiah(inv.sisa)}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
+                          <TextInput
+                            type="number"
+                            mono
+                            min={0}
+                            max={inv.sisa}
+                            aria-label={`Alokasi untuk ${inv.nomor}`}
+                            className="w-28 py-1 text-right text-xs"
+                            value={alokasi[inv.id] ?? ""}
+                            onChange={(e) => setAlokasi({ ...alokasi, [inv.id]: Number(e.target.value) })}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Batal
           </Button>
           <Button
-            disabled={!form.outletId || form.jumlah <= 0 || mutation.isPending}
+            disabled={!canSubmit || mutation.isPending}
             onClick={() => mutation.mutate(undefined as never)}
           >
             Catat penerimaan

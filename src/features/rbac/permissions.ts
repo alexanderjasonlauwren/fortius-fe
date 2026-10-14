@@ -69,6 +69,9 @@ export const PERMISSIONS = {
   PAYMENTS_VIEW: "finance.read.payments",
   PAYMENTS_CREATE: "finance.create.payments",
   PAYMENTS_VERIFY: "finance.verify.payments",
+  /** Rejecting a pending receipt, and voiding a verified one -- the same
+   *  backend action (POST /payments/:id/reject) reverses its journal. */
+  PAYMENTS_REJECT: "finance.reject.payments",
 
   // Invoices and the general ledger. Reports composes /deliveries,
   // /payments and /invoices with no dedicated permission of its own (the
