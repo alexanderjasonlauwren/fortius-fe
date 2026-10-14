@@ -685,6 +685,8 @@ const SOURCE_TYPE: Record<string, JournalView["sourceType"]> = {
   closing: "closing", opening_balance: "openingBalance", expense: "expense",
   transportation_claim: "transportationClaim", sim3lon_opening: "sim3lonOpening",
   purchase_payment: "purchasePayment",
+  asset_acquisition: "assetAcquisition",
+  asset_disposal: "assetDisposal",
 };
 
 function toJournalView(row: JournalResponse): JournalView {

@@ -16,6 +16,8 @@ export const JOURNAL_SOURCE_LABEL: Record<JournalSourceType, string> = {
   openingBalance: "Saldo awal",
   sim3lonOpening: "Saldo awal SIM3LON",
   purchasePayment: "Pembayaran tagihan",
+  assetAcquisition: "Perolehan aset",
+  assetDisposal: "Pelepasan aset",
 };
 
 /**
@@ -44,6 +46,8 @@ export function journalSourceHref(type: JournalSourceType, sourceId?: string): s
     case "cashVoucher":
       return "/cash-bank";
     case "depreciation":
+    case "assetAcquisition":
+    case "assetDisposal":
       return "/assets";
     default:
       return undefined;

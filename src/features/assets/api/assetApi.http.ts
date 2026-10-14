@@ -16,6 +16,7 @@ import type {
   AssetStatus,
   AssetView,
   CreateAssetInput,
+  DisposeAssetInput,
   UpdateAssetInput,
 } from "./contract";
 
@@ -43,6 +44,9 @@ interface AssetResponse {
 
   status: AssetStatus;
   disposed_at?: string;
+  acquisition_journal?: string;
+  disposal_journal?: string;
+  disposal_proceeds?: number;
 
   monthly_amount: number;
   accumulated_to_date: number;
@@ -93,6 +97,9 @@ function toView(row: AssetResponse): AssetView {
     vehicleId: row.vehicle_id,
     status: row.status,
     disposedAt: row.disposed_at,
+    acquisitionJournal: row.acquisition_journal,
+    disposalJournal: row.disposal_journal,
+    disposalProceeds: row.disposal_proceeds,
     monthlyAmount: row.monthly_amount,
     accumulatedToDate: row.accumulated_to_date,
     version: row.version,
@@ -129,6 +136,20 @@ async function createAsset(input: CreateAssetInput): Promise<AssetView> {
     accumulated_account_id: input.accumulatedAccountId,
     expense_account_id: input.expenseAccountId,
     vehicle_id: input.vehicleId,
+    credit_account_id: input.creditAccountId || undefined,
+  });
+  return toView(row);
+}
+
+async function disposeAsset(input: DisposeAssetInput): Promise<AssetView> {
+  const row = await send<AssetResponse>("post", `/assets/${input.id}/dispose`, {
+    version: input.version,
+    disposed_at: input.disposedAt,
+    proceeds: input.proceeds,
+    // A write-off has nowhere for proceeds to go; do not send a stale pick.
+    proceeds_account_id: input.proceeds > 0 ? input.proceedsAccountId || undefined : undefined,
+    gain_loss_account_id: input.gainLossAccountId || undefined,
+    note: input.note?.trim() || undefined,
   });
   return toView(row);
 }
@@ -140,7 +161,6 @@ async function updateAsset(input: UpdateAssetInput): Promise<AssetView> {
     residual_value: input.residualValue,
     useful_life_months: input.usefulLifeMonths,
     status: input.status,
-    disposed_at: input.disposedAt,
   });
   return toView(row);
 }
@@ -164,6 +184,7 @@ async function getAssetReconciliation(asOf: string): Promise<AssetReconciliation
 }
 
 export const assetApiHttp: AssetApi = {
+  disposeAsset,
   listAssets,
   getAsset,
   createAsset,

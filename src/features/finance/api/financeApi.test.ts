@@ -521,13 +521,15 @@ describe("journals", () => {
       items: [
         journalWire({ id: "j-1", source_type: "expense" }),
         journalWire({ id: "j-2", source_type: "transportation_claim" }),
+        journalWire({ id: "j-3", source_type: "asset_acquisition" }),
+        journalWire({ id: "j-4", source_type: "asset_disposal" }),
       ],
       pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
     });
     const journals = await financeApiHttp.getJournals();
     // Read as "manual" these were offered the reverse action, which the
     // backend then refused.
-    expect(journals.map((j) => j.sourceType)).toEqual(["expense", "transportationClaim"]);
+    expect(journals.map((j) => j.sourceType)).toEqual(["expense", "transportationClaim", "assetAcquisition", "assetDisposal"]);
   });
 
   it("narrows the list by account and search, and names each journal's branch", async () => {

@@ -7,7 +7,8 @@
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, Pencil, Plus, TriangleAlert, X } from "lucide-react";
+import { CalendarClock, LogOut, Pencil, Plus, TriangleAlert, X } from "lucide-react";
+import { DisposeAssetDialog } from "@/features/assets/components/DisposeAssetDialog";
 import { getAssetReconciliation, listAssets, type AssetClass, type AssetView } from "@/features/assets/api/assetApi";
 import { AssetDialog } from "@/features/assets/components/AssetDialog";
 import { AssetScheduleDialog } from "@/features/assets/components/AssetScheduleDialog";
@@ -23,7 +24,7 @@ import { Field, SegmentedControl } from "@/components/common/Field";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { getStatusVariant } from "@/lib/status";
-import { formatRupiah } from "@/lib/format";
+import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
 
 type Tab = "daftar" | "penyusutan" | "rekonsiliasi";
@@ -53,6 +54,7 @@ export function AssetsPage() {
   /* ── Daftar aset ───────────────────────────────────────────────────── */
   const [assetDialog, setAssetDialog] = useState<"new" | AssetView | null>(null);
   const [scheduleTarget, setScheduleTarget] = useState<AssetView | null>(null);
+  const [disposeTarget, setDisposeTarget] = useState<AssetView | null>(null);
   const assets = useQuery({ queryKey: [...scopeKey(), "assets", "list"], queryFn: () => listAssets(), enabled: tab === "daftar" || tab === "penyusutan" });
 
   const assetColumns: Column<AssetView>[] = [
@@ -62,6 +64,7 @@ export function AssetsPage() {
         <>
           <span className="data block text-xs text-ink">{row.assetCode}</span>
           <span className="text-2xs text-ink-muted">{row.name}</span>
+          {row.acquisitionJournal && <span className="data block text-2xs text-ink-muted">Perolehan {row.acquisitionJournal}</span>}
         </>
       ),
       sortValue: (row) => row.assetCode,
@@ -80,7 +83,21 @@ export function AssetsPage() {
       key: "accumulated", header: "Akumulasi s.d. ini", align: "right",
       render: (row) => <span className="data text-xs">{formatRupiah(row.accumulatedToDate)}</span>,
     },
-    { key: "status", header: "Status", render: (row) => <StatusBadge label={STATUS_LABEL[row.status]} variant={getStatusVariant(STATUS_LABEL[row.status])} /> },
+    {
+      key: "status", header: "Status",
+      render: (row) => (
+        <>
+          <StatusBadge label={STATUS_LABEL[row.status]} variant={getStatusVariant(STATUS_LABEL[row.status])} />
+          {row.status === "disposed" && (
+            <span className="data mt-0.5 block text-2xs text-ink-muted">
+              {row.disposedAt ? formatDateId(row.disposedAt) : ""}
+              {row.disposalProceeds != null ? ` · ${formatRupiah(row.disposalProceeds)}` : ""}
+              {row.disposalJournal ? ` · ${row.disposalJournal}` : ""}
+            </span>
+          )}
+        </>
+      ),
+    },
     {
       key: "actions", header: "",
       render: (row) => (
@@ -88,11 +105,17 @@ export function AssetsPage() {
           <Button variant="ghost" size="icon-xs" aria-label={`Jadwal ${row.assetCode}`} onClick={() => setScheduleTarget(row)}>
             <CalendarClock className="h-3.5 w-3.5" />
           </Button>
-          <CanAccess permission={PERMISSIONS.ASSETS_UPDATE}>
-            <Button variant="ghost" size="icon-xs" aria-label={`Ubah ${row.assetCode}`} onClick={() => setAssetDialog(row)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          </CanAccess>
+          {row.status !== "disposed" && (
+            <CanAccess permission={PERMISSIONS.ASSETS_UPDATE}>
+              <Button variant="ghost" size="icon-xs" aria-label={`Ubah ${row.assetCode}`} onClick={() => setAssetDialog(row)}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon-xs" aria-label={`Lepas ${row.assetCode}`}
+                className="hover:bg-rust-soft hover:text-rust-ink" onClick={() => setDisposeTarget(row)}>
+                <LogOut className="h-3.5 w-3.5" />
+              </Button>
+            </CanAccess>
+          )}
         </div>
       ),
     },
@@ -286,6 +309,12 @@ export function AssetsPage() {
         onSaved={() => void assets.refetch()}
       />
       <AssetScheduleDialog asset={scheduleTarget} onClose={() => setScheduleTarget(null)} />
+      <DisposeAssetDialog
+        key={disposeTarget?.id ?? "closed"}
+        asset={disposeTarget}
+        onClose={() => setDisposeTarget(null)}
+        onDisposed={() => void assets.refetch()}
+      />
       <RunDepreciationDialog
         // Forces a fresh mount on every open, keyed on the latest posted
         // period -- without this, the dialog's own lazy initial `period`

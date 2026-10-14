@@ -802,7 +802,11 @@ export type JournalSourceType =
   | "transportationClaim"
   | "sim3lonOpening"
   // One instalment paid on a vendor bill (accounting parity P3).
-  | "purchasePayment";
+  | "purchasePayment"
+  // A fixed asset's purchase ("dikreditkan dari") and its sale or write-off
+  // (accounting parity P3).
+  | "assetAcquisition"
+  | "assetDisposal";
 
 /**
  * A posted journal is immutable. Corrections are made by posting a reversal,

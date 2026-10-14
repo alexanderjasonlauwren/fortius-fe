@@ -33,6 +33,10 @@ export interface AssetView {
 
   status: AssetStatus;
   disposedAt?: string;
+  /** Numbers of the journals that bought and sold it, and what it fetched. */
+  acquisitionJournal?: string;
+  disposalJournal?: string;
+  disposalProceeds?: number;
 
   /** (cost-residual)/useful_life_months -- computed on read, never stored. */
   monthlyAmount: number;
@@ -67,6 +71,9 @@ export interface CreateAssetInput {
   accumulatedAccountId?: string;
   expenseAccountId?: string;
   vehicleId?: string;
+  /** "Dikreditkan dari": where it was paid from or owed to. Given, the
+   *  backend posts the acquisition journal (Dr asset / Cr this account). */
+  creditAccountId?: string;
 }
 
 /** Edits an asset's register fields -- never its class, code or account
@@ -77,8 +84,22 @@ export interface UpdateAssetInput {
   name: string;
   residualValue: number;
   usefulLifeMonths: number;
-  status: AssetStatus;
-  disposedAt?: string;
+  /** Disposing is disposeAsset, which posts the journal. */
+  status: Exclude<AssetStatus, "disposed">;
+}
+
+/** Sells or writes off an asset; the backend posts the disposal journal. */
+export interface DisposeAssetInput {
+  id: string;
+  version: number;
+  disposedAt: string;
+  /** Zero for a write-off. */
+  proceeds: number;
+  /** Where the proceeds went; required when proceeds is positive. */
+  proceedsAccountId?: string;
+  /** Overrides Pendapatan Lain-lain for the gain or loss. */
+  gainLossAccountId?: string;
+  note?: string;
 }
 
 export interface AssetScheduleLine {
@@ -102,6 +123,7 @@ export interface AssetApi {
   getAsset(id: string): Promise<AssetView>;
   createAsset(input: CreateAssetInput): Promise<AssetView>;
   updateAsset(input: UpdateAssetInput): Promise<AssetView>;
+  disposeAsset(input: DisposeAssetInput): Promise<AssetView>;
   getAssetSchedule(id: string): Promise<AssetScheduleLine[]>;
   getAssetReconciliation(asOf: string): Promise<AssetReconciliationRow[]>;
 }

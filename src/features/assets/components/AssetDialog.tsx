@@ -37,10 +37,12 @@ const CLASS_LABEL: Record<AssetClass, string> = {
   prepaid: "Sewa Dibayar Dimuka (Prepaid)",
 };
 
-const STATUS_LABEL: Record<AssetStatus, string> = {
+/** What an edit may set. Disposing is its own action (DisposeAssetDialog),
+ *  because it posts the journal that takes the asset off the books. */
+type EditableStatus = Exclude<AssetStatus, "disposed">;
+const STATUS_LABEL: Record<EditableStatus, string> = {
   active: "Aktif",
   fully_depreciated: "Habis Disusutkan",
-  disposed: "Dilepas",
 };
 
 interface AssetDialogProps {
@@ -68,8 +70,8 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
   const [accumulatedAccountId, setAccumulatedAccountId] = useState("");
   const [expenseAccountId, setExpenseAccountId] = useState("");
   const [vehicleId, setVehicleId] = useState(asset?.vehicleId ?? "");
-  const [status, setStatus] = useState<AssetStatus>(asset?.status ?? "active");
-  const [disposedAt, setDisposedAt] = useState(asset?.disposedAt ?? "");
+  const [status, setStatus] = useState<EditableStatus>(asset?.status === "fully_depreciated" ? "fully_depreciated" : "active");
+  const [creditAccountId, setCreditAccountId] = useState("");
 
   const vehicles = useQuery({ queryKey: [...scopeKey(), "assets", "vehicles"], queryFn: () => getVehicles(), enabled: open && assetClass === "vehicle" });
   const accounts = useQuery({ queryKey: [...scopeKey(), "assets", "accounts"], queryFn: getChartOfAccounts, enabled: open && !editing });
@@ -80,13 +82,14 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
   // every depreciation run).
   const assetAccounts = leafAccounts((accounts.data ?? []).filter((a) => a.akun.tipe === "Aset"));
   const expenseAccounts = leafAccounts((accounts.data ?? []).filter((a) => a.akun.tipe === "Beban"));
+  // Paid from kas/bank, owed to a vendor, or put in by the owners.
+  const creditAccounts = leafAccounts((accounts.data ?? []).filter((a) => a.akun.tipe !== "Pendapatan" && a.akun.tipe !== "Beban"));
 
   const save = useDeskMutation({
     mutationFn: () =>
       editing
         ? updateAsset({
             id: asset.id, version: asset.version, name, residualValue, usefulLifeMonths, status,
-            disposedAt: status === "disposed" ? disposedAt : undefined,
           })
         : createAsset({
             assetCode, name, assetClass, acquisitionDate, depreciationStartDate,
@@ -97,6 +100,7 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
             accumulatedAccountId: accumulatedAccountId || undefined,
             expenseAccountId: expenseAccountId || undefined,
             vehicleId: assetClass === "vehicle" && vehicleId ? vehicleId : undefined,
+            creditAccountId: creditAccountId || undefined,
           }),
     success: (row) => ({ title: `${row.assetCode} ${editing ? "diperbarui" : "didaftarkan"}` }),
     errorTitle: "Aset tidak tersimpan",
@@ -104,7 +108,7 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
   });
 
   const canSubmit = editing
-    ? !!name.trim() && residualValue < (asset?.cost ?? 0) && usefulLifeMonths > 0 && (status !== "disposed" || !!disposedAt)
+    ? !!name.trim() && residualValue < (asset?.cost ?? 0) && usefulLifeMonths > 0
     : !!assetCode.trim() && !!name.trim() && cost > 0 && residualValue < cost && usefulLifeMonths > 0 &&
       (openingAccumulated === 0 || !!openingAsOf);
 
@@ -170,6 +174,16 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
                 </Field>
               </div>
 
+              <Field label="Dikreditkan dari" htmlFor="ast-credit"
+                hint="Akun pembayarannya: kas/bank, atau hutang bila belum dibayar. Kosongkan bila aset sudah tercatat di saldo awal atau lewat tagihan vendor.">
+                <SelectInput id="ast-credit" value={creditAccountId} onChange={(e) => setCreditAccountId(e.target.value)}>
+                  <option value="">— Tidak dijurnal —</option>
+                  {creditAccounts.map((a) => (
+                    <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                  ))}
+                </SelectInput>
+              </Field>
+
               {assetClass === "vehicle" && (
                 <Field label="Kendaraan (opsional)" htmlFor="ast-vehicle">
                   <SelectInput id="ast-vehicle" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
@@ -216,17 +230,12 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
           {editing && (
             <div className="grid grid-cols-2 gap-4">
               <Field label="Status" htmlFor="ast-status" required>
-                <SelectInput id="ast-status" value={status} onChange={(e) => setStatus(e.target.value as AssetStatus)}>
+                <SelectInput id="ast-status" value={status} onChange={(e) => setStatus(e.target.value as EditableStatus)}>
                   {Object.entries(STATUS_LABEL).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </SelectInput>
               </Field>
-              {status === "disposed" && (
-                <Field label="Per tanggal pelepasan" htmlFor="ast-disposed" required>
-                  <TextInput id="ast-disposed" type="date" value={disposedAt} onChange={(e) => setDisposedAt(e.target.value)} />
-                </Field>
-              )}
             </div>
           )}
         </div>

@@ -13,5 +13,7 @@ describe("journal source links", () => {
   it("falls back to the module, and to nothing for a journal that is its own document", () => {
     expect(journalSourceHref("payment", "x")).toBe("/payments");
     expect(journalSourceHref("manual")).toBeUndefined();
+    expect(journalSourceHref("assetAcquisition", "a-1")).toBe("/assets");
+    expect(journalSourceHref("assetDisposal", "a-1")).toBe("/assets");
   });
 });

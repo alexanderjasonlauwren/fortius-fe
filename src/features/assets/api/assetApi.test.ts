@@ -117,3 +117,42 @@ describe("schedule and reconciliation", () => {
     expect(getOne).toHaveBeenCalledWith("/assets/reconciliation?as_of=2026-10-07");
   });
 });
+
+describe("acquisition and disposal (parity P3)", () => {
+  it("sends the account it was credited from, and reads back its journals", async () => {
+    send.mockResolvedValue(wire({ acquisition_journal: "JV-0109", disposal_journal: "JV-0110", disposal_proceeds: 160_000_000 }));
+    const row = await assetApiHttp.createAsset({
+      assetCode: "AST-1", name: "Pickup", assetClass: "vehicle", acquisitionDate: "2026-10-01",
+      depreciationStartDate: "2026-11-01", cost: 150_000_000, usefulLifeMonths: 96, creditAccountId: "acc-hutang",
+    });
+    expect(send.mock.calls[0][2].credit_account_id).toBe("acc-hutang");
+    expect(row).toMatchObject({ acquisitionJournal: "JV-0109", disposalJournal: "JV-0110", disposalProceeds: 160_000_000 });
+  });
+
+  it("disposes with proceeds, where they went and a trimmed note", async () => {
+    send.mockResolvedValue(wire({ status: "disposed" }));
+    await assetApiHttp.disposeAsset({
+      id: ID, version: 3, disposedAt: "2026-10-14", proceeds: 160_000_000,
+      proceedsAccountId: "acc-bank", gainLossAccountId: "", note: " dijual ",
+    });
+    const [method, path, body] = send.mock.calls[0];
+    expect(method).toBe("post");
+    expect(path).toBe(`/assets/${ID}/dispose`);
+    expect(body).toEqual({
+      version: 3, disposed_at: "2026-10-14", proceeds: 160_000_000,
+      proceeds_account_id: "acc-bank", gain_loss_account_id: undefined, note: "dijual",
+    });
+  });
+
+  it("drops a stale proceeds account on a write-off", async () => {
+    send.mockResolvedValue(wire({ status: "disposed" }));
+    await assetApiHttp.disposeAsset({ id: ID, version: 3, disposedAt: "2026-10-14", proceeds: 0, proceedsAccountId: "acc-bank" });
+    expect(send.mock.calls[0][2].proceeds_account_id).toBeUndefined();
+  });
+
+  it("no longer sends a disposal date on update", async () => {
+    send.mockResolvedValue(wire());
+    await assetApiHttp.updateAsset({ id: ID, version: 2, name: "x", residualValue: 0, usefulLifeMonths: 60, status: "active" });
+    expect("disposed_at" in send.mock.calls[0][2]).toBe(false);
+  });
+});
