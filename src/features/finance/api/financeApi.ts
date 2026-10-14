@@ -11,8 +11,12 @@ export type {
   CreateAccountInput,
   CreateManualInvoiceInput,
   CreateManualJournalInput,
+  CreditNoteFilters,
   CreditNoteInput,
+  CreditNoteReason,
   CreditNoteView,
+  InvoiceDetailView,
+  InvoiceLineView,
   FundingResult,
   FundStopInput,
   InvoiceFilters,
@@ -42,6 +46,12 @@ export const getOutletReceipts = api.getOutletReceipts.bind(api);
 export const fundDistributionStop = api.fundDistributionStop.bind(api);
 export const releaseDistributionStop = api.releaseDistributionStop.bind(api);
 export const submitCreditNote = api.submitCreditNote.bind(api);
+export const getCreditNotes = api.getCreditNotes.bind(api);
+export const applyCreditNote = api.applyCreditNote.bind(api);
+export const cancelCreditNote = api.cancelCreditNote.bind(api);
+export const getInvoice = api.getInvoice.bind(api);
+export const voidInvoice = api.voidInvoice.bind(api);
+export { CREDIT_NOTE_REASONS } from "./contract";
 export const getJournals = api.getJournals.bind(api);
 export const createManualJournal = api.createManualJournal.bind(api);
 export const reverseJournal = api.reverseJournal.bind(api);

@@ -32,8 +32,10 @@ import type {
   CreateAccountInput,
   CreateManualInvoiceInput,
   CreateManualJournalInput,
+  CreditNoteFilters,
   CreditNoteInput,
   CreditNoteView,
+  InvoiceDetailView,
   DateRange,
   FinanceApi,
   FundingResult,
@@ -59,7 +61,9 @@ async function outletsById(): Promise<Map<string, OutletView>> {
 /* ── invoices ──────────────────────────────────────────────────────────── */
 
 interface InvoiceLineResponse {
-  product_id: string;
+  product_id?: string;
+  product_name?: string;
+  description?: string;
   quantity: number;
   unit_price: number;
   subtotal: number;
@@ -77,6 +81,10 @@ interface InvoiceResponse {
   /** The surat jalan number of the delivery this invoice bills. */
   delivery_number?: string;
   invoice_type: string;
+  description?: string;
+  reference_number?: string;
+  void_reason?: string;
+  voided_at?: string;
   lines: InvoiceLineResponse[];
   subtotal: number;
   tax_percentage: number;
@@ -115,6 +123,8 @@ function toInvoiceStatus(paymentStatus: string): InvoiceStatus {
       return "Sebagian";
     case "overdue":
       return "Jatuh Tempo";
+    case "void":
+      return "Batal";
     default:
       return "Terbit";
   }
@@ -167,7 +177,33 @@ function toInvoiceView(
     sisa: row.outstanding_amount,
     status: toInvoiceStatus(row.payment_status),
     termin: outlet?.termin ?? 0,
+    referensi: row.reference_number,
+    keterangan: row.description,
+    alasanBatal: row.void_reason,
+    version: row.version,
   };
+}
+
+async function getInvoice(id: string): Promise<InvoiceDetailView> {
+  const [row, outlets] = await Promise.all([getOne<InvoiceResponse>(`/invoices/${id}`), outletsById()]);
+  const view = toInvoiceView(row, outlets, todayIso());
+  return {
+    ...view,
+    lines: (row.lines ?? []).map((l) => ({
+      uraian: l.product_name ?? l.description ?? "—",
+      qty: l.quantity,
+      harga: l.unit_price,
+      jumlah: l.subtotal,
+    })),
+    subtotal: row.subtotal,
+    persenPajak: row.tax_percentage,
+    pajak: row.tax_amount,
+  };
+}
+
+async function voidInvoice(id: string, version: number, reason: string): Promise<InvoiceView> {
+  const row = await send<InvoiceResponse>("post", `/invoices/${id}/void`, { version, reason });
+  return toInvoiceView(row, await outletsById(), todayIso());
 }
 
 /** 100 is every list definition's MaxPageSize; the server refuses more. */
@@ -224,7 +260,9 @@ async function createManualInvoice(input: CreateManualInvoiceInput): Promise<Inv
     invoice_type: input.invoiceType,
     outlet_id: input.outletId,
     issue_date: input.issueDate,
-    due_date: input.dueDate,
+    due_date: input.dueDate || undefined,
+    branch_id: input.branchId || undefined,
+    reference_number: input.referenceNumber || undefined,
     description: input.description,
     package_id: input.packageId,
     fee_amount: input.feeAmount,
@@ -517,6 +555,7 @@ interface CreditNoteResponse {
   credit_note_number: string;
   outlet_id: string;
   invoice_id?: string;
+  invoice_number?: string;
   amount: number;
   reason_code: string;
   reason: string;
@@ -539,28 +578,60 @@ function toCreditNoteView(row: CreditNoteResponse): CreditNoteView {
     nomor: row.credit_note_number,
     outletId: row.outlet_id,
     invoiceId: row.invoice_id ?? null,
+    invoiceNomor: row.invoice_number,
     jumlah: row.amount,
     alasan: row.reason,
+    kodeAlasan: row.reason_code,
     status: CREDIT_NOTE_STATUS[row.credit_note_status] ?? "Terbit",
     tanggal: row.issue_date.slice(0, 10),
+    alasanBatal: row.cancellation_reason,
+    version: row.version,
   };
 }
 
-/**
- * `reason_code` is a required, closed CHECK on the backend
- * (`goods_return | billing_correction | price_adjustment | quality_claim |
- * goodwill`); ReceivablesPage's dialog collects only free-text `alasan`, so
- * this build always sends `billing_correction`, the closest generic code, a
- * console screen with no reason picker yet cannot choose more precisely.
- */
+const CREDIT_NOTE_STATUS_CODE: Record<CreditNoteView["status"], string> = {
+  Terbit: "issued",
+  Terpakai: "applied",
+  Batal: "cancelled",
+};
+
+async function getCreditNotes(filters?: CreditNoteFilters): Promise<CreditNoteView[]> {
+  const wire: { field: string; operator: "eq"; value: string }[] = [];
+  if (filters?.status && filters.status !== "Semua") {
+    wire.push({ field: "credit_note_status", operator: "eq", value: CREDIT_NOTE_STATUS_CODE[filters.status] });
+  }
+  if (filters?.outletId && filters.outletId !== "Semua") {
+    wire.push({ field: "outlet_id", operator: "eq", value: filters.outletId });
+  }
+  const page = await getList<CreditNoteResponse>("/credit-notes", {
+    pageSize: PAGE_SIZE,
+    sort: [{ field: "issue_date", direction: "desc" }],
+    search: filters?.search,
+    filters: wire,
+  });
+  return page.items.map(toCreditNoteView);
+}
+
+async function applyCreditNote(id: string, version: number, invoiceId?: string): Promise<CreditNoteView> {
+  return toCreditNoteView(
+    await send<CreditNoteResponse>("post", `/credit-notes/${id}/apply`, { version, invoice_id: invoiceId }),
+  );
+}
+
+async function cancelCreditNote(id: string, version: number, reason: string): Promise<CreditNoteView> {
+  return toCreditNoteView(
+    await send<CreditNoteResponse>("post", `/credit-notes/${id}/cancel`, { version, reason }),
+  );
+}
+
 async function submitCreditNote(input: CreditNoteInput): Promise<CreditNoteView> {
   const created = await send<CreditNoteResponse>("post", "/credit-notes", {
     outlet_id: input.outletId,
     invoice_id: input.invoiceId ?? undefined,
     amount: input.jumlah,
-    reason_code: "billing_correction",
+    reason_code: input.kodeAlasan,
     reason: input.alasan,
-    issue_date: toApiTimestamp(todayIso()),
+    issue_date: toApiTimestamp(input.tanggal),
   });
   return toCreditNoteView(created);
 }
@@ -923,6 +994,11 @@ export const financeApiHttp: FinanceApi = {
   fundDistributionStop,
   releaseDistributionStop,
   submitCreditNote,
+  getCreditNotes,
+  applyCreditNote,
+  cancelCreditNote,
+  getInvoice,
+  voidInvoice,
   getJournals,
   createManualJournal,
   reverseJournal,

@@ -25,6 +25,8 @@ import { formatRupiah } from "@/lib/format";
 import { outletLabel } from "@/lib/lexicon";
 import { leafAccounts } from "@/features/finance/lib/accounts";
 import { scopeKey } from "@/lib/scope";
+import { todayIso } from "@/lib/date";
+import { useScope } from "@/features/tenancy/useScope";
 
 type Jenis = "registration" | "other";
 
@@ -59,8 +61,13 @@ interface ManualInvoiceDialogProps {
 export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceDialogProps) {
   const [jenis, setJenis] = useState<Jenis>("registration");
   const [outletId, setOutletId] = useState("");
-  const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [issueDate, setIssueDate] = useState(todayIso);
+  // Empty means "from the pangkalan's own payment terms" -- the backend
+  // derives it, the same as for a delivery invoice.
+  const [dueDate, setDueDate] = useState("");
+  const [reference, setReference] = useState("");
   const [description, setDescription] = useState("");
+  const { branchId } = useScope();
 
   const [packageId, setPackageId] = useState("");
   const [feeAmount, setFeeAmount] = useState(0);
@@ -86,7 +93,9 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
   function reset() {
     setJenis("registration");
     setOutletId("");
-    setIssueDate(new Date().toISOString().slice(0, 10));
+    setIssueDate(todayIso());
+    setDueDate("");
+    setReference("");
     setDescription("");
     setPackageId("");
     setFeeAmount(0);
@@ -117,6 +126,11 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
         invoiceType: jenis,
         outletId,
         issueDate,
+        dueDate: dueDate || undefined,
+        // The branch the console is scoped to; consolidated leaves it to
+        // the backend's default branch.
+        branchId: branchId ?? undefined,
+        referenceNumber: reference.trim() || undefined,
         description: description || undefined,
         packageId: jenis === "registration" ? (packageId || undefined) : undefined,
         feeAmount: jenis === "registration" ? feeAmount : undefined,
@@ -134,7 +148,7 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
 
   const totalLines = lineRows.reduce((s, l) => s + (l.amount || 0), 0);
   const canSubmit =
-    !!outletId && !!issueDate &&
+    !!outletId && !!issueDate && (!dueDate || dueDate >= issueDate) &&
     (jenis === "registration"
       ? feeAmount > 0 || !!packageId
       : lineRows.length > 0 && lineRows.every((l) => l.description.trim() && l.amount > 0 && l.revenueAccountId));
@@ -172,6 +186,17 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
             </Field>
             <Field label="Tanggal terbit" htmlFor="mi-date" required>
               <TextInput id="mi-date" type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Jatuh tempo" htmlFor="mi-due"
+              hint="Kosongkan untuk memakai termin pangkalan."
+              error={dueDate && dueDate < issueDate ? "Tidak boleh sebelum tanggal terbit" : undefined}>
+              <TextInput id="mi-due" type="date" min={issueDate} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </Field>
+            <Field label="No. referensi" htmlFor="mi-ref" hint="Nomor PO atau permintaan dari pangkalan.">
+              <TextInput id="mi-ref" mono maxLength={100} value={reference} onChange={(e) => setReference(e.target.value)} />
             </Field>
           </div>
 

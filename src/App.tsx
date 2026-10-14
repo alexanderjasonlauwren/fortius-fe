@@ -21,6 +21,7 @@ import { OcrPage } from "./pages/ocr/OcrPage";
 import { PaymentPage } from "./pages/payments/PaymentPage";
 import { PaymentControlPage } from "./pages/payments/PaymentControlPage";
 import { ReceivablesPage } from "./pages/receivables/ReceivablesPage";
+import { InvoiceDetailPage } from "./pages/receivables/InvoiceDetailPage";
 import { CashBankPage } from "./pages/cashbank/CashBankPage";
 import { AssetsPage } from "./pages/assets/AssetsPage";
 import { PurchasesPage } from "./pages/purchases/PurchasesPage";
@@ -152,6 +153,11 @@ const router = createBrowserRouter([
       { path: "receivables", element: (
         <RequirePermission permission={PERMISSIONS.PAYMENTS_VIEW}>
           <ReceivablesPage />
+        </RequirePermission>
+      ) },
+      { path: "receivables/:id", element: (
+        <RequirePermission permission={PERMISSIONS.INVOICES_VIEW}>
+          <InvoiceDetailPage />
         </RequirePermission>
       ) },
       { path: "payments", element: (

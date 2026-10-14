@@ -114,6 +114,52 @@ describe("invoice status", () => {
     expect(other.suratJalan).toBe("—");
   });
 
+  it("reads a void invoice as Batal, keeping why it was voided", async () => {
+    getList.mockResolvedValue({
+      items: [invoiceWire({ payment_status: "void", void_reason: "salah outlet", outstanding_amount: 100_000 })],
+      pagination: {},
+    });
+    const [inv] = await financeApiHttp.getInvoices({ status: "Semua" });
+    expect(inv.status).toBe("Batal");
+    expect(inv.alasanBatal).toBe("salah outlet");
+    // A void invoice is never open, whatever its outstanding column says.
+    expect(await financeApiHttp.getInvoices({ status: "Belum lunas" })).toEqual([]);
+  });
+
+  it("sends a manual invoice's due date, branch and reference, and leaves blanks to the backend", async () => {
+    send.mockResolvedValue(invoiceWire({ invoice_type: "other" }));
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    await financeApiHttp.createManualInvoice({
+      invoiceType: "other", outletId: OUTLET_ID, issueDate: "2026-10-14", dueDate: "2026-10-28",
+      branchId: "b-1", referenceNumber: "PO-7", lines: [{ description: "Sewa", amount: 1, revenueAccountId: "a" }],
+    });
+    await financeApiHttp.createManualInvoice({
+      invoiceType: "other", outletId: OUTLET_ID, issueDate: "2026-10-14", dueDate: "", referenceNumber: "",
+      lines: [{ description: "Sewa", amount: 1, revenueAccountId: "a" }],
+    });
+    expect(send.mock.calls[0][2]).toMatchObject({ due_date: "2026-10-28", branch_id: "b-1", reference_number: "PO-7" });
+    expect(send.mock.calls[1][2]).toMatchObject({ due_date: undefined, branch_id: undefined, reference_number: undefined });
+  });
+
+  it("voids under the version the caller read, with the reason", async () => {
+    send.mockResolvedValue(invoiceWire({ payment_status: "void", version: 2 }));
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    await financeApiHttp.voidInvoice(INVOICE_ID, 1, "salah outlet");
+    expect(send).toHaveBeenCalledWith("post", `/invoices/${INVOICE_ID}/void`, { version: 1, reason: "salah outlet" });
+  });
+
+  it("prints a product line by its product's name and a manual line by its text", async () => {
+    getOne.mockResolvedValue(invoiceWire({
+      lines: [
+        { product_id: "p-1", product_name: "LPG 3 Kg", quantity: 80, unit_price: 15_000, subtotal: 1_200_000 },
+        { description: "Sewa tabung", quantity: 1, unit_price: 50_000, subtotal: 50_000 },
+      ],
+    }));
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    const detail = await financeApiHttp.getInvoice(INVOICE_ID);
+    expect(detail.lines.map((l) => l.uraian)).toEqual(["LPG 3 Kg", "Sewa tabung"]);
+  });
+
   it("maps overdue and partial to their own console statuses", async () => {
     getList.mockResolvedValue({
       items: [invoiceWire({ payment_status: "overdue" })],
@@ -327,34 +373,59 @@ describe("payments", () => {
 
 describe("credit notes", () => {
   // IssueRequest.IssueDate is a Go time.Time — same live failure as payments.
-  it("sends issue_date as an RFC 3339 timestamp for today's local date", async () => {
-    vi.useFakeTimers();
-    // 01:00 WIB on 12 Oct is still 11 Oct in UTC; the note must carry the local date.
-    vi.setSystemTime(new Date(2026, 9, 12, 1, 0, 0));
+  it("sends the chosen reason code and the form's date as an RFC 3339 timestamp", async () => {
     send.mockResolvedValue({
       id: "cn-1",
       credit_note_number: "CN-0001",
       outlet_id: OUTLET_ID,
       amount: 50_000,
-      issue_date: "2026-10-12T00:00:00Z",
-      credit_status: "issued",
-      reason_code: "billing_correction",
+      issue_date: "2026-10-03T00:00:00Z",
+      credit_note_status: "issued",
+      reason_code: "goods_return",
+      reason: "Segel rusak",
+      version: 1,
     });
 
-    try {
-      await financeApiHttp.submitCreditNote({
-        outletId: OUTLET_ID,
-        invoiceId: INVOICE_ID,
-        jumlah: 50_000,
-        alasan: "Selisih harga",
-      });
-    } finally {
-      vi.useRealTimers();
-    }
+    await financeApiHttp.submitCreditNote({
+      outletId: OUTLET_ID,
+      invoiceId: INVOICE_ID,
+      jumlah: 50_000,
+      alasan: "Segel rusak",
+      kodeAlasan: "goods_return",
+      tanggal: "2026-10-03",
+    });
 
     const [, path, body] = send.mock.calls[0];
     expect(path).toBe("/credit-notes");
-    expect(body.issue_date).toBe("2026-10-12T00:00:00Z");
+    expect(body.reason_code).toBe("goods_return");
+    expect(body.issue_date).toBe("2026-10-03T00:00:00Z");
+  });
+
+  it("filters the list by the wire status and names each note's invoice", async () => {
+    getList.mockResolvedValue({
+      items: [{
+        id: "cn-1", credit_note_number: "CN-0001", outlet_id: OUTLET_ID, invoice_id: INVOICE_ID,
+        invoice_number: "INV-0009", amount: 10_000, issue_date: "2026-10-03T00:00:00Z",
+        credit_note_status: "applied", reason_code: "goodwill", reason: "x", version: 2,
+      }],
+      pagination: {},
+    });
+    const [note] = await financeApiHttp.getCreditNotes({ status: "Terpakai" });
+    expect(getList.mock.calls[0][1].filters).toEqual([
+      { field: "credit_note_status", operator: "eq", value: "applied" },
+    ]);
+    expect(note).toMatchObject({ invoiceNomor: "INV-0009", status: "Terpakai", kodeAlasan: "goodwill", version: 2 });
+  });
+
+  it("applies and cancels under the version the caller read", async () => {
+    send.mockResolvedValue({
+      id: "cn-1", credit_note_number: "CN-0001", outlet_id: OUTLET_ID, amount: 1,
+      issue_date: "2026-10-03T00:00:00Z", credit_note_status: "cancelled", reason_code: "goodwill", reason: "x", version: 3,
+    });
+    await financeApiHttp.applyCreditNote("cn-1", 2);
+    await financeApiHttp.cancelCreditNote("cn-1", 2, "salah input");
+    expect(send.mock.calls[0]).toEqual(["post", "/credit-notes/cn-1/apply", { version: 2, invoice_id: undefined }]);
+    expect(send.mock.calls[1]).toEqual(["post", "/credit-notes/cn-1/cancel", { version: 2, reason: "salah input" }]);
   });
 });
 

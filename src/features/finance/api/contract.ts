@@ -50,6 +50,28 @@ export interface InvoiceView {
   sisa: number;
   status: InvoiceStatus;
   termin: number;
+  /** The customer's own reference (their PO or request number). */
+  referensi?: string;
+  keterangan?: string;
+  /** Why a voided invoice was voided. */
+  alasanBatal?: string;
+  version: number;
+}
+
+export interface InvoiceLineView {
+  /** Product name for a catalogue line, the typed text for a manual one. */
+  uraian: string;
+  qty: number;
+  harga: number;
+  jumlah: number;
+}
+
+/** One invoice with everything its own page shows and prints. */
+export interface InvoiceDetailView extends InvoiceView {
+  lines: InvoiceLineView[];
+  subtotal: number;
+  persenPajak: number;
+  pajak: number;
 }
 
 /** One kit item on a registration invoice's create payload. */
@@ -77,6 +99,8 @@ export interface CreateManualInvoiceInput {
   outletId: string;
   issueDate: string;
   dueDate?: string;
+  branchId?: string;
+  referenceNumber?: string;
   description?: string;
   packageId?: string;
   feeAmount?: number;
@@ -166,11 +190,24 @@ export interface FundingResult {
   availableBalance: number;
 }
 
+/** The backend's closed reason_code vocabulary, in the console's words. */
+export const CREDIT_NOTE_REASONS = {
+  goods_return: "Retur tabung",
+  billing_correction: "Koreksi tagihan",
+  price_adjustment: "Penyesuaian harga",
+  quality_claim: "Klaim kualitas",
+  goodwill: "Kebijakan (goodwill)",
+} as const;
+
+export type CreditNoteReason = keyof typeof CREDIT_NOTE_REASONS;
+
 export interface CreditNoteInput {
   outletId: string;
   invoiceId: string | null;
   jumlah: number;
   alasan: string;
+  kodeAlasan: CreditNoteReason;
+  tanggal: string;
 }
 
 export interface CreditNoteView {
@@ -178,10 +215,21 @@ export interface CreditNoteView {
   nomor: string;
   outletId: string;
   invoiceId: string | null;
+  /** The number of the invoice it reduces, when it names one. */
+  invoiceNomor?: string;
   jumlah: number;
   alasan: string;
+  kodeAlasan: string;
   status: CreditNoteStatus;
   tanggal: string;
+  alasanBatal?: string;
+  version: number;
+}
+
+export interface CreditNoteFilters {
+  status?: CreditNoteStatus | "Semua";
+  outletId?: string;
+  search?: string;
 }
 
 export interface JournalLineView {
@@ -271,6 +319,14 @@ export interface FinanceApi {
   /** Reverses fundDistributionStop for a stop not yet dispatched. */
   releaseDistributionStop(input: FundStopInput): Promise<FundingResult>;
   submitCreditNote(input: CreditNoteInput): Promise<CreditNoteView>;
+  getCreditNotes(filters?: CreditNoteFilters): Promise<CreditNoteView[]>;
+  /** Lands an issued credit note on its invoice (or on invoiceId, for a
+   *  credit on account). */
+  applyCreditNote(id: string, version: number, invoiceId?: string): Promise<CreditNoteView>;
+  cancelCreditNote(id: string, version: number, reason: string): Promise<CreditNoteView>;
+  getInvoice(id: string): Promise<InvoiceDetailView>;
+  /** Ends a manual invoice raised in error; its journals are reversed. */
+  voidInvoice(id: string, version: number, reason: string): Promise<InvoiceView>;
   getJournals(range?: DateRange): Promise<JournalView[]>;
   /** "Jurnal umum" (gap-closing plan, Phase E). Refused by the real
    *  backend's own finance.create.journals grant for anyone but
