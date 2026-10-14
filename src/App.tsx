@@ -24,6 +24,7 @@ import { ReceivablesPage } from "./pages/receivables/ReceivablesPage";
 import { InvoiceDetailPage } from "./pages/receivables/InvoiceDetailPage";
 import { CashBankPage } from "./pages/cashbank/CashBankPage";
 import { AssetsPage } from "./pages/assets/AssetsPage";
+import { PurchaseDetailPage } from "./pages/purchases/PurchaseDetailPage";
 import { PurchasesPage } from "./pages/purchases/PurchasesPage";
 import { OpeningBalanceWizardPage } from "./pages/openingbalance/OpeningBalanceWizardPage";
 import { LedgerPage } from "./pages/ledger/LedgerPage";
@@ -183,6 +184,11 @@ const router = createBrowserRouter([
       { path: "purchases", element: (
         <RequirePermission permission={PERMISSIONS.PURCHASES_VIEW}>
           <PurchasesPage />
+        </RequirePermission>
+      ) },
+      { path: "purchases/:id", element: (
+        <RequirePermission permission={PERMISSIONS.PURCHASES_VIEW}>
+          <PurchaseDetailPage />
         </RequirePermission>
       ) },
       { path: "opening-balance", element: (

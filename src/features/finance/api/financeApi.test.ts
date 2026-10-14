@@ -694,4 +694,19 @@ describe("chart of accounts: create + upgrade (phase P1)", () => {
     expect(rows.find((r) => r.akun.kode === "5-4000")?.akun.induk).toBeUndefined();
     expect(rows.find((r) => r.akun.kode === "5-4100")?.akun.induk).toBe("5-4000");
   });
+
+  it("flags a control account and everything under it, and nothing else", async () => {
+    getList.mockResolvedValue({
+      items: [
+        { id: "b", code: "1-1100", name: "Bank", account_type: "asset", normal_balance: "dr", is_system: true, role: "bank" },
+        { id: "b1", code: "1-1101", name: "Bank BCA", account_type: "asset", normal_balance: "dr", is_system: false, parent_id: "b" },
+        { id: "e", code: "5-3300", name: "Beban Pemeliharaan", account_type: "expense", normal_balance: "dr", is_system: false },
+      ],
+      pagination: {},
+    });
+    getOne.mockResolvedValue({ rows: [], totals: {}, balanced: true });
+    const rows = await financeApiHttp.getChartOfAccounts();
+    const flag = (code: string) => rows.find((r) => r.akun.kode === code)?.akun.kontrol;
+    expect([flag("1-1100"), flag("1-1101"), flag("5-3300")]).toEqual([true, true, false]);
+  });
 });

@@ -57,7 +57,7 @@ describe("getPurchases", () => {
 
     expect(row.purchaseNumber).toBe("PB-202610-0001");
     expect(row.supplierName).toBe("UD. Sumber Logam");
-    expect(row.lines[0]).toMatchObject({ productId: PRODUCT_ID, quantity: 2, unitCost: 50000, subtotal: 100000 });
+    expect(row.lines[0]).toMatchObject({ kind: "product", productId: PRODUCT_ID, quantity: 2, unitCost: 50000, subtotal: 100000 });
     expect(row.paymentStatus).toBe("unpaid");
   });
 
@@ -103,9 +103,64 @@ describe("recordGeneralPurchase", () => {
       supplier_id: SUPPLIER_ID,
       branch_id: BRANCH_ID,
       date: "2026-10-08",
-      lines: [{ product_id: PRODUCT_ID, quantity: 2, unit_cost: 50000 }],
+      due_date: undefined,
+      vendor_invoice_number: undefined,
+      lines: [{ product_id: PRODUCT_ID, account_id: undefined, description: undefined, quantity: 2, unit_cost: 50000 }],
       notes: "Pembelian timbangan",
     });
+  });
+
+  it("sends an account line with its description, the terms, and the branch in scope", async () => {
+    send.mockResolvedValue(wire());
+    await purchaseApiHttp.recordGeneralPurchase({
+      supplierId: SUPPLIER_ID, date: "2026-10-08", dueDate: "2026-11-07", vendorInvoiceNumber: " BM/118 ",
+      branchId: BRANCH_ID,
+      lines: [{ accountId: "acc-1", description: "Servis truk", productId: "", quantity: 1, unitCost: 300_000 }],
+    });
+    // The branch in scope is used as is -- no default-branch lookup.
+    expect(getList).not.toHaveBeenCalled();
+    expect(send.mock.calls[0][2]).toMatchObject({
+      branch_id: BRANCH_ID, due_date: "2026-11-07", vendor_invoice_number: "BM/118",
+      lines: [{ product_id: undefined, account_id: "acc-1", description: "Servis truk", quantity: 1, unit_cost: 300_000 }],
+    });
+  });
+});
+
+describe("bill payments and voids", () => {
+  it("reads what is paid, what is left and each instalment", async () => {
+    getList.mockResolvedValue({ items: [wire({
+      payment_status: "partial", amount_paid: 40_000, outstanding_amount: 60_000, due_date: "2026-10-31",
+      payments: [{ id: "p-1", payment_number: "BYR-1", paid_on: "2026-10-10", amount: 40_000, status: "posted", version: 1 }],
+    })] });
+    const [row] = await purchaseApiHttp.getPurchases();
+    expect(row).toMatchObject({ paymentStatus: "partial", amountPaid: 40_000, outstanding: 60_000, dueDate: "2026-10-31" });
+    expect(row.payments[0]).toMatchObject({ number: "BYR-1", amount: 40_000, status: "posted" });
+  });
+
+  it("asks the server for one status and answers 'open' (unpaid or partial) itself", async () => {
+    getList.mockResolvedValue({ items: [
+      wire({ id: "a", payment_status: "unpaid" }), wire({ id: "b", payment_status: "partial" }),
+      wire({ id: "c", payment_status: "paid" }), wire({ id: "d", payment_status: "void" }),
+    ] });
+    const open = await purchaseApiHttp.getPurchases({ paymentStatus: "open", supplierId: SUPPLIER_ID, search: "BM" });
+    expect(open.map((r) => r.id)).toEqual(["a", "b"]);
+    expect(getList.mock.calls[0][1]).toMatchObject({
+      search: "BM", filters: [{ field: "supplier_id", operator: "eq", value: SUPPLIER_ID }],
+    });
+  });
+
+  it("pays part of a bill, and voids a payment or a bill under the version read", async () => {
+    send.mockResolvedValue(wire({ payment_status: "partial" }));
+    await purchaseApiHttp.recordPurchasePayment({
+      purchaseId: ID, amount: 40_000, paidOn: "2026-10-10", bankAccountId: "ba-1", bankReference: " TRF-9 ",
+    });
+    await purchaseApiHttp.voidPurchasePayment(ID, "p-1", 2, "transfer ditarik");
+    await purchaseApiHttp.voidPurchase(ID, 3, "tagihan ganda");
+    expect(send.mock.calls[0]).toEqual(["post", `/purchases/${ID}/payments`, {
+      amount: 40_000, paid_on: "2026-10-10", bank_account_id: "ba-1", bank_reference: "TRF-9", notes: undefined,
+    }]);
+    expect(send.mock.calls[1]).toEqual(["post", `/purchases/${ID}/payments/p-1/void`, { version: 2, reason: "transfer ditarik" }]);
+    expect(send.mock.calls[2]).toEqual(["post", `/purchases/${ID}/void`, { version: 3, reason: "tagihan ganda" }]);
   });
 });
 

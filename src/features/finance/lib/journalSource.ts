@@ -15,17 +15,19 @@ export const JOURNAL_SOURCE_LABEL: Record<JournalSourceType, string> = {
   closing: "Tutup buku",
   openingBalance: "Saldo awal",
   sim3lonOpening: "Saldo awal SIM3LON",
+  purchasePayment: "Pembayaran tagihan",
 };
 
 /**
  * Where the document behind a journal is worked on, or undefined when the
- * journal is its own document (manual, closing, opening balance). Only a
- * transport fee claim has a detail page today; the rest open the module the
- * document lives in.
+ * journal is its own document (manual, closing, opening balance). Invoices,
+ * vendor bills (and their payments, which the backend links to the bill)
+ * and transport fee claims open their own page; the rest open their module.
  */
 export function journalSourceHref(type: JournalSourceType, sourceId?: string): string | undefined {
   switch (type) {
     case "invoice":
+      return sourceId ? `/receivables/${sourceId}` : "/receivables";
     case "creditNote":
       return "/receivables";
     case "payment":
@@ -33,7 +35,8 @@ export function journalSourceHref(type: JournalSourceType, sourceId?: string): s
     case "delivery":
       return "/transactions";
     case "purchase":
-      return "/purchases";
+    case "purchasePayment":
+      return sourceId ? `/purchases/${sourceId}` : "/purchases";
     case "expense":
       return "/expenses";
     case "transportationClaim":

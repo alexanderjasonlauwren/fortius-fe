@@ -86,7 +86,9 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
   // adalah akun induk; posting harus ke sub-akun"), caught live posting a
   // manual journal to one (gap-closing plan, Phase E) -- the same chart,
   // so a voucher's own line picker excludes parents too.
-  const postableAccounts = leafAccounts(accounts.data ?? []);
+  // A control account (receivable, payable, inventory, cash/bank...) is
+  // refused on a voucher line by the backend; do not offer it.
+  const postableAccounts = leafAccounts(accounts.data ?? []).filter((a) => !a.akun.kontrol);
 
   const save = useDeskMutation({
     mutationFn: () => {

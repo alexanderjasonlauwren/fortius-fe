@@ -681,6 +681,7 @@ const SOURCE_TYPE: Record<string, JournalView["sourceType"]> = {
   manual: "manual", purchase: "purchase", cash_voucher: "cashVoucher", depreciation: "depreciation",
   closing: "closing", opening_balance: "openingBalance", expense: "expense",
   transportation_claim: "transportationClaim", sim3lon_opening: "sim3lonOpening",
+  purchase_payment: "purchasePayment",
 };
 
 function toJournalView(row: JournalResponse): JournalView {
@@ -925,6 +926,29 @@ async function getProfitAndLoss(range: { from: string; to: string }): Promise<Pr
  * still get it, so a refused trial balance leaves every balance at zero
  * rather than failing the picker.
  */
+/** Roles the backend reserves for one module (cashvoucher's
+ *  controlAccountModule, purchase's controlRoles). */
+const CONTROL_ROLES = new Set([
+  "receivable", "registration_receivable", "transport_receivable", "customer_deposit",
+  "payable", "inventory", "output_vat", "retained_earnings", "opening_balance_equity", "cash", "bank",
+]);
+
+/** Ids of accounts that carry a control role or sit under one. */
+function controlAccountIds(rows: AccountResponse[]): Set<string> {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const out = new Set<string>();
+  for (const row of rows) {
+    for (let cur: AccountResponse | undefined = row, depth = 0; cur && depth < 10; depth++) {
+      if (cur.role && CONTROL_ROLES.has(cur.role)) {
+        out.add(row.id);
+        break;
+      }
+      cur = cur.parent_id ? byId.get(cur.parent_id) : undefined;
+    }
+  }
+  return out;
+}
+
 async function getChartOfAccounts(): Promise<AccountBalance[]> {
   const today = todayIso();
   const [accountRows, tb] = await Promise.all([
@@ -932,6 +956,7 @@ async function getChartOfAccounts(): Promise<AccountBalance[]> {
     getTrialBalance({ from: `${today.slice(0, 4)}-01-01`, to: today }).catch(() => null),
   ]);
   const idToCode = new Map(accountRows.map((a) => [a.id, a.code]));
+  const control = controlAccountIds(accountRows);
   const closingByCode = new Map((tb?.rows ?? []).map((r) => [r.akun.kode, r]));
 
   return accountRows
@@ -941,7 +966,7 @@ async function getChartOfAccounts(): Promise<AccountBalance[]> {
       const debit = row?.saldoAkhirDebit ?? 0;
       const kredit = row?.saldoAkhirKredit ?? 0;
       return {
-        akun: toAccountEntity(a, idToCode),
+        akun: { ...toAccountEntity(a, idToCode), kontrol: control.has(a.id) },
         debit,
         kredit,
         saldo: a.normal_balance === "dr" ? debit - kredit : kredit - debit,

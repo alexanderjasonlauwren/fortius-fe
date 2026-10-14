@@ -756,6 +756,12 @@ export interface AccountEntity {
   role?: AccountRole;
   /** Accounts the posting rules depend on cannot be deleted. */
   sistem: boolean;
+  /**
+   * A control account, or under one: receivable, payable, inventory, cash,
+   * bank... -- moved only by its own module. The backend refuses it on a
+   * voucher or bill line; pickers hide it. Set by getChartOfAccounts.
+   */
+  kontrol?: boolean;
   aktif: boolean;
 }
 
@@ -794,7 +800,9 @@ export type JournalSourceType =
   // until the ledger showed each journal's source (accounting parity P2).
   | "expense"
   | "transportationClaim"
-  | "sim3lonOpening";
+  | "sim3lonOpening"
+  // One instalment paid on a vendor bill (accounting parity P3).
+  | "purchasePayment";
 
 /**
  * A posted journal is immutable. Corrections are made by posting a reversal,

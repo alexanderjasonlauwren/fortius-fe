@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Wand2 } from "lucide-react";
 import { getChartOfAccounts } from "@/features/finance/api/financeApi";
+import { leafAccounts } from "@/features/finance/lib/accounts";
 import {
   autoMatch,
   classifyLine,
@@ -58,7 +59,9 @@ function ClassifyRow({ line, importId }: { line: BankStatementLine; importId: st
     <div className="flex items-center gap-2">
       <SelectInput value={accountId} onChange={(e) => setAccountId(e.target.value)} className="h-8 text-xs">
         <option value="">Posting ke akun…</option>
-        {(accounts.data ?? []).map((a) => (
+        {/* Leaves no module controls: classifying posts a cash voucher,
+            which refuses a parent or a control account. */}
+        {leafAccounts(accounts.data ?? []).filter((a) => !a.akun.kontrol).map((a) => (
           <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
         ))}
       </SelectInput>

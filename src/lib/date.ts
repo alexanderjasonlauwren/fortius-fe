@@ -18,6 +18,12 @@ export function isoDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** "YYYY-MM-DD" plus n calendar days, in local time -- payment terms. */
+export function addDaysIso(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return isoDate(new Date(y, m - 1, d + days));
+}
+
 export function todayIso(): string {
   return isoDate(startOfToday());
 }

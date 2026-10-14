@@ -253,6 +253,8 @@ export const PERMISSIONS = {
   PURCHASES_VIEW: "finance.read.purchases",
   PURCHASES_CREATE: "finance.create.purchases",
   PURCHASES_VERIFY: "finance.verify.purchases",
+  /** Voiding a vendor bill, or one payment on it (accounting parity P3). */
+  PURCHASES_VOID: "finance.void.purchases",
 
   // Delivery execution — what happens at the drop, recorded by whoever is
   // there. Executing is an update to the delivery row, not a verb of its own.
