@@ -1,0 +1,49 @@
+name: Checks
+
+# The Vercel demo deploy was retired on 2026-10-14: it served the mock build,
+# and the console is API-only now. The console ships as the Docker image
+# (Dockerfile) next to the backend; this workflow only proves a change builds.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Every check this repository has, run on every change.
+  check:
+    name: Type check, lint, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      # Was missing, and that is why thirteen lint errors accumulated
+      # unnoticed: `npm run lint` existed and nothing ran it. A standard
+      # nothing enforces is a suggestion.
+      - name: Lint
+        run: npm run lint
+
+      # The console had no test framework at all until 2026-08-29 — not few
+      # tests, none — so this step and the suite behind it arrived together.
+      # Wired into CI on the first day for the reason the lint step above
+      # exists: a check nothing runs is a check that stops being true.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

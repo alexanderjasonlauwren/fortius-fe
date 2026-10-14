@@ -205,10 +205,6 @@ function generateCode(name: string): string {
  */
 async function resolveAccountId(code: string | undefined): Promise<string | undefined> {
   if (!code) return undefined;
-  // financeApiHttp directly, never the mock/http switcher -- this adapter
-  // is itself the HTTP implementation and must behave as one regardless
-  // of the ambient VITE_DATA_SOURCE, the same reasoning every other
-  // *Api.http.ts file importing another feature's concrete module follows.
   const accounts = leafAccounts(await financeApiHttp.getChartOfAccounts());
   const match = accounts.find((a) => a.akun.kode === code);
   if (!match) {
