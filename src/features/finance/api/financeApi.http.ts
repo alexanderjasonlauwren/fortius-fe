@@ -42,6 +42,7 @@ import type {
   FundStopInput,
   InvoiceFilters,
   InvoiceView,
+  JournalQuery,
   JournalView,
   PaymentMethodView,
   PaymentView,
@@ -668,6 +669,8 @@ interface JournalResponse {
   source_id?: string;
   source_number?: string;
   version: number;
+  branch_id?: string;
+  branch_name?: string;
 }
 
 // Mirrors fin.journals.source_type's own CHECK constraint values, renamed
@@ -703,6 +706,8 @@ function toJournalView(row: JournalResponse): JournalView {
       memo: l.memo,
     })),
     version: row.version,
+    branchId: row.branch_id,
+    branchName: row.branch_name,
   };
 }
 
@@ -721,10 +726,11 @@ const MAX_JOURNAL_PAGES = 20;
  * what LedgerPage's Jurnal tab and the financial-statements Buku Besar tab
  * both render directly.
  */
-async function getJournals(range?: DateRange): Promise<JournalView[]> {
-  const filters: { field: string; operator: "gte" | "lte"; value: string }[] = [];
+async function getJournals(range?: DateRange, query?: JournalQuery): Promise<JournalView[]> {
+  const filters: { field: string; operator: "eq" | "gte" | "lte"; value: string }[] = [];
   if (range?.from) filters.push({ field: "journal_date", operator: "gte", value: range.from });
   if (range?.to) filters.push({ field: "journal_date", operator: "lte", value: range.to });
+  if (query?.accountId) filters.push({ field: "account_id", operator: "eq", value: query.accountId });
 
   const items: JournalResponse[] = [];
   for (let pageNumber = 1; pageNumber <= MAX_JOURNAL_PAGES; pageNumber++) {
@@ -733,6 +739,7 @@ async function getJournals(range?: DateRange): Promise<JournalView[]> {
       pageSize: PAGE_SIZE,
       sort: [{ field: "journal_date", direction: "desc" }],
       filters,
+      search: query?.search?.trim() || undefined,
     });
     items.push(...page.items);
     if (!page.pagination.has_next) break;
@@ -751,7 +758,7 @@ async function createManualJournal(input: CreateManualJournalInput): Promise<Jou
       account_id: l.accountId,
       debit: l.debit || undefined,
       credit: l.kredit || undefined,
-      memo: l.memo,
+      memo: l.memo?.trim() || undefined,
     })),
   });
   return toJournalView(row);

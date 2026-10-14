@@ -1,15 +1,19 @@
 /**
- * "Jurnal umum": a hand-entered correction. No branch picker -- the same
- * gap every other finance screen in this console already has (no branch-
- * listing endpoint exists anywhere to build one from); left blank, a
- * manual journal resolves to the tenant's own default branch, exactly as
- * CreateManualJournalRequest's own doc describes. Gap-closing plan, Phase
- * E / financial-statements plan P7.4.
+ * "Jurnal umum": a hand-entered correction. Booked in the branch the
+ * console is scoped to; consolidated leaves it to the tenant's default
+ * branch, as CreateManualJournalRequest's own doc describes. Gap-closing
+ * plan, Phase E / financial-statements plan P7.4.
+ *
+ * Accounting parity P3: a memo per line, and "duplicate" -- a recurring
+ * correction (an accrual, a monthly allocation) starts from last month's
+ * entry instead of being typed again.
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
-import { createManualJournal, getChartOfAccounts } from "@/features/finance/api/financeApi";
+import { createManualJournal, getChartOfAccounts, type JournalView } from "@/features/finance/api/financeApi";
+import { useScope } from "@/features/tenancy/useScope";
+import { todayIso } from "@/lib/date";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Field, SelectInput, TextInput } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
@@ -25,32 +29,46 @@ interface LineRow {
   accountId: string;
   debit: number;
   kredit: number;
+  memo: string;
 }
 
 let rowKeySeq = 0;
 function emptyLine(): LineRow {
   rowKeySeq += 1;
-  return { key: rowKeySeq, accountId: "", debit: 0, kredit: 0 };
+  return { key: rowKeySeq, accountId: "", debit: 0, kredit: 0, memo: "" };
+}
+
+/** A duplicate's lines: the same accounts, amounts and memos, fresh keys. */
+function linesFrom(journal?: JournalView | null): LineRow[] {
+  if (!journal?.lines.length) return [emptyLine(), emptyLine()];
+  return journal.lines.map((l) => ({
+    key: (rowKeySeq += 1), accountId: l.akun?.id ?? "", debit: l.debit, kredit: l.kredit, memo: l.memo ?? "",
+  }));
 }
 
 interface ManualJournalDialogProps {
   open: boolean;
   onClose: () => void;
   onPosted: () => void;
+  /** Pre-fills the entry from this journal (duplicate), dated today. The
+   *  caller remounts the dialog per template (a `key`), so lazy initial
+   *  state is enough. */
+  template?: JournalView | null;
 }
 
-export function ManualJournalDialog({ open, onClose, onPosted }: ManualJournalDialogProps) {
-  const [journalDate, setJournalDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [description, setDescription] = useState("");
-  const [rows, setRows] = useState<LineRow[]>(() => [emptyLine(), emptyLine()]);
+export function ManualJournalDialog({ open, onClose, onPosted, template }: ManualJournalDialogProps) {
+  const { branchId } = useScope();
+  const [journalDate, setJournalDate] = useState(todayIso);
+  const [description, setDescription] = useState(template?.keterangan ?? "");
+  const [rows, setRows] = useState<LineRow[]>(() => linesFrom(template));
 
   const accounts = useQuery({ queryKey: [...scopeKey(), "manual-journal", "accounts"], queryFn: getChartOfAccounts, enabled: open });
   const postableAccounts = leafAccounts(accounts.data ?? []);
 
   function reset() {
-    setJournalDate(new Date().toISOString().slice(0, 10));
-    setDescription("");
-    setRows([emptyLine(), emptyLine()]);
+    setJournalDate(todayIso());
+    setDescription(template?.keterangan ?? "");
+    setRows(linesFrom(template));
   }
 
   function setSide(key: number, side: "debit" | "kredit", value: number) {
@@ -64,11 +82,12 @@ export function ManualJournalDialog({ open, onClose, onPosted }: ManualJournalDi
   const post = useDeskMutation({
     mutationFn: () =>
       createManualJournal({
+        branchId: branchId ?? undefined,
         journalDate,
         description,
         lines: rows
           .filter((r) => r.accountId && (r.debit > 0 || r.kredit > 0))
-          .map((r) => ({ accountId: r.accountId, debit: r.debit, kredit: r.kredit })),
+          .map((r) => ({ accountId: r.accountId, debit: r.debit, kredit: r.kredit, memo: r.memo })),
       }),
     success: (row) => ({ title: `${row.nomor} diposting` }),
     errorTitle: "Jurnal tidak tersimpan",
@@ -82,7 +101,7 @@ export function ManualJournalDialog({ open, onClose, onPosted }: ManualJournalDi
     <Dialog open={open} onOpenChange={(next) => !next && (reset(), onClose())}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Jurnal umum baru</DialogTitle>
+          <DialogTitle>{template ? `Duplikat ${template.nomor}` : "Jurnal umum baru"}</DialogTitle>
           <DialogDescription>
             Koreksi manual -- tidak dapat diubah setelah diposting, hanya dibalik.
           </DialogDescription>
@@ -105,8 +124,9 @@ export function ManualJournalDialog({ open, onClose, onPosted }: ManualJournalDi
               <span className="text-right">Kredit</span>
               <span />
             </div>
-            {rows.map((row) => (
-              <div key={row.key} className="grid grid-cols-[1fr_7rem_7rem_2rem] items-center gap-2">
+            {rows.map((row, i) => (
+              <div key={row.key} className="space-y-1">
+              <div className="grid grid-cols-[1fr_7rem_7rem_2rem] items-center gap-2">
                 <SelectInput
                   aria-label="Akun"
                   value={row.accountId}
@@ -134,6 +154,15 @@ export function ManualJournalDialog({ open, onClose, onPosted }: ManualJournalDi
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
+              </div>
+              <TextInput
+                aria-label={`Keterangan baris ${i + 1}`}
+                placeholder="Keterangan baris (opsional)"
+                maxLength={2000}
+                className="py-1 text-xs"
+                value={row.memo}
+                onChange={(e) => setRows(rows.map((r) => (r.key === row.key ? { ...r, memo: e.target.value } : r)))}
+              />
               </div>
             ))}
             <Button type="button" variant="outline" size="sm" onClick={() => setRows([...rows, emptyLine()])}>

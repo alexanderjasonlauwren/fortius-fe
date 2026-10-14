@@ -266,6 +266,16 @@ export interface JournalView {
   lines: JournalLineView[];
   total: number;
   version: number;
+  branchId?: string;
+  branchName?: string;
+}
+
+/** Narrows the journal list beyond its date range (accounting parity P3). */
+export interface JournalQuery {
+  /** Journal number or description. */
+  search?: string;
+  /** Only journals with a line on this account. */
+  accountId?: string;
 }
 
 export interface ManualJournalLineInput {
@@ -343,7 +353,7 @@ export interface FinanceApi {
   getInvoice(id: string): Promise<InvoiceDetailView>;
   /** Ends a manual invoice raised in error; its journals are reversed. */
   voidInvoice(id: string, version: number, reason: string): Promise<InvoiceView>;
-  getJournals(range?: DateRange): Promise<JournalView[]>;
+  getJournals(range?: DateRange, query?: JournalQuery): Promise<JournalView[]>;
   /** "Jurnal umum" (gap-closing plan, Phase E). Refused by the real
    *  backend's own finance.create.journals grant for anyone but
    *  tenant_admin -- the same tier manual journal entry has always sat

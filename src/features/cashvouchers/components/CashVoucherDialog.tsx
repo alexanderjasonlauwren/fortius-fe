@@ -5,12 +5,21 @@
  * no voucher_type field at all), so editing locks the segmented control
  * rather than hiding it, the same reasoning BankSection's own Kind field
  * follows. Financial-statements plan's gap-closing phase, Phase B.
+ *
+ * Accounting parity P3: a reference number, a contact (vendor or
+ * pangkalan), a memo per line, and "duplicate" -- a new draft pre-filled
+ * from an existing voucher, dated today.
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { getBankAccounts } from "@/features/bankaccounts/api/bankAccountApi";
 import { getChartOfAccounts } from "@/features/finance/api/financeApi";
+import { getVendors } from "@/features/suppliers/api/vendorApi";
+import { getOutletOptions } from "@/features/distribution/api/distributionApi";
+import { useScope } from "@/features/tenancy/useScope";
+import { contactValue, parseContact } from "@/features/cashvouchers/lib/contact";
+import { todayIso } from "@/lib/date";
 import {
   createCashVoucher,
   updateCashVoucher,
@@ -57,31 +66,41 @@ interface CashVoucherDialogProps {
   onClose: () => void;
   /** Present when editing an existing draft; absent when creating. */
   voucher?: CashVoucher | null;
+  /** Pre-fills a NEW draft from this voucher (duplicate), dated today. */
+  template?: CashVoucher | null;
   onSaved: () => void;
 }
 
-export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVoucherDialogProps) {
+export function CashVoucherDialog({ open, onClose, voucher, template, onSaved }: CashVoucherDialogProps) {
   const editing = !!voucher;
+  const source = voucher ?? template;
+  const { branchId } = useScope();
   // Lazy initial state read straight from `voucher`, not an effect that
   // copies it in after mount -- the caller remounts this component (via a
   // `key` keyed on the voucher's own id, or "new") every time a different
   // voucher or a fresh create is opened, so each mount's initial state is
   // already right. See CashBankPage.tsx's own `key` for why that holds.
-  const [voucherType, setVoucherType] = useState<CashVoucherType>(voucher?.voucherType ?? "receipt");
-  const [voucherDate, setVoucherDate] = useState(voucher?.voucherDate ?? (() => new Date().toISOString().slice(0, 10))());
-  const [bankAccountId, setBankAccountId] = useState(voucher?.bankAccountId ?? "");
-  const [counterBankAccountId, setCounterBankAccountId] = useState(voucher?.counterBankAccountId ?? "");
-  const [counterparty, setCounterparty] = useState(voucher?.counterparty ?? "");
-  const [description, setDescription] = useState(voucher?.description ?? "");
-  const [amount, setAmount] = useState(voucher?.totalAmount ?? 0);
+  const [voucherType, setVoucherType] = useState<CashVoucherType>(source?.voucherType ?? "receipt");
+  // A duplicate is today's movement, not a copy of the old date.
+  const [voucherDate, setVoucherDate] = useState(voucher?.voucherDate ?? todayIso());
+  const [bankAccountId, setBankAccountId] = useState(source?.bankAccountId ?? "");
+  const [counterBankAccountId, setCounterBankAccountId] = useState(source?.counterBankAccountId ?? "");
+  const [counterparty, setCounterparty] = useState(source?.counterparty ?? "");
+  const [contact, setContact] = useState(source ? contactValue(source) : "");
+  // A duplicate never carries the old slip number: each movement has its own.
+  const [referenceNumber, setReferenceNumber] = useState(voucher?.referenceNumber ?? "");
+  const [description, setDescription] = useState(source?.description ?? "");
+  const [amount, setAmount] = useState(source?.totalAmount ?? 0);
   const [lines, setLines] = useState<LineRow[]>(() =>
-    voucher?.lines.length
-      ? voucher.lines.map((l) => ({ key: (lineKeySeq += 1), accountId: l.accountId, amount: l.amount, memo: l.memo }))
+    source?.lines.length
+      ? source.lines.map((l) => ({ key: (lineKeySeq += 1), accountId: l.accountId, amount: l.amount, memo: l.memo }))
       : [emptyLine()],
   );
 
   const bankAccounts = useQuery({ queryKey: [...scopeKey(), "cash-bank", "bank-accounts"], queryFn: getBankAccounts, enabled: open });
   const accounts = useQuery({ queryKey: [...scopeKey(), "cash-bank", "chart-of-accounts"], queryFn: getChartOfAccounts, enabled: open });
+  const vendors = useQuery({ queryKey: [...scopeKey(), "vendors"], queryFn: getVendors, enabled: open });
+  const outlets = useQuery({ queryKey: [...scopeKey(), "outlet-options"], queryFn: getOutletOptions, enabled: open });
   // ledger.Post refuses a line posted to a grouping header ("Akun %s
   // adalah akun induk; posting harus ke sub-akun"), caught live posting a
   // manual journal to one (gap-closing plan, Phase E) -- the same chart,
@@ -93,6 +112,8 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
   const save = useDeskMutation({
     mutationFn: () => {
       const payload = {
+        ...parseContact(contact),
+        referenceNumber,
         voucherType,
         voucherDate,
         bankAccountId,
@@ -104,18 +125,20 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
       };
       return voucher
         ? updateCashVoucher({ id: voucher.id, version: voucher.version, ...payload })
-        : createCashVoucher(payload);
+        // A new voucher is booked in the branch the console is scoped to;
+        // consolidated leaves it to the backend's default branch.
+        : createCashVoucher({ ...payload, branchId: branchId ?? undefined });
     },
     success: (row) => ({ title: `${row.voucherNumber} disimpan sebagai draft` }),
     errorTitle: "Voucher tidak tersimpan",
     onDone: () => { onSaved(); onClose(); },
   });
 
-  function applyTemplate(template: (typeof QUICK_TEMPLATES)[number]) {
-    setVoucherType(template.voucherType);
-    setCounterparty(template.counterparty);
-    const account = template.accountCode
-      ? accounts.data?.find((a) => a.akun.kode === template.accountCode)?.akun
+  function applyTemplate(quick: (typeof QUICK_TEMPLATES)[number]) {
+    setVoucherType(quick.voucherType);
+    setCounterparty(quick.counterparty);
+    const account = quick.accountCode
+      ? accounts.data?.find((a) => a.akun.kode === quick.accountCode)?.akun
       : undefined;
     if (account) setLines([emptyLine(account.id)]);
   }
@@ -131,7 +154,9 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{editing ? `Ubah ${voucher?.voucherNumber}` : "Voucher kas/bank baru"}</DialogTitle>
+          <DialogTitle>
+            {editing ? `Ubah ${voucher?.voucherNumber}` : template ? `Duplikat ${template.voucherNumber}` : "Voucher kas/bank baru"}
+          </DialogTitle>
           <DialogDescription>
             Tersimpan sebagai draft -- posting menulis jurnal dan tidak dapat diedit lagi.
           </DialogDescription>
@@ -156,7 +181,7 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
             )}
           </Field>
 
-          {!editing && (
+          {!editing && !template && (
             <div className="flex flex-wrap gap-2">
               {QUICK_TEMPLATES.map((t) => (
                 <Button key={t.label} type="button" variant="outline" size="sm" onClick={() => applyTemplate(t)}>
@@ -169,6 +194,9 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
           <div className="grid grid-cols-2 gap-4">
             <Field label="Tanggal" htmlFor="cv-date" required>
               <TextInput id="cv-date" type="date" value={voucherDate} onChange={(e) => setVoucherDate(e.target.value)} />
+            </Field>
+            <Field label="No. referensi" htmlFor="cv-ref" hint="No. slip, transfer, atau kuitansi.">
+              <TextInput id="cv-ref" mono maxLength={100} value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} />
             </Field>
             <Field label={voucherType === "transfer" ? "Dari akun" : "Akun kas/bank"} htmlFor="cv-bank" required>
               <SelectInput id="cv-bank" value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
@@ -202,7 +230,8 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
             <div className="space-y-2">
               <p className="text-xs font-semibold text-ink-muted">Baris akun</p>
               {lines.map((line, i) => (
-                <div key={line.key} className="flex items-end gap-2">
+                <div key={line.key} className="space-y-1">
+                <div className="flex items-end gap-2">
                   <Field label={i === 0 ? "Akun" : undefined} htmlFor={`cv-line-account-${line.key}`} className="flex-1">
                     <SelectInput
                       id={`cv-line-account-${line.key}`}
@@ -232,6 +261,15 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
+                <TextInput
+                  aria-label={`Keterangan baris ${i + 1}`}
+                  placeholder="Keterangan baris (opsional)"
+                  maxLength={200}
+                  className="py-1 text-xs"
+                  value={line.memo ?? ""}
+                  onChange={(e) => setLines(lines.map((l) => (l.key === line.key ? { ...l, memo: e.target.value } : l)))}
+                />
+                </div>
               ))}
               <div className="flex items-center justify-between">
                 <Button type="button" variant="outline" size="sm" onClick={() => setLines([...lines, emptyLine()])}>
@@ -245,9 +283,24 @@ export function CashVoucherDialog({ open, onClose, voucher, onSaved }: CashVouch
             </div>
           )}
 
-          <Field label="Pihak terkait" htmlFor="cv-counterparty" hint="Nama bank, penyedia jasa, atau pihak lain.">
-            <TextInput id="cv-counterparty" value={counterparty} onChange={(e) => setCounterparty(e.target.value)} />
-          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Kontak" htmlFor="cv-contact" hint="Vendor atau pangkalan, bila ada.">
+              <SelectInput id="cv-contact" value={contact} onChange={(e) => setContact(e.target.value)}>
+                <option value="">— Tidak ada —</option>
+                <optgroup label="Vendor">
+                  {(vendors.data ?? []).filter((v) => v.status === "atv" || contact === `s:${v.id}`).map((v) => (
+                    <option key={v.id} value={`s:${v.id}`}>{v.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Pangkalan">
+                  {(outlets.data ?? []).map((o) => <option key={o.id} value={`o:${o.id}`}>{o.label}</option>)}
+                </optgroup>
+              </SelectInput>
+            </Field>
+            <Field label="Pihak lain" htmlFor="cv-counterparty" hint="Bank, penyedia jasa, atau pihak tanpa kontak.">
+              <TextInput id="cv-counterparty" maxLength={200} value={counterparty} onChange={(e) => setCounterparty(e.target.value)} />
+            </Field>
+          </div>
           <Field label="Catatan" htmlFor="cv-description">
             <TextareaInput id="cv-description" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
           </Field>

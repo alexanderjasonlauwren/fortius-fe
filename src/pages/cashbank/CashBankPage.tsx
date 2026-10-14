@@ -6,10 +6,11 @@
  * is its first console surface.
  */
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, FolderOpen, Plus, Send, Wallet, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, FolderOpen, Plus, Wallet } from "lucide-react";
 import { getBankAccounts } from "@/features/bankaccounts/api/bankAccountApi";
 import {
+  deleteCashVoucher,
   listCashVouchers,
   postCashVoucher,
   type CashVoucher,
@@ -17,6 +18,9 @@ import {
   type CashVoucherType,
 } from "@/features/cashvouchers/api/cashVoucherApi";
 import { CashVoucherDialog } from "@/features/cashvouchers/components/CashVoucherDialog";
+import { VoucherDetailDialog } from "@/features/cashvouchers/components/VoucherDetailDialog";
+import { VOUCHER_STATUS_LABEL, VOUCHER_TYPE_LABEL, voucherParty } from "@/features/cashvouchers/lib/labels";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { VoidVoucherDialog } from "@/features/cashvouchers/components/VoidVoucherDialog";
 import { listImports, getReconciliation } from "@/features/bankstatements/api/bankStatementApi";
 import { ImportBankStatementDialog } from "@/features/bankstatements/components/ImportBankStatementDialog";
@@ -26,7 +30,7 @@ import { PERMISSIONS } from "@/features/rbac/permissions";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
-import { Field, SegmentedControl, SelectInput } from "@/components/common/Field";
+import { Field, SearchInput, SegmentedControl, SelectInput, TextInput } from "@/components/common/Field";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
@@ -36,28 +40,42 @@ import { scopeKey } from "@/lib/scope";
 
 type Tab = "transaksi" | "rekening-koran" | "rekonsiliasi";
 
-const VOUCHER_TYPE_LABEL: Record<CashVoucherType, string> = {
-  receipt: "Kas masuk",
-  disbursement: "Kas keluar",
-  transfer: "Transfer",
-};
-const VOUCHER_STATUS_LABEL: Record<CashVoucherStatus, string> = {
-  draft: "Draft",
-  posted: "Diposting",
-  void: "Dibatalkan",
-};
+/** What the voucher dialog is open for: a fresh one, editing a draft, or
+ *  a new draft copied from an existing voucher. */
+type VoucherDialogState = { mode: "new" } | { mode: "edit" | "duplicate"; voucher: CashVoucher } | null;
 
 export function CashBankPage() {
   const [tab, setTab] = useState<Tab>("transaksi");
+  const queryClient = useQueryClient();
+  // An edit changes the voucher the detail dialog caches, not only the list.
+  const refreshVouchers = () => {
+    void vouchers.refetch();
+    void queryClient.invalidateQueries({ queryKey: [...scopeKey(), "cash-bank", "voucher"] });
+  };
 
   /* ── Transaksi ─────────────────────────────────────────────────────── */
   const [voucherStatusFilter, setVoucherStatusFilter] = useState<CashVoucherStatus | "">("");
-  const [voucherDialog, setVoucherDialog] = useState<"new" | CashVoucher | null>(null);
+  const [voucherTypeFilter, setVoucherTypeFilter] = useState<CashVoucherType | "">("");
+  const [voucherAccountFilter, setVoucherAccountFilter] = useState("");
+  const [voucherSearch, setVoucherSearch] = useState("");
+  const [voucherFrom, setVoucherFrom] = useState("");
+  const [voucherTo, setVoucherTo] = useState("");
+  const [voucherDialog, setVoucherDialog] = useState<VoucherDialogState>(null);
+  const [viewing, setViewing] = useState<CashVoucher | null>(null);
+  const [deleting, setDeleting] = useState<CashVoucher | null>(null);
   const [voidTarget, setVoidTarget] = useState<CashVoucher | null>(null);
 
+  const voucherFilters = {
+    status: voucherStatusFilter || undefined,
+    voucherType: voucherTypeFilter || undefined,
+    bankAccountId: voucherAccountFilter || undefined,
+    search: voucherSearch,
+    from: voucherFrom || undefined,
+    to: voucherTo || undefined,
+  };
   const vouchers = useQuery({
-    queryKey: [...scopeKey(), "cash-bank", "vouchers", voucherStatusFilter],
-    queryFn: () => listCashVouchers(voucherStatusFilter ? { status: voucherStatusFilter } : undefined),
+    queryKey: [...scopeKey(), "cash-bank", "vouchers", voucherFilters],
+    queryFn: () => listCashVouchers(voucherFilters),
     enabled: tab === "transaksi",
   });
 
@@ -65,6 +83,13 @@ export function CashBankPage() {
     mutationFn: (row: CashVoucher) => postCashVoucher(row.id, row.version),
     success: (row) => ({ title: `${row.voucherNumber} diposting`, description: "Jurnal telah ditulis." }),
     errorTitle: "Posting gagal",
+    onDone: () => { setViewing(null); refreshVouchers(); },
+  });
+  const deleteMutation = useDeskMutation({
+    mutationFn: (row: CashVoucher) => deleteCashVoucher(row.id),
+    success: (_, row) => ({ title: `${row.voucherNumber} dihapus` }),
+    errorTitle: "Draft tidak dapat dihapus",
+    onDone: () => { setDeleting(null); setViewing(null); void vouchers.refetch(); },
   });
 
   const voucherColumns: Column<CashVoucher>[] = [
@@ -73,7 +98,9 @@ export function CashBankPage() {
       render: (row) => (
         <>
           <span className="data block text-xs text-ink">{row.voucherNumber}</span>
-          <span className="text-2xs text-ink-muted">{VOUCHER_TYPE_LABEL[row.voucherType]}</span>
+          <span className="text-2xs text-ink-muted">
+            {VOUCHER_TYPE_LABEL[row.voucherType]}{row.referenceNumber ? ` · ${row.referenceNumber}` : ""}
+          </span>
         </>
       ),
       sortValue: (row) => row.voucherNumber,
@@ -88,41 +115,9 @@ export function CashBankPage() {
         </span>
       ),
     },
-    { key: "counterparty", header: "Pihak terkait", render: (row) => <span className="text-xs text-ink-muted">{row.counterparty ?? "—"}</span> },
+    { key: "counterparty", header: "Pihak terkait", render: (row) => <span className="text-xs text-ink-muted">{voucherParty(row) ?? "—"}</span> },
     { key: "amount", header: "Nilai", align: "right", render: (row) => <span className="data">{formatRupiah(row.totalAmount)}</span>, sortValue: (row) => row.totalAmount },
     { key: "status", header: "Status", render: (row) => <StatusBadge label={VOUCHER_STATUS_LABEL[row.status]} variant={getStatusVariant(VOUCHER_STATUS_LABEL[row.status])} /> },
-    {
-      key: "actions", header: "",
-      render: (row) =>
-        row.status === "draft" ? (
-          <CanAccess permission={PERMISSIONS.CASH_VOUCHERS_APPROVE}>
-            <div className="flex justify-end gap-1">
-              <Button variant="ghost" size="icon-xs" aria-label={`Ubah ${row.voucherNumber}`} onClick={() => setVoucherDialog(row)}>
-                <Wallet className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost" size="icon-xs" aria-label={`Posting ${row.voucherNumber}`}
-                onClick={() => postMutation.mutate(row)}
-                disabled={postMutation.isPending}
-              >
-                <Send className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </CanAccess>
-        ) : row.status === "posted" ? (
-          <CanAccess permission={PERMISSIONS.CASH_VOUCHERS_APPROVE}>
-            <div className="flex justify-end">
-              <Button
-                variant="ghost" size="icon-xs" aria-label={`Batalkan ${row.voucherNumber}`}
-                className="hover:bg-rust-soft hover:text-rust-ink"
-                onClick={() => setVoidTarget(row)}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </CanAccess>
-        ) : null,
-    },
   ];
 
   /* ── Rekening Koran ────────────────────────────────────────────────── */
@@ -170,15 +165,30 @@ export function CashBankPage() {
             title="Voucher kas & bank"
             hint={`${vouchers.data?.length ?? 0} voucher`}
             actions={
-              <div className="flex gap-2">
-                <SelectInput value={voucherStatusFilter} onChange={(e) => setVoucherStatusFilter(e.target.value as CashVoucherStatus | "")}>
+              <div className="flex flex-wrap items-center gap-2">
+                <SearchInput value={voucherSearch} onChange={setVoucherSearch} placeholder="Nomor, referensi, kontak" className="w-48" />
+                <TextInput type="date" aria-label="Dari tanggal" value={voucherFrom} max={voucherTo || undefined}
+                  onChange={(e) => setVoucherFrom(e.target.value)} className="w-36 py-1.5 text-xs" />
+                <TextInput type="date" aria-label="Sampai tanggal" value={voucherTo} min={voucherFrom || undefined}
+                  onChange={(e) => setVoucherTo(e.target.value)} className="w-36 py-1.5 text-xs" />
+                <SelectInput aria-label="Jenis" value={voucherTypeFilter} onChange={(e) => setVoucherTypeFilter(e.target.value as CashVoucherType | "")}>
+                  <option value="">Semua jenis</option>
+                  {Object.entries(VOUCHER_TYPE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </SelectInput>
+                <SelectInput aria-label="Akun kas/bank" value={voucherAccountFilter} onChange={(e) => setVoucherAccountFilter(e.target.value)}>
+                  <option value="">Semua akun</option>
+                  {(bankAccounts.data ?? []).map((a) => (
+                    <option key={a.id} value={a.id}>{a.kind === "cash" ? "Kas" : a.bank} {a.nomorRekening}</option>
+                  ))}
+                </SelectInput>
+                <SelectInput aria-label="Status" value={voucherStatusFilter} onChange={(e) => setVoucherStatusFilter(e.target.value as CashVoucherStatus | "")}>
                   <option value="">Semua status</option>
                   {Object.entries(VOUCHER_STATUS_LABEL).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </SelectInput>
                 <CanAccess permission={PERMISSIONS.CASH_VOUCHERS_CREATE}>
-                  <Button onClick={() => setVoucherDialog("new")}>
+                  <Button onClick={() => setVoucherDialog({ mode: "new" })}>
                     <Plus className="h-3.5 w-3.5" />
                     Voucher baru
                   </Button>
@@ -191,13 +201,14 @@ export function CashBankPage() {
             data={vouchers.data ?? []}
             isLoading={vouchers.isLoading}
             rowKey={(row) => row.id}
+            onRowClick={setViewing}
             spineFor={(row) => spineFor(VOUCHER_STATUS_LABEL[row.status])}
             pageSize={12}
             defaultSortKey="date"
             defaultSortDir="desc"
             dense
             emptyIcon={Wallet}
-            emptyMessage="Belum ada voucher"
+            emptyMessage={voucherSearch || voucherFrom || voucherTo || voucherStatusFilter || voucherTypeFilter || voucherAccountFilter ? "Tidak ada voucher yang cocok" : "Belum ada voucher"}
             emptyDescription="Catat kas masuk, kas keluar, atau transfer antar akun."
           />
         </Panel>
@@ -305,13 +316,33 @@ export function CashBankPage() {
         // Forces a fresh mount (so its lazy initial state re-reads
         // `voucher`) on every distinct target -- see the component's own
         // doc for why an effect was the wrong fix here.
-        key={voucherDialog === "new" ? "new" : voucherDialog ? voucherDialog.id : "closed"}
+        key={!voucherDialog ? "closed" : voucherDialog.mode === "new" ? "new" : `${voucherDialog.mode}-${voucherDialog.voucher.id}`}
         open={!!voucherDialog}
-        voucher={voucherDialog === "new" ? null : voucherDialog}
+        voucher={voucherDialog?.mode === "edit" ? voucherDialog.voucher : null}
+        template={voucherDialog?.mode === "duplicate" ? voucherDialog.voucher : null}
         onClose={() => setVoucherDialog(null)}
-        onSaved={() => void vouchers.refetch()}
+        onSaved={refreshVouchers}
       />
-      <VoidVoucherDialog voucher={voidTarget} onClose={() => setVoidTarget(null)} onVoided={() => void vouchers.refetch()} />
+      <VoucherDetailDialog
+        voucher={viewing}
+        onClose={() => setViewing(null)}
+        onEdit={(v) => { setViewing(null); setVoucherDialog({ mode: "edit", voucher: v }); }}
+        onDuplicate={(v) => { setViewing(null); setVoucherDialog({ mode: "duplicate", voucher: v }); }}
+        onPost={(v) => postMutation.mutate(v)}
+        onDelete={setDeleting}
+        onVoid={(v) => { setViewing(null); setVoidTarget(v); }}
+        posting={postMutation.isPending}
+      />
+      <ConfirmDialog
+        isOpen={!!deleting}
+        title={`Hapus ${deleting?.voucherNumber ?? ""}?`}
+        message="Draft ini belum diposting, jadi tidak ada jurnal yang perlu dibalik. Nomornya tidak dipakai ulang."
+        confirmLabel="Hapus draft"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleting && deleteMutation.mutate(deleting)}
+        onCancel={() => setDeleting(null)}
+      />
+      <VoidVoucherDialog voucher={voidTarget} onClose={() => setVoidTarget(null)} onVoided={refreshVouchers} />
       <ImportBankStatementDialog
         open={importDialogOpen}
         onClose={() => setImportDialogOpen(false)}

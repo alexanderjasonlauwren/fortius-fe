@@ -32,6 +32,16 @@ export interface CashVoucher {
   counterBankAccountLabel?: string;
   totalAmount: number;
   status: CashVoucherStatus;
+  voidReason?: string;
+  /** The slip, transfer or kuitansi number it is checked against. */
+  referenceNumber?: string;
+  /** The contact: a vendor or a pangkalan, at most one. */
+  supplierId?: string;
+  supplierName?: string;
+  outletId?: string;
+  outletName?: string;
+  branchId: string;
+  branchName: string;
   lines: CashVoucherLine[];
   version: number;
   createdAt: string;
@@ -60,6 +70,9 @@ export interface CreateCashVoucherInput {
   bankAccountId: string;
   counterBankAccountId?: string;
   counterparty?: string;
+  referenceNumber?: string;
+  supplierId?: string;
+  outletId?: string;
   description?: string;
   amount?: number;
   lines?: CashVoucherLineInput[];
@@ -74,6 +87,9 @@ export interface UpdateCashVoucherInput {
   bankAccountId: string;
   counterBankAccountId?: string;
   counterparty?: string;
+  referenceNumber?: string;
+  supplierId?: string;
+  outletId?: string;
   description?: string;
   amount?: number;
   lines?: CashVoucherLineInput[];
@@ -84,6 +100,12 @@ export interface CashVoucherFilters {
   status?: CashVoucherStatus;
   branchId?: string;
   search?: string;
+  supplierId?: string;
+  outletId?: string;
+  bankAccountId?: string;
+  /** Voucher date range, inclusive (YYYY-MM-DD). */
+  from?: string;
+  to?: string;
 }
 
 export interface CashVoucherApi {
@@ -97,4 +119,6 @@ export interface CashVoucherApi {
   /** Posts the mirror of the original journal and marks the voucher void.
    *  Refused for a voucher still draft. */
   voidCashVoucher(id: string, version: number, reason: string): Promise<CashVoucher>;
+  /** Removes a draft; a posted voucher is voided instead. */
+  deleteCashVoucher(id: string): Promise<void>;
 }

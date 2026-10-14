@@ -3,7 +3,8 @@ import { AttachmentsButton } from "@/features/attachments/components/Attachments
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { BookOpen, CheckCircle2, Plus, TriangleAlert, Undo2 } from "lucide-react";
+import { BookOpen, CheckCircle2, Copy, Plus, TriangleAlert, Undo2 } from "lucide-react";
+import { leafAccounts } from "@/features/finance/lib/accounts";
 import {
   getChartOfAccounts,
   getJournals,
@@ -30,7 +31,7 @@ import {
   Skeleton,
 } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
-import { Field, SegmentedControl, TextInput } from "@/components/common/Field";
+import { Field, SearchInput, SegmentedControl, SelectInput, TextInput } from "@/components/common/Field";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import {
   Dialog,
@@ -121,15 +122,19 @@ export function LedgerPage() {
 /* ── journals ──────────────────────────────────────────────────────────── */
 
 function JournalSection({ range }: { range: { from: string; to: string } }) {
+  const [search, setSearch] = useState("");
+  const [accountId, setAccountId] = useState("");
   const journals = useQuery({
-    queryKey: [...scopeKey(), "journals", range],
-    queryFn: () => getJournals(range),
+    queryKey: [...scopeKey(), "journals", range, search, accountId],
+    queryFn: () => getJournals(range, { search, accountId: accountId || undefined }),
   });
-  const [newJournalOpen, setNewJournalOpen] = useState(false);
+  const accounts = useQuery({ queryKey: [...scopeKey(), "manual-journal", "accounts"], queryFn: getChartOfAccounts });
+  // The dialog is open for a fresh entry ("new") or a copy of a journal.
+  const [journalDialog, setJournalDialog] = useState<"new" | JournalView | null>(null);
   const [reverseTarget, setReverseTarget] = useState<JournalView | null>(null);
 
-  if (journals.isLoading) return <Skeleton className="h-96 w-full" />;
   const rows = journals.data ?? [];
+  const filtered = !!search || !!accountId;
 
   return (
     <Panel>
@@ -137,19 +142,30 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
         title="Jurnal umum"
         hint={`${rows.length} entri pada periode ini · entri yang sudah diposting tidak dapat diubah, hanya dibalik`}
         actions={
-          <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>
-            <Button size="sm" onClick={() => setNewJournalOpen(true)}>
-              <Plus className="h-3.5 w-3.5" />
-              Jurnal baru
-            </Button>
-          </CanAccess>
+          <div className="flex flex-wrap items-center gap-2">
+            <SearchInput value={search} onChange={setSearch} placeholder="Nomor atau keterangan" className="w-48" />
+            <SelectInput aria-label="Akun" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-56">
+              <option value="">Semua akun</option>
+              {leafAccounts(accounts.data ?? []).map((a) => (
+                <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+              ))}
+            </SelectInput>
+            <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>
+              <Button size="sm" onClick={() => setJournalDialog("new")}>
+                <Plus className="h-3.5 w-3.5" />
+                Jurnal baru
+              </Button>
+            </CanAccess>
+          </div>
         }
       />
-      {rows.length === 0 ? (
+      {journals.isLoading ? (
+        <Skeleton className="h-96 w-full" />
+      ) : rows.length === 0 ? (
         <EmptyState
           icon={BookOpen}
-          title="Belum ada jurnal pada periode ini"
-          description="Jurnal terbentuk otomatis saat tagihan terbit, kas diterima, atau nota kredit diterbitkan."
+          title={filtered ? "Tidak ada jurnal yang cocok" : "Belum ada jurnal pada periode ini"}
+          description={filtered ? "Ubah pencarian atau akun." : "Jurnal terbentuk otomatis saat tagihan terbit, kas diterima, atau nota kredit diterbitkan."}
         />
       ) : (
         <ul className="divide-y divide-line">
@@ -164,6 +180,13 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
                     <StatusBadge variant="draft" label="Dibalik" />
                   )}
                   <AttachmentsButton ownerType="journal" ownerId={j.id} label={j.nomor} />
+                  {j.sourceType === "manual" && (
+                    <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>
+                      <Button variant="ghost" size="icon-xs" aria-label={`Duplikat ${j.nomor}`} onClick={() => setJournalDialog(j)}>
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </CanAccess>
+                  )}
                   {j.status === "Diposting" && (j.sourceType === "manual" || j.sourceType === "openingBalance") && (
                     <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>
                       <Button
@@ -177,7 +200,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
                   )}
                 </p>
                 <p className="data text-2xs text-ink-muted">
-                  {formatDateId(j.tanggal)}
+                  {formatDateId(j.tanggal)}{j.branchName ? ` · ${j.branchName}` : ""}
                 </p>
               </div>
               <p className="mt-0.5 text-sm text-ink">{j.keterangan}</p>
@@ -209,6 +232,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
                             {l.akun?.kode}
                           </span>{" "}
                           {l.akun?.nama}
+                          {l.memo && <span className="block text-2xs text-ink-muted">{l.memo}</span>}
                         </td>
                         <td className="data py-1.5 text-right text-xs text-ink">
                           {l.debit > 0 ? formatRupiah(l.debit) : "—"}
@@ -227,8 +251,11 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
       )}
 
       <ManualJournalDialog
-        open={newJournalOpen}
-        onClose={() => setNewJournalOpen(false)}
+        // A fresh mount per target, so a duplicate starts from its journal.
+        key={journalDialog === "new" ? "new" : journalDialog ? journalDialog.id : "closed"}
+        open={!!journalDialog}
+        template={journalDialog === "new" ? null : journalDialog}
+        onClose={() => setJournalDialog(null)}
         onPosted={() => void journals.refetch()}
       />
       <ReverseJournalDialog

@@ -119,3 +119,65 @@ describe("lifecycle", () => {
     ]);
   });
 });
+
+describe("reference, contact and draft delete (parity P3)", () => {
+  it("reads the reference, contact and branch", async () => {
+    getOne.mockResolvedValue(wire({
+      reference_number: "TRF-01", supplier_id: "sup-1", supplier_name: "UD. Sumber Logam",
+      branch_id: "br-1", branch_name: "Pool Salatiga", status: "void", void_reason: "ganda",
+    }));
+    const v = await cashVoucherApiHttp.getCashVoucher(ID);
+    expect(v).toMatchObject({
+      referenceNumber: "TRF-01", supplierId: "sup-1", supplierName: "UD. Sumber Logam",
+      branchId: "br-1", branchName: "Pool Salatiga", voidReason: "ganda",
+    });
+  });
+
+  it("sends one contact, a trimmed reference and per-line memos", async () => {
+    send.mockResolvedValue(wire());
+    await cashVoucherApiHttp.createCashVoucher({
+      voucherType: "disbursement", voucherDate: "2026-10-14", bankAccountId: BANK_ID,
+      referenceNumber: "  TRF-01 ", supplierId: "sup-1", outletId: "out-1", counterparty: "  ",
+      lines: [{ accountId: ACCOUNT_ID, amount: 2500, memo: " biaya transfer " }, { accountId: ACCOUNT_ID, amount: 1, memo: "" }],
+    });
+    const body = send.mock.calls[0][2];
+    expect(body).toMatchObject({ reference_number: "TRF-01", supplier_id: "sup-1" });
+    expect(body.outlet_id).toBeUndefined();
+    expect(body.counterparty).toBeUndefined();
+    expect(body.lines).toEqual([
+      { account_id: ACCOUNT_ID, amount: 2500, memo: "biaya transfer" },
+      { account_id: ACCOUNT_ID, amount: 1, memo: undefined },
+    ]);
+  });
+
+  it("sends a pangkalan contact on update when no vendor is named", async () => {
+    send.mockResolvedValue(wire());
+    await cashVoucherApiHttp.updateCashVoucher({
+      id: ID, version: 2, voucherDate: "2026-10-14", bankAccountId: BANK_ID, outletId: "out-1",
+      lines: [{ accountId: ACCOUNT_ID, amount: 10 }],
+    });
+    expect(send.mock.calls[0][1]).toBe(`/cash-vouchers/${ID}`);
+    expect(send.mock.calls[0][2]).toMatchObject({ version: 2, outlet_id: "out-1" });
+    expect(send.mock.calls[0][2].supplier_id).toBeUndefined();
+  });
+
+  it("filters by contact, account and date range", async () => {
+    getList.mockResolvedValue({ items: [] });
+    await cashVoucherApiHttp.listCashVouchers({ supplierId: "sup-1", bankAccountId: BANK_ID, from: "2026-10-01", to: "2026-10-31", search: " TRF " });
+    expect(getList.mock.calls[0][1]).toMatchObject({
+      search: "TRF",
+      filters: [
+        { field: "supplier_id", operator: "eq", value: "sup-1" },
+        { field: "bank_account_id", operator: "eq", value: BANK_ID },
+        { field: "date", operator: "gte", value: "2026-10-01" },
+        { field: "date", operator: "lte", value: "2026-10-31" },
+      ],
+    });
+  });
+
+  it("deletes a draft by id", async () => {
+    send.mockResolvedValue(undefined);
+    await cashVoucherApiHttp.deleteCashVoucher(ID);
+    expect(send).toHaveBeenCalledWith("delete", `/cash-vouchers/${ID}`);
+  });
+});

@@ -530,6 +530,18 @@ describe("journals", () => {
     expect(journals.map((j) => j.sourceType)).toEqual(["expense", "transportationClaim"]);
   });
 
+  it("narrows the list by account and search, and names each journal's branch", async () => {
+    getList.mockResolvedValueOnce({
+      items: [journalWire({ branch_id: "br-1", branch_name: "Pool Salatiga" })],
+      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+    });
+    const [journal] = await financeApiHttp.getJournals({ from: "2026-10-01", to: "2026-10-31" }, { search: " JV-0018 ", accountId: "a-9" });
+    const params = getList.mock.calls[0][1];
+    expect(params.search).toBe("JV-0018");
+    expect(params.filters).toContainEqual({ field: "account_id", operator: "eq", value: "a-9" });
+    expect(journal).toMatchObject({ branchId: "br-1", branchName: "Pool Salatiga" });
+  });
+
   describe("manual entry", () => {
     // Caught live: CreateManualJournalRequest.JournalDate is a real Go
     // time.Time, unlike every other date field this adapter sends (asset
@@ -549,6 +561,22 @@ describe("journals", () => {
       });
       const [, , body] = send.mock.calls[0];
       expect(body.journal_date).toBe("2026-10-08T00:00:00Z");
+    });
+
+    it("sends the branch and each line's memo, trimmed, blank memos dropped", async () => {
+      send.mockResolvedValue(journalWire());
+      await financeApiHttp.createManualJournal({
+        branchId: "br-1",
+        journalDate: "2026-10-08",
+        description: "Akrual sewa",
+        lines: [
+          { accountId: "a-1", debit: 50_000, kredit: 0, memo: " sewa Oktober " },
+          { accountId: "a-2", debit: 0, kredit: 50_000, memo: "  " },
+        ],
+      });
+      const [, , body] = send.mock.calls[0];
+      expect(body.branch_id).toBe("br-1");
+      expect(body.lines.map((l: { memo?: string }) => l.memo)).toEqual(["sewa Oktober", undefined]);
     });
 
     it("sends the version to reverse a journal", async () => {
