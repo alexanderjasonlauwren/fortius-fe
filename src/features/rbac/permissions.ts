@@ -140,6 +140,8 @@ export const PERMISSIONS = {
   EXPENSES_VIEW: "distribution.read.expenses",
   EXPENSES_CREATE: "distribution.create.expenses",
   EXPENSES_APPROVE: "distribution.approve.expenses",
+  /** Voiding an approved expense reverses its journal (accounting parity P3). */
+  EXPENSES_VOID: "distribution.void.expenses",
   OCR_CREATE: "ocr.create.ocr_inbox",
   OCR_VIEW: "ocr.read.ocr_extractions",
   OCR_VERIFY: "ocr.create.ocr_verifications",
