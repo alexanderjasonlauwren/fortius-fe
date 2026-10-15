@@ -11,6 +11,7 @@ import {
   getBalanceSheet,
   getBalanceSheetNotes,
   getGeneralLedger,
+  getLayouts,
   getProfitAndLoss,
 } from "@/features/financialstatements/api/financialstatementsApi";
 import { StatementTable } from "@/features/financialstatements/components/StatementTable";
@@ -84,17 +85,25 @@ export function FinancialStatementsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  // Which format each statement is drawn on: "" is the tenant's default
+  // (the current Laba Rugi and Neraca); the FY2025 format stays selectable
+  // for reading 2025 the way it was reported.
+  const [plLayout, setPlLayout] = useState("");
+  const [bsLayout, setBsLayout] = useState("");
+  const layouts = useQuery({ queryKey: [...scopeKey(), "financial-statements", "layouts"], queryFn: getLayouts });
+  const layoutsOf = (kind: "profit_loss" | "balance_sheet") => (layouts.data ?? []).filter((l) => l.kind === kind);
+
   const pl = useQuery({
-    queryKey: [...scopeKey(), "financial-statements", "pl", period.from, period.to],
-    queryFn: () => getProfitAndLoss({ from: period.from, to: period.to }),
+    queryKey: [...scopeKey(), "financial-statements", "pl", period.from, period.to, plLayout],
+    queryFn: () => getProfitAndLoss({ from: period.from, to: period.to, layout: plLayout || undefined }),
   });
   const bs = useQuery({
-    queryKey: [...scopeKey(), "financial-statements", "bs", period.asOf],
-    queryFn: () => getBalanceSheet({ asOf: period.asOf }),
+    queryKey: [...scopeKey(), "financial-statements", "bs", period.asOf, bsLayout],
+    queryFn: () => getBalanceSheet({ asOf: period.asOf, layout: bsLayout || undefined }),
   });
   const notes = useQuery({
-    queryKey: [...scopeKey(), "financial-statements", "notes", period.asOf],
-    queryFn: () => getBalanceSheetNotes({ asOf: period.asOf }),
+    queryKey: [...scopeKey(), "financial-statements", "notes", period.asOf, bsLayout],
+    queryFn: () => getBalanceSheetNotes({ asOf: period.asOf, layout: bsLayout || undefined }),
     enabled: tab === "penjelasan",
   });
   const gl = useQuery({
@@ -127,9 +136,13 @@ export function FinancialStatementsPage() {
   const exportMutation = useDeskMutation({
     mutationFn: () =>
       downloadPackage(
-        month === "semua"
-          ? { fiscalYear: year }
-          : { dateFrom: period.from, dateTo: period.to, asOf: period.asOf },
+        {
+          ...(month === "semua"
+            ? { fiscalYear: year }
+            : { dateFrom: period.from, dateTo: period.to, asOf: period.asOf }),
+          layoutProfitLoss: plLayout || undefined,
+          layoutBalanceSheet: bsLayout || undefined,
+        },
       ),
     errorTitle: "Unduh laporan gagal",
     success: "Laporan keuangan diunduh",
@@ -194,6 +207,19 @@ export function FinancialStatementsPage() {
               ))}
             </SelectInput>
           </Field>
+          {(tab === "laba-rugi" || tab === "neraca" || tab === "penjelasan") && (
+            <Field label="Format" htmlFor="fs-layout" hint="Format 2025 untuk membaca laporan tahun 2025 seperti dilaporkan.">
+              <SelectInput
+                id="fs-layout"
+                value={tab === "laba-rugi" ? plLayout : bsLayout}
+                onChange={(e) => (tab === "laba-rugi" ? setPlLayout(e.target.value) : setBsLayout(e.target.value))}
+              >
+                {layoutsOf(tab === "laba-rugi" ? "profit_loss" : "balance_sheet").map((l) => (
+                  <option key={l.code} value={l.isDefault ? "" : l.code}>{l.name}{l.isDefault ? " (utama)" : ""}</option>
+                ))}
+              </SelectInput>
+            </Field>
+          )}
         </div>
       </Panel>
 

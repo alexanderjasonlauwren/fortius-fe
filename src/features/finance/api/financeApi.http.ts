@@ -939,7 +939,7 @@ async function getProfitAndLoss(range: { from: string; to: string }): Promise<Pr
  *  controlAccountModule, purchase's controlRoles). */
 const CONTROL_ROLES = new Set([
   "receivable", "registration_receivable", "transport_receivable", "customer_deposit",
-  "payable", "inventory", "output_vat", "retained_earnings", "opening_balance_equity", "cash", "bank",
+  "payable", "payable_pertamina", "inventory", "output_vat", "retained_earnings", "opening_balance_equity", "cash", "bank",
 ]);
 
 /** Ids of accounts that carry a control role or sit under one. */

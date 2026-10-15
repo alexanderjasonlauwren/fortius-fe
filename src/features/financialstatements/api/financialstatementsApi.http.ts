@@ -19,6 +19,7 @@ import type {
   StatementLine,
   StatementLineKind,
   StatementWarning,
+  LayoutOption,
 } from "./contract";
 
 interface CompareInfoResponse {
@@ -247,6 +248,13 @@ async function getGeneralLedger(input: {
 /** Triggers a browser download of the .xlsx the backend renders --
  *  `responseType: "blob"` is what keeps axios from trying to parse binary
  *  content as the JSON envelope every other endpoint returns. */
+async function getLayouts(): Promise<LayoutOption[]> {
+  const rows = await getOne<{ code: string; name: string; kind: LayoutOption["kind"]; is_default: boolean }[]>(
+    "/financial-statements/layouts",
+  );
+  return (rows ?? []).map((r) => ({ code: r.code, name: r.name, kind: r.kind, isDefault: r.is_default }));
+}
+
 async function downloadPackage(input: {
   fiscalYear?: number;
   dateFrom?: string;
@@ -254,6 +262,8 @@ async function downloadPackage(input: {
   asOf?: string;
   branchId?: string;
   compare?: string;
+  layoutProfitLoss?: string;
+  layoutBalanceSheet?: string;
 }): Promise<void> {
   const params = new URLSearchParams();
   if (input.fiscalYear) params.set("fiscal_year", String(input.fiscalYear));
@@ -262,6 +272,8 @@ async function downloadPackage(input: {
   if (input.asOf) params.set("as_of", input.asOf);
   if (input.branchId) params.set("branch_id", input.branchId);
   if (input.compare) params.set("compare", input.compare);
+  if (input.layoutProfitLoss) params.set("layout_profit_loss", input.layoutProfitLoss);
+  if (input.layoutBalanceSheet) params.set("layout_balance_sheet", input.layoutBalanceSheet);
 
   const response = await apiClient.get(`/financial-statements/export?${params}`, { responseType: "blob" });
   const disposition: string = response.headers["content-disposition"] ?? "";
@@ -279,6 +291,7 @@ async function downloadPackage(input: {
 }
 
 export const financialstatementsApiHttp: FinancialStatementsApi = {
+  getLayouts,
   getProfitAndLoss,
   getBalanceSheet,
   getBalanceSheetNotes,

@@ -150,7 +150,17 @@ export interface GeneralLedgerPage {
  *  backend's own `compare` query param uses everywhere it appears. */
 export type CompareSource = string;
 
+/** A layout a statement can be drawn on: the default of its kind, or one
+ *  kept for reading an older period (the FY2025 format). */
+export interface LayoutOption {
+  code: string;
+  name: string;
+  kind: "profit_loss" | "balance_sheet";
+  isDefault: boolean;
+}
+
 export interface FinancialStatementsApi {
+  getLayouts(): Promise<LayoutOption[]>;
   getProfitAndLoss(input: {
     from: string;
     to: string;
@@ -183,5 +193,8 @@ export interface FinancialStatementsApi {
     asOf?: string;
     branchId?: string;
     compare?: CompareSource;
+    /** Layouts to draw the two statements on; omitted means each default. */
+    layoutProfitLoss?: string;
+    layoutBalanceSheet?: string;
   }): Promise<void>;
 }

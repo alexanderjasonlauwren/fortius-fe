@@ -9,6 +9,7 @@ export type {
   ExtraCompareLine,
   GeneralLedgerLine,
   GeneralLedgerPage,
+  LayoutOption,
   LayoutRef,
   NoteLeaf,
   NotesStatement,
@@ -28,3 +29,4 @@ export const getBalanceSheet = api.getBalanceSheet.bind(api);
 export const getBalanceSheetNotes = api.getBalanceSheetNotes.bind(api);
 export const getGeneralLedger = api.getGeneralLedger.bind(api);
 export const downloadPackage = api.downloadPackage.bind(api);
+export const getLayouts = api.getLayouts.bind(api);
