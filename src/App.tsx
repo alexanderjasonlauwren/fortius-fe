@@ -30,6 +30,8 @@ import { OpeningBalanceWizardPage } from "./pages/openingbalance/OpeningBalanceW
 import { LedgerPage } from "./pages/ledger/LedgerPage";
 import { FinancialStatementsPage } from "./pages/financialstatements/FinancialStatementsPage";
 import { ReportsPage } from "./pages/reports/ReportsPage";
+import { FinanceReportsPage } from "./pages/financereports/FinanceReportsPage";
+import { FinanceReportPage } from "./pages/financereports/FinanceReportPage";
 import { TransactionListPage } from "./pages/transactions/TransactionListPage";
 import { OutletListPage } from "./pages/outlet/OutletListPage";
 import { OutletFormPage } from "./pages/outlet/OutletFormPage";
@@ -204,6 +206,16 @@ const router = createBrowserRouter([
       { path: "financial-statements", element: (
         <RequirePermission permission={PERMISSIONS.FINANCIAL_STATEMENTS_VIEW}>
           <FinancialStatementsPage />
+        </RequirePermission>
+      ) },
+      { path: "laporan", element: (
+        <RequirePermission permission={PERMISSIONS.FINANCE_REPORTS_VIEW}>
+          <FinanceReportsPage />
+        </RequirePermission>
+      ) },
+      { path: "laporan/:key", element: (
+        <RequirePermission permission={PERMISSIONS.FINANCE_REPORTS_VIEW}>
+          <FinanceReportPage />
         </RequirePermission>
       ) },
       { path: "reports", element: (

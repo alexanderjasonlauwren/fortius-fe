@@ -5,6 +5,7 @@ import {
   Network,
   Bell,
   BookOpen,
+  ChartColumn,
   Building2,
   ClipboardCheck,
   ClipboardList,
@@ -202,6 +203,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: FileSpreadsheet,
         hint: "Laba Rugi, Neraca, dan Penjelasan Akun, dihasilkan dari buku besar",
         permission: PERMISSIONS.FINANCIAL_STATEMENTS_VIEW,
+      },
+      {
+        name: "Laporan",
+        href: "/laporan",
+        icon: ChartColumn,
+        hint: "Arus kas, umur piutang & hutang, penjualan, pembelian, biaya, kas & bank, aset",
+        permission: PERMISSIONS.FINANCE_REPORTS_VIEW,
       },
       {
         name: "Rekap Transaksi",

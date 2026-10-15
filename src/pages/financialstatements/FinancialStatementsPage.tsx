@@ -4,6 +4,7 @@
  * plan, phase P2.
  */
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileDown, TriangleAlert, Upload } from "lucide-react";
 import {
@@ -71,13 +72,24 @@ function resolvePeriod(year: number, month: number | "semua"): { from: string; t
   return { from, to: clampedTo, asOf: clampedTo };
 }
 
+const TABS: Tab[] = ["laba-rugi", "neraca", "penjelasan", "komparasi", "buku-besar"];
+
 export function FinancialStatementsPage() {
-  const [tab, setTab] = useState<Tab>("laba-rugi");
+  // ?tab= and ?account= open the page where a link from Laporan points: a
+  // statement, or one account's Buku Besar.
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = params.get("tab") as Tab | null;
+    return t && TABS.includes(t) ? t : "laba-rugi";
+  });
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [month, setMonth] = useState<number | "semua">("semua");
   const period = resolvePeriod(year, month);
 
-  const [glAccount, setGlAccount] = useState<{ id: string; code: string } | null>(null);
+  const [glAccount, setGlAccount] = useState<{ id: string; code: string } | null>(() => {
+    const account = params.get("account");
+    return account ? { id: account, code: "" } : null;
+  });
 
   const [komparasiView, setKomparasiView] = useState<KomparasiView>("laba-rugi");
   const komparasiExternalKind = komparasiView === "laba-rugi" ? "profit_loss" : "balance_sheet";
@@ -401,7 +413,7 @@ export function FinancialStatementsPage() {
         <Panel>
           <PanelHeader
             title="Buku Besar"
-            hint={glAccount ? `Akun ${glAccount.code}, periode ${formatDateId(period.from)} - ${formatDateId(period.to)}` : "Pilih akun dari Laba Rugi atau Neraca"}
+            hint={glAccount ? `Akun ${glAccount.code || gl.data?.accountCode || ""}${gl.data?.accountName ? ` ${gl.data.accountName}` : ""}, periode ${formatDateId(period.from)} - ${formatDateId(period.to)}` : "Pilih akun dari Laba Rugi atau Neraca"}
           />
           {!glAccount ? (
             <p className="p-4 text-sm text-ink-muted">

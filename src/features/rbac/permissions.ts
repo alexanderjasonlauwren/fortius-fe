@@ -168,6 +168,15 @@ export const PERMISSIONS = {
   FINANCIAL_STATEMENTS_VIEW: "finance.read.financial_statements",
   FINANCIAL_STATEMENTS_EXPORT: "finance.export.financial_statements",
   /**
+   * The report pack under Laporan (accounting parity P5): aging, sales,
+   * purchases, expenses, cash flow, bank and asset summaries. Its own
+   * resource on the backend, granted to tenant_admin and finance_officer.
+   * Named FINANCE_REPORTS_* because REPORTS_VIEW was once a console-only code
+   * with another meaning (see the console-only block below).
+   */
+  FINANCE_REPORTS_VIEW: "finance.read.reports",
+  FINANCE_REPORTS_EXPORT: "finance.export.reports",
+  /**
    * Imported comparison books (Komparasi) -- financial-statements plan
    * P8/gap-closing phase A. finance_officer holds only the read grant;
    * importing/correcting/deleting a book is tenant_admin-only.
