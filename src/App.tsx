@@ -33,6 +33,7 @@ import { ReportsPage } from "./pages/reports/ReportsPage";
 import { AccountsPage } from "./pages/accounts/AccountsPage";
 import { FinanceDashboardPage } from "./pages/financedashboard/FinanceDashboardPage";
 import { FiscalYearsPage } from "./pages/fiscalyears/FiscalYearsPage";
+import { InventoryPage } from "./pages/inventory/InventoryPage";
 import { FinanceReportsPage } from "./pages/financereports/FinanceReportsPage";
 import { FinanceReportPage } from "./pages/financereports/FinanceReportPage";
 import { TransactionListPage } from "./pages/transactions/TransactionListPage";
@@ -207,6 +208,11 @@ const router = createBrowserRouter([
       { path: "accounts", element: (
         <RequirePermission permission={PERMISSIONS.ACCOUNTS_VIEW}>
           <AccountsPage />
+        </RequirePermission>
+      ) },
+      { path: "inventory", element: (
+        <RequirePermission permission={PERMISSIONS.INVENTORY_VIEW}>
+          <InventoryPage />
         </RequirePermission>
       ) },
       { path: "fiscal-years", element: (

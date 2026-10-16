@@ -20,7 +20,7 @@ describe("report pack adapter (parity P5)", () => {
       { key: "ar_aging", title: "Umur Piutang", category: "penjualan", description: "d", period_kind: "as_of", branched: true },
     ]);
     expect(await api.getCatalogue()).toEqual([
-      { key: "ar_aging", title: "Umur Piutang", category: "penjualan", description: "d", periodKind: "as_of", branched: true },
+      { key: "ar_aging", title: "Umur Piutang", category: "penjualan", description: "d", periodKind: "as_of", branched: true, params: [] },
     ]);
     expect(getOne).toHaveBeenCalledWith("/reports");
   });
@@ -35,6 +35,9 @@ describe("report pack adapter (parity P5)", () => {
     expect(range).toContain("date_to=2026-10-31");
     expect(range).toContain("branch_id=b-1");
     expect(range).not.toContain("as_of");
+    getOne.mockClear();
+    await api.getReport("stock_card", { from: "2026-10-01", to: "2026-10-31", productId: "p-1" });
+    expect(getOne.mock.calls[0][0]).toContain("product_id=p-1");
 
     getOne.mockClear();
     await api.getReport("ar_aging", { asOf: "2026-10-15" });

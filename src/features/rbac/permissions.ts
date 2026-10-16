@@ -239,6 +239,16 @@ export const PERMISSIONS = {
   FISCAL_YEARS_VIEW: "finance.read.fiscal_years",
   FISCAL_YEARS_CLOSE: "finance.create.fiscal_years",
   FISCAL_YEARS_REOPEN: "finance.update.fiscal_years",
+  /**
+   * The monthly period lock (accounting parity P7, §16). Update moves a
+   * month between open, review and closed -- and is also what lets someone
+   * post into a month under review.
+   */
+  ACCOUNTING_PERIODS_VIEW: "finance.read.accounting_periods",
+  ACCOUNTING_PERIODS_UPDATE: "finance.update.accounting_periods",
+  /** Stock on hand at moving average, opening stock, stock counts (P7, §8.1). */
+  INVENTORY_VIEW: "finance.read.inventory",
+  INVENTORY_CREATE: "finance.create.inventory",
 
   /**
    * Sub-ledger admin (gap-closing plan, Phase F) -- verified against the

@@ -232,6 +232,12 @@ describe("the nav a role is shown", () => {
     expect(group("Keuangan · Akun & Laporan")).toEqual(["/accounts", "/ledger", "/opening-balance", "/fiscal-years", "/financial-statements"]);
   });
 
+  it("lists Persediaan under Keuangan · Transaksi for whoever may read stock (parity P7)", () => {
+    const shown = navGroupsFor([PERMISSIONS.INVENTORY_VIEW]).find((g) => g.label === "Keuangan · Transaksi")?.items.map((i) => i.href);
+    expect(shown).toEqual(["/inventory"]);
+    expect(navGroupsFor([PERMISSIONS.PAYMENTS_VIEW]).flatMap((g) => g.items).some((i) => i.href === "/inventory")).toBe(false);
+  });
+
   it("puts Laporan and Dasbor Keuangan in Menu utama, the dashboard only with both its permissions", () => {
     const main = (codes: string[]) => navGroupsFor(codes).find((g) => g.label === "Menu utama")?.items.map((i) => i.href) ?? [];
     expect(main([PERMISSIONS.FINANCE_REPORTS_VIEW])).toEqual(["/dashboard", "/laporan"]);

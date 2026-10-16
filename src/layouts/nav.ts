@@ -5,6 +5,7 @@ import {
   Network,
   Bell,
   BookOpen,
+  Boxes,
   ChartColumn,
   ChartPie,
   FileInput,
@@ -207,6 +208,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Receipt,
         hint: "Catat dan klasifikasikan struk biaya operasional",
         permission: [PERMISSIONS.OCR_VIEW, PERMISSIONS.OCR_ARCHIVE_VIEW],
+      },
+      {
+        name: "Persediaan",
+        href: "/inventory",
+        icon: Boxes,
+        hint: "Stok per produk dengan harga rata-rata, saldo awal, dan stok opname",
+        permission: PERMISSIONS.INVENTORY_VIEW,
       },
       {
         name: "Kas & Bank",

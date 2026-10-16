@@ -7,7 +7,7 @@
  * fortius-backend's internal/entities/financialstatement Report*.
  */
 
-export type ReportCategory = "ikhtisar" | "penjualan" | "pembelian" | "biaya" | "kas_bank" | "aset";
+export type ReportCategory = "ikhtisar" | "penjualan" | "pembelian" | "biaya" | "kas_bank" | "aset" | "persediaan";
 
 export interface ReportDefinition {
   key: string;
@@ -18,6 +18,8 @@ export interface ReportDefinition {
   periodKind: "range" | "as_of";
   /** Whether a branch filter applies. */
   branched: boolean;
+  /** What else it needs: "product" for Kartu Stok. */
+  params: string[];
 }
 
 export type ReportColumnKind = "text" | "money" | "number" | "percent" | "date";
@@ -30,7 +32,7 @@ export interface ReportColumn {
 
 /** Where a row drills down to. */
 export interface ReportLink {
-  type: "invoice" | "purchase" | "outlet" | "supplier" | "account" | "claim" | "asset";
+  type: "invoice" | "purchase" | "outlet" | "supplier" | "account" | "claim" | "asset" | "product";
   id: string;
 }
 
@@ -65,6 +67,7 @@ export interface ReportQuery {
   to?: string;
   asOf?: string;
   branchId?: string;
+  productId?: string;
 }
 
 export interface FinanceReportsApi {
@@ -80,6 +83,7 @@ export const CATEGORY_LABEL: Record<ReportCategory, string> = {
   biaya: "Biaya",
   kas_bank: "Kas & Bank",
   aset: "Aset",
+  persediaan: "Persediaan",
 };
 
-export const CATEGORY_ORDER: ReportCategory[] = ["ikhtisar", "penjualan", "pembelian", "biaya", "kas_bank", "aset"];
+export const CATEGORY_ORDER: ReportCategory[] = ["ikhtisar", "penjualan", "pembelian", "biaya", "persediaan", "kas_bank", "aset"];

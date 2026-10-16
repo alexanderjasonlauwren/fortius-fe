@@ -14,6 +14,7 @@ import {
   type ReportQuery,
 } from "@/features/financereports/api/financereportsApi";
 import { ReportTable } from "@/features/financereports/components/ReportTable";
+import { getStock } from "@/features/inventory/api/inventoryApi";
 import {
   PRESET_LABEL,
   periodFromParams,
@@ -63,14 +64,25 @@ export function FinanceReportPage() {
   // assets) on today -- yesterday's aging is rarely what anyone wants.
   const period = periodFromParams(def?.periodKind === "as_of" ? params : recallPeriod(key, params));
 
+  // A report about one product (Kartu Stok) picks it here, kept in the URL
+  // so Persediaan and Ringkasan Persediaan can link straight to it.
+  const needsProduct = def?.params.includes("product") ?? false;
+  const productId = params.get("product_id") ?? "";
+  const products = useQuery({
+    queryKey: [...scopeKey(), "inventory", "stock"],
+    queryFn: getStock,
+    enabled: needsProduct,
+  });
+
   const range = resolveRange(period);
   const query: ReportQuery = def?.periodKind === "as_of" ? { asOf: period.date } : { from: range.from, to: range.to };
   if (def?.branched && branch !== ALL) query.branchId = branch;
+  if (needsProduct && productId) query.productId = productId;
 
   const report = useQuery({
     queryKey: [...scopeKey(), "finance-reports", key, query],
     queryFn: () => getFinanceReport(key, query),
-    enabled: !!def,
+    enabled: !!def && (!needsProduct || !!productId),
   });
 
   const exportMutation = useDeskMutation({
@@ -118,7 +130,7 @@ export function FinanceReportPage() {
               Cetak / PDF
             </Button>
             <CanAccess permission={PERMISSIONS.FINANCE_REPORTS_EXPORT}>
-              <Button variant="outline" disabled={!def || exportMutation.isPending} onClick={() => exportMutation.mutate(undefined as never)}>
+              <Button variant="outline" disabled={!def || (needsProduct && !productId) || exportMutation.isPending} onClick={() => exportMutation.mutate(undefined as never)}>
                 <FileDown className="h-4 w-4" />
                 Unduh Excel
               </Button>
@@ -173,6 +185,24 @@ export function FinanceReportPage() {
               )}
             </>
           )}
+          {needsProduct && (
+            <Field label="Produk" htmlFor="rp-product">
+              <SelectInput
+                id="rp-product"
+                value={productId}
+                onChange={(e) => {
+                  const next = new URLSearchParams(params);
+                  next.set("product_id", e.target.value);
+                  setParams(next, { replace: true });
+                }}
+              >
+                <option value="">— Pilih produk —</option>
+                {(products.data ?? []).map((p) => (
+                  <option key={p.productId} value={p.productId}>{p.code} {p.name}</option>
+                ))}
+              </SelectInput>
+            </Field>
+          )}
           {def?.branched && (branches.length > 1 || canSeeAll) && (
             <Field label="Cabang" htmlFor="rp-branch">
               <SelectInput id="rp-branch" value={branch} onChange={(e) => setBranch(e.target.value)}>
@@ -210,7 +240,9 @@ export function FinanceReportPage() {
           title={report.data?.company.legalName ?? def?.title ?? ""}
           hint={report.data ? `${reportPeriodLabel(report.data)}${def?.branched ? ` · ${branchLabel ?? ""}` : ""}` : undefined}
         />
-        {report.isLoading || catalogue.isLoading ? (
+        {needsProduct && !productId ? (
+          <p className="p-4 text-sm text-ink-muted">Pilih produk untuk melihat kartu stoknya.</p>
+        ) : report.isLoading || catalogue.isLoading ? (
           <Skeleton className="h-96 w-full" />
         ) : report.isError ? (
           <p className="p-4 text-sm text-rust-ink">Laporan gagal dimuat. Coba lagi, atau ubah periodenya.</p>

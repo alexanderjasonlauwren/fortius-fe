@@ -20,6 +20,7 @@ interface DefinitionResponse {
   description: string;
   period_kind: ReportDefinition["periodKind"];
   branched: boolean;
+  params?: string[] | null;
 }
 
 interface ReportResponse {
@@ -54,6 +55,7 @@ function params(query: ReportQuery): URLSearchParams {
   if (query.from) p.set("date_from", query.from);
   if (query.to) p.set("date_to", query.to);
   if (query.branchId) p.set("branch_id", query.branchId);
+  if (query.productId) p.set("product_id", query.productId);
   return p;
 }
 
@@ -66,6 +68,7 @@ async function getCatalogue(): Promise<ReportDefinition[]> {
     description: r.description,
     periodKind: r.period_kind,
     branched: r.branched,
+    params: r.params ?? [],
   }));
 }
 

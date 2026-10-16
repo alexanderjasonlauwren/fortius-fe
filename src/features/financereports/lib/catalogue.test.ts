@@ -3,8 +3,8 @@ import { PERMISSIONS } from "@/features/rbac/permissions";
 import { favourites, hubEntries } from "./catalogue";
 
 const catalogue = [
-  { key: "cash_flow", title: "Arus Kas", category: "ikhtisar" as const, description: "", periodKind: "range" as const, branched: true },
-  { key: "ar_aging", title: "Umur Piutang", category: "penjualan" as const, description: "", periodKind: "as_of" as const, branched: true },
+  { key: "cash_flow", title: "Arus Kas", category: "ikhtisar" as const, description: "", periodKind: "range" as const, branched: true, params: [] },
+  { key: "ar_aging", title: "Umur Piutang", category: "penjualan" as const, description: "", periodKind: "as_of" as const, branched: true, params: [] },
 ];
 const holding = (...codes: string[]) => (code: string) => codes.includes(code);
 

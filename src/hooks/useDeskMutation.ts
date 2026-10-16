@@ -77,6 +77,19 @@ export function useDeskMutation<TArgs, TResult>({
 }
 
 /**
+ * Refusals every form can meet, said the way the person at the desk needs to
+ * hear them -- the server's own message is written for a developer. Keyed by
+ * the stable code, never the message (accounting parity P7).
+ */
+const FRIENDLY: Record<string, string> = {
+  PERIOD_CLOSED:
+    "Periode ini sudah ditutup. Gunakan tanggal di bulan yang masih terbuka, atau minta tim keuangan membukanya kembali di Tutup Buku.",
+  PERIOD_IN_REVIEW:
+    "Periode ini sedang direview. Hanya tim keuangan yang dapat mencatat transaksi di bulan ini sampai review selesai.",
+  USE_STOCK_COUNT: "Akun ini memegang stok produk. Koreksi lewat stok opname per produk di menu Persediaan.",
+};
+
+/**
  * What to put under the error title.
  *
  * A 422 from the service says "The request failed validation" and carries the
@@ -89,7 +102,10 @@ export function useDeskMutation<TArgs, TResult>({
  * them here would need a map per form that drifts the first time a field is
  * renamed; naming the field the server named is worse copy and better help.
  */
-function describeFailure(error: Error): string {
+export function describeFailure(error: Error): string {
+  if (error instanceof ApiError && FRIENDLY[error.code]) {
+    return FRIENDLY[error.code];
+  }
   if (!(error instanceof ApiError) || error.violations.length === 0) {
     return error.message;
   }
