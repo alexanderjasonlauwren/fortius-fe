@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SupplierSection } from "@/features/settings/components/SupplierSection";
 import { Link } from "react-router-dom";
 import { AlertCircle, ArrowRight, CalendarClock, FileSpreadsheet, Upload } from "lucide-react";
 import { useScheduleAgreement } from "@/features/sa/hooks/useScheduleAgreement";
@@ -250,6 +251,10 @@ export function SAManagementPage() {
           });
         }}
       />
+
+      {/* The SA issuers, derived from the agreements themselves. Lived in
+          Pengaturan until accounting parity P6. */}
+      <SupplierSection />
     </div>
   );
 }

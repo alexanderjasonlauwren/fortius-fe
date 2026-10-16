@@ -8,7 +8,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 const { financereportsApiHttp: api } = await import("./financereportsApi.http");
-const { periodFromParams, periodToParams, resolveRange } = await import("../lib/period");
+const { periodFromParams, periodToParams, recallPeriod, rememberPeriod, resolveRange } = await import("../lib/period");
 const { reportLinkHref } = await import("../lib/links");
 const { formatReportCell, reportPrintHtml } = await import("../lib/render");
 
@@ -136,4 +136,36 @@ describe("report rows", () => {
     expect(html).toContain("✗ tie");
     expect(html).toContain("<strong>Rp 5</strong>");
   });
+});
+
+describe("remembered report period", () => {
+  const memory = () => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
+  };
+
+  it("reopens a report on the period last used for it, and only for it", () => {
+    const store = memory();
+    rememberPeriod("cash_flow", at("p=tahunan&y=2025"), store);
+    const recalled = recallPeriod("cash_flow", new URLSearchParams("cabang=x"), store);
+    expect(resolveRange(periodFromParams(recalled, "2026-10-15"))).toEqual({ from: "2025-01-01", to: "2025-12-31" });
+    expect(recalled.get("cabang")).toBe("x");
+    expect(recallPeriod("ap_aging", new URLSearchParams(), store).has("p")).toBe(false);
+  });
+
+  it("lets a link's own period win over the remembered one", () => {
+    const store = memory();
+    rememberPeriod("cash_flow", at("p=tahunan&y=2025"), store);
+    expect(recallPeriod("cash_flow", new URLSearchParams("p=harian&d=2026-10-01"), store).get("p")).toBe("harian");
+  });
+
+  it("still works when the browser refuses storage", () => {
+    const broken = { getItem: () => { throw new Error("denied"); }, setItem: () => { throw new Error("denied"); } };
+    expect(() => rememberPeriod("cash_flow", at(""), broken)).not.toThrow();
+    expect(recallPeriod("cash_flow", new URLSearchParams(), broken).toString()).toBe("");
+  });
+
+  function at(q: string) {
+    return periodFromParams(new URLSearchParams(q), "2026-10-15");
+  }
 });

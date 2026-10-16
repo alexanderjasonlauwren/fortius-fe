@@ -4,6 +4,8 @@
  * bookkeeper does -- edit or withdraw while pending, void once approved
  * (accounting parity P3).
  */
+import { ExpenseCategorySection } from "@/features/settings/components/ExpenseCategorySection";
+import { SegmentedControl } from "@/components/common/Field";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -40,8 +42,13 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function ExpensePage() {
-  // ?q= opens the list on one expense, e.g. from the receipt it was filed from.
+  // Kategori lived in Pengaturan until accounting parity P6; it belongs beside the expenses that use it.
   const [params] = useSearchParams();
+  const canSeeMaster = useAuthStore((st) => st.hasPermission(PERMISSIONS.EXPENSE_CATEGORIES_VIEW));
+  const [view, setView] = useState<"daftar" | "kategori">(() =>
+    params.get("tab") === "kategori" && canSeeMaster ? "kategori" : "daftar",
+  );
+  // ?q= opens the list on one expense, e.g. from the receipt it was filed from.
   const [search, setSearch] = useState(params.get("q") ?? "");
   const [status, setStatus] = useState<ExpenseStatus | "Semua">("Semua");
   const [from, setFrom] = useState("");
@@ -176,6 +183,19 @@ export function ExpensePage() {
         actions={<CanAccess permission={PERMISSIONS.EXPENSES_CREATE}><Button onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-3.5 w-3.5" />Catat pengeluaran</Button></CanAccess>}
         meta={<span className="text-xs text-ink-muted"><span className="data">{rows.length}</span> catatan · menunggu persetujuan <span className="data font-semibold text-ink">{formatRupiah(pendingTotal)}</span></span>}
       />
+      {canSeeMaster && (
+        <SegmentedControl<"daftar" | "kategori">
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "daftar", label: "Pengeluaran" },
+            { value: "kategori", label: "Kategori" },
+          ]}
+        />
+      )}
+      {view === "kategori" && <ExpenseCategorySection />}
+      {view === "daftar" && (
+        <>
       <Panel>
         <PanelHeader
           title="Daftar pengeluaran"
@@ -248,6 +268,8 @@ export function ExpensePage() {
         onConfirm={(why) => voidOne.mutate(why)}
         onClose={() => setVoiding(null)}
       />
+        </>
+      )}
     </div>
   );
 }

@@ -30,6 +30,9 @@ import { OpeningBalanceWizardPage } from "./pages/openingbalance/OpeningBalanceW
 import { LedgerPage } from "./pages/ledger/LedgerPage";
 import { FinancialStatementsPage } from "./pages/financialstatements/FinancialStatementsPage";
 import { ReportsPage } from "./pages/reports/ReportsPage";
+import { AccountsPage } from "./pages/accounts/AccountsPage";
+import { FinanceDashboardPage } from "./pages/financedashboard/FinanceDashboardPage";
+import { FiscalYearsPage } from "./pages/fiscalyears/FiscalYearsPage";
 import { FinanceReportsPage } from "./pages/financereports/FinanceReportsPage";
 import { FinanceReportPage } from "./pages/financereports/FinanceReportPage";
 import { TransactionListPage } from "./pages/transactions/TransactionListPage";
@@ -168,11 +171,14 @@ const router = createBrowserRouter([
           <PaymentPage />
         </RequirePermission>
       ) },
-      { path: "payment-control", element: (
+      // Renamed "Alokasi Dana Pengiriman" in accounting parity P6: it funds
+      // dispatch, it does not verify payments. The old path still lands.
+      { path: "dispatch-funding", element: (
         <RequirePermission permission={PERMISSIONS.PAYMENTS_VIEW}>
           <PaymentControlPage />
         </RequirePermission>
       ) },
+      { path: "payment-control", element: <Navigate to="/dispatch-funding" replace /> },
       { path: "cash-bank", element: (
         <RequirePermission permission={PERMISSIONS.CASH_VOUCHERS_VIEW}>
           <CashBankPage />
@@ -198,6 +204,16 @@ const router = createBrowserRouter([
           <OpeningBalanceWizardPage />
         </RequirePermission>
       ) },
+      { path: "accounts", element: (
+        <RequirePermission permission={PERMISSIONS.ACCOUNTS_VIEW}>
+          <AccountsPage />
+        </RequirePermission>
+      ) },
+      { path: "fiscal-years", element: (
+        <RequirePermission permission={PERMISSIONS.FISCAL_YEARS_VIEW}>
+          <FiscalYearsPage />
+        </RequirePermission>
+      ) },
       { path: "ledger", element: (
         <RequirePermission permission={PERMISSIONS.JOURNALS_VIEW}>
           <LedgerPage />
@@ -206,6 +222,11 @@ const router = createBrowserRouter([
       { path: "financial-statements", element: (
         <RequirePermission permission={PERMISSIONS.FINANCIAL_STATEMENTS_VIEW}>
           <FinancialStatementsPage />
+        </RequirePermission>
+      ) },
+      { path: "finance-dashboard", element: (
+        <RequirePermission permissions={[PERMISSIONS.FINANCE_REPORTS_VIEW, PERMISSIONS.FINANCIAL_STATEMENTS_VIEW]}>
+          <FinanceDashboardPage />
         </RequirePermission>
       ) },
       { path: "laporan", element: (

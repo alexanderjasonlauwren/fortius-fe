@@ -18,6 +18,8 @@ import {
   PRESET_LABEL,
   periodFromParams,
   periodToParams,
+  recallPeriod,
+  rememberPeriod,
   resolveRange,
   type PeriodPreset,
   type PeriodState,
@@ -50,7 +52,6 @@ const ALL = "semua";
 export function FinanceReportPage() {
   const { key = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const period = periodFromParams(params);
   const { branches, branchId: scopeBranch, canSeeAll } = useScope();
   // The report's own branch filter starts on the console's branch and can
   // widen to every branch without switching the whole console.
@@ -58,6 +59,9 @@ export function FinanceReportPage() {
 
   const catalogue = useQuery({ queryKey: [...scopeKey(), "finance-reports", "catalogue"], queryFn: getReportCatalogue });
   const def = catalogue.data?.find((d) => d.key === key);
+  // A range report reopens on the period last used; an as-of report (aging,
+  // assets) on today -- yesterday's aging is rarely what anyone wants.
+  const period = periodFromParams(def?.periodKind === "as_of" ? params : recallPeriod(key, params));
 
   const range = resolveRange(period);
   const query: ReportQuery = def?.periodKind === "as_of" ? { asOf: period.date } : { from: range.from, to: range.to };
@@ -76,8 +80,9 @@ export function FinanceReportPage() {
   });
 
   function update(next: Partial<PeriodState>) {
-    const merged = periodToParams({ ...period, ...next }, new URLSearchParams(params));
-    setParams(merged, { replace: true });
+    const state = { ...period, ...next };
+    rememberPeriod(key, state);
+    setParams(periodToParams(state, new URLSearchParams(params)), { replace: true });
   }
 
   const branchLabel = branch === ALL ? "Semua cabang" : branches.find((b) => b.id === branch)?.nama;

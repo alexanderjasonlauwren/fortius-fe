@@ -68,7 +68,7 @@ export function PaymentPage() {
   // backend action, reversing the journal it posted.
   const voiding = decision?.action === "reject" && decision.payment.status === "Terverifikasi";
   const [allocating, setAllocating] = useState<PaymentView | null>(null);
-  // Arriving from Verifikasi Pembayaran's "Alokasikan" dialog with no receipt yet
+  // Arriving from Alokasi Dana Pengiriman's "Alokasikan" dialog with no receipt yet
   // recorded: ?outlet=<id> opens this dialog with that outlet pre-selected,
   // so recording one is a single trip rather than a menu hunt back here.
   const [searchParams] = useSearchParams();

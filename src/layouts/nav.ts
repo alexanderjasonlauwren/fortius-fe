@@ -6,6 +6,10 @@ import {
   Bell,
   BookOpen,
   ChartColumn,
+  ChartPie,
+  FileInput,
+  ListTree,
+  Lock,
   Building2,
   ClipboardCheck,
   ClipboardList,
@@ -62,6 +66,10 @@ export interface NavGroup {
 
 export const NAV_GROUPS: NavGroup[] = [
   {
+    // What people open first thing: the day's board, the money, the reports.
+    // Laporan and Dasbor Keuangan sit here rather than at the bottom of
+    // Keuangan because the client asked for reports one click away
+    // (accounting parity P6).
     label: "Menu utama",
     items: [
       {
@@ -71,11 +79,22 @@ export const NAV_GROUPS: NavGroup[] = [
         hint: "Papan berangkat hari ini dan angka kunci",
       },
       {
-        // Financial-statements plan, phase P2: renamed so it stops
-        // colliding with the new "Laporan Keuangan" (the generated
-        // statements themselves) under Keuangan below. This page is the
-        // operational recap -- volume, verified cash, top outlets -- not a
-        // Laba Rugi or Neraca.
+        name: "Dasbor Keuangan",
+        href: "/finance-dashboard",
+        icon: ChartPie,
+        hint: "Kas & bank, piutang, hutang, laba, dan tren 12 bulan",
+        permission: [PERMISSIONS.FINANCE_REPORTS_VIEW, PERMISSIONS.FINANCIAL_STATEMENTS_VIEW],
+      },
+      {
+        name: "Laporan",
+        href: "/laporan",
+        icon: ChartColumn,
+        hint: "Laba rugi, neraca, arus kas, umur piutang & hutang, penjualan, pembelian, biaya",
+        permission: PERMISSIONS.FINANCE_REPORTS_VIEW,
+      },
+      {
+        // The operational recap -- volume, verified cash, top outlets -- not
+        // a Laba Rugi or Neraca; the owner's daily view of the operation.
         name: "Rekap Operasional",
         href: "/reports",
         icon: FileText,
@@ -98,7 +117,7 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Schedule Agreement",
         href: "/sa",
         icon: FileText,
-        hint: `Kuota dari ${supplierLabel()} dan sisa yang bisa ditarik`,
+        hint: `Kuota dari ${supplierLabel()}, sisa yang bisa ditarik, dan penerbit SA`,
         permission: PERMISSIONS.SA_VIEW,
       },
       {
@@ -123,8 +142,10 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: PERMISSIONS.INTEGRATION_SIM3LON_VIEW,
       },
       {
-        name: "Verifikasi Pembayaran",
-        href: "/payment-control",
+        // Was "Verifikasi Pembayaran" at /payment-control: it allocates funds
+        // to dispatch, it does not verify receipts (that is Penerimaan Kas).
+        name: "Alokasi Dana Pengiriman",
+        href: "/dispatch-funding",
         icon: ClipboardCheck,
         hint: "Dana terverifikasi per pangkalan sebelum armada berangkat",
         permission: PERMISSIONS.PAYMENTS_VIEW,
@@ -139,27 +160,15 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Keuangan",
+    // Jurnal's model: the documents money moves on -- sales, purchases,
+    // costs, cash -- each with its own master data beside it.
+    label: "Keuangan · Transaksi",
     items: [
       {
-        name: "Pengeluaran & Kas Kecil",
-        href: "/expenses",
-        icon: Fuel,
-        hint: "Catat biaya operasional dan persetujuannya",
-        permission: PERMISSIONS.EXPENSES_VIEW,
-      },
-      {
-        name: "Bukti Pengeluaran",
-        href: "/ocr",
-        icon: Receipt,
-        hint: "Catat dan klasifikasikan struk biaya operasional",
-        permission: [PERMISSIONS.OCR_VIEW, PERMISSIONS.OCR_ARCHIVE_VIEW],
-      },
-      {
-        name: "Piutang",
+        name: "Tagihan & Piutang",
         href: "/receivables",
         icon: ReceiptText,
-        hint: "Umur piutang, tagihan, dan nota kredit",
+        hint: "Tagihan penjualan, umur piutang, dan nota kredit",
         permission: PERMISSIONS.PAYMENTS_VIEW,
       },
       {
@@ -170,18 +179,41 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: PERMISSIONS.PAYMENTS_VIEW,
       },
       {
+        // Was "Rekap Transaksi": a working list of surat jalan and their
+        // billing, not a report.
+        name: "Daftar Penjualan",
+        href: "/transactions",
+        icon: Table2,
+        hint: "Setiap surat jalan dengan tagihan dan status bayarnya, disaring dan diekspor",
+        permission: PERMISSIONS.TRANSACTIONS_VIEW,
+      },
+      {
+        name: "Pembelian",
+        href: "/purchases",
+        icon: ShoppingCart,
+        hint: "Tagihan vendor, pembayarannya, dan daftar vendor",
+        permission: PERMISSIONS.PURCHASES_VIEW,
+      },
+      {
+        name: "Pengeluaran & Kas Kecil",
+        href: "/expenses",
+        icon: Fuel,
+        hint: "Catat biaya operasional, persetujuannya, dan kategori biaya",
+        permission: PERMISSIONS.EXPENSES_VIEW,
+      },
+      {
+        name: "Bukti Pengeluaran",
+        href: "/ocr",
+        icon: Receipt,
+        hint: "Catat dan klasifikasikan struk biaya operasional",
+        permission: [PERMISSIONS.OCR_VIEW, PERMISSIONS.OCR_ARCHIVE_VIEW],
+      },
+      {
         name: "Kas & Bank",
         href: "/cash-bank",
         icon: Landmark,
-        hint: "Voucher kas masuk/keluar/transfer, rekening koran, dan rekonsiliasi",
+        hint: "Voucher kas, rekening koran, rekonsiliasi, dan daftar rekening",
         permission: PERMISSIONS.CASH_VOUCHERS_VIEW,
-      },
-      {
-        name: "Buku Besar",
-        href: "/ledger",
-        icon: BookOpen,
-        hint: "Jurnal, neraca saldo, dan laba rugi",
-        permission: PERMISSIONS.JOURNALS_VIEW,
       },
       {
         name: "Aset Tetap",
@@ -190,33 +222,45 @@ export const NAV_GROUPS: NavGroup[] = [
         hint: "Daftar aset, penyusutan bulanan, dan rekonsiliasi",
         permission: PERMISSIONS.ASSETS_VIEW,
       },
+    ],
+  },
+  {
+    label: "Keuangan · Akun & Laporan",
+    items: [
       {
-        name: "Pembelian",
-        href: "/purchases",
-        icon: ShoppingCart,
-        hint: "Pembelian umum dari vendor lokal, di luar Schedule Agreement",
-        permission: PERMISSIONS.PURCHASES_VIEW,
+        name: "Daftar Akun",
+        href: "/accounts",
+        icon: ListTree,
+        hint: "Bagan akun dan saldo; tiap akun membuka transaksinya",
+        permission: PERMISSIONS.ACCOUNTS_VIEW,
+      },
+      {
+        name: "Jurnal Umum",
+        href: "/ledger",
+        icon: BookOpen,
+        hint: "Jurnal, jurnal manual, dan neraca saldo",
+        permission: PERMISSIONS.JOURNALS_VIEW,
+      },
+      {
+        name: "Saldo Awal",
+        href: "/opening-balance",
+        icon: FileInput,
+        hint: "Impor saldo awal akun saat mulai memakai sistem",
+        permission: PERMISSIONS.FISCAL_YEARS_VIEW,
+      },
+      {
+        name: "Tutup Buku",
+        href: "/fiscal-years",
+        icon: Lock,
+        hint: "Tutup dan buka kembali tahun buku",
+        permission: PERMISSIONS.FISCAL_YEARS_VIEW,
       },
       {
         name: "Laporan Keuangan",
         href: "/financial-statements",
         icon: FileSpreadsheet,
-        hint: "Laba Rugi, Neraca, dan Penjelasan Akun, dihasilkan dari buku besar",
+        hint: "Laba Rugi, Neraca, Penjelasan Akun, Komparasi, dan Buku Besar",
         permission: PERMISSIONS.FINANCIAL_STATEMENTS_VIEW,
-      },
-      {
-        name: "Laporan",
-        href: "/laporan",
-        icon: ChartColumn,
-        hint: "Arus kas, umur piutang & hutang, penjualan, pembelian, biaya, kas & bank, aset",
-        permission: PERMISSIONS.FINANCE_REPORTS_VIEW,
-      },
-      {
-        name: "Rekap Transaksi",
-        href: "/transactions",
-        icon: Table2,
-        hint: "Daftar seluruh transaksi, disaring dan diekspor ke Excel",
-        permission: PERMISSIONS.INVOICES_VIEW,
       },
     ],
   },

@@ -2,25 +2,19 @@ import { scopeKey } from "@/lib/scope";
 import { AttachmentsButton } from "@/features/attachments/components/AttachmentsButton";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { BookOpen, CheckCircle2, Copy, Plus, TriangleAlert, Undo2 } from "lucide-react";
 import { leafAccounts } from "@/features/finance/lib/accounts";
 import {
   getChartOfAccounts,
   getJournals,
-  getProfitAndLoss,
   getTrialBalance,
-  upgradeChart,
-  type ChartUpgradeResult,
   type JournalView,
 } from "@/features/finance/api/financeApi";
 import { JOURNAL_SOURCE_LABEL, journalSourceHref } from "@/features/finance/lib/journalSource";
 import { ManualJournalDialog } from "@/features/finance/components/ManualJournalDialog";
 import { ReverseJournalDialog } from "@/features/finance/components/ReverseJournalDialog";
-import { FiscalYearSection } from "@/features/fiscalyears/components/FiscalYearSection";
 import { defaultRange } from "@/features/transactions/api/transactionApi";
-import { useAuthStore } from "@/features/auth/store/authStore";
-import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -33,38 +27,39 @@ import {
 import { EmptyState } from "@/components/common/EmptyState";
 import { Field, SearchInput, SegmentedControl, SelectInput, TextInput } from "@/components/common/Field";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateId, formatRupiah, formatRupiahShort } from "@/lib/format";
 
-type Tab = "jurnal" | "neraca-saldo" | "laba-rugi" | "bagan" | "tutup-buku";
+type Tab = "jurnal" | "neraca-saldo";
+
+/**
+ * Where the old Buku Besar tabs went (accounting parity P6): Laba rugi was a
+ * second copy of Laporan Keuangan's, Bagan akun is Daftar Akun and Tutup
+ * Buku its own page. A bookmark to one of them still lands somewhere real.
+ */
+const MOVED_TABS: Record<string, string> = {
+  "laba-rugi": "/financial-statements?tab=laba-rugi",
+  bagan: "/accounts",
+  "tutup-buku": "/fiscal-years",
+};
 
 export function LedgerPage() {
-  const [tab, setTab] = useState<Tab>("jurnal");
+  const [params] = useSearchParams();
+  const requested = params.get("tab");
+  const [tab, setTab] = useState<Tab>(requested === "neraca-saldo" ? "neraca-saldo" : "jurnal");
   const [range, setRange] = useState(defaultRange);
-  // Distinct from JOURNALS_VIEW, which only gates the page itself: confirmed
-  // live that finance_officer holds finance.read.journals but not
-  // finance.read.accounts (only tenant_admin does), so the chart-of-accounts
-  // tab needs its own gate or that role sees a permanently empty table.
-  const canViewAccounts = useAuthStore((s) => s.hasPermission(PERMISSIONS.ACCOUNTS_VIEW));
-  const canViewFiscalYears = useAuthStore((s) => s.hasPermission(PERMISSIONS.FISCAL_YEARS_VIEW));
+
+  if (requested && MOVED_TABS[requested]) return <Navigate to={MOVED_TABS[requested]} replace />;
 
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Keuangan"
-        title="Buku Besar"
-        description="Setiap tagihan, penerimaan, dan nota kredit memposting jurnal berpasangan ke sini. Laporan di bawah dihitung dari jurnal, bukan dari tabel operasional."
+        title="Jurnal Umum"
+        description="Setiap tagihan, penerimaan, pembelian, biaya, dan voucher memposting jurnal berpasangan ke sini. Neraca saldo dihitung dari jurnal yang sama."
         actions={
-          tab !== "tutup-buku" && (
+          (
             <div className="flex items-end gap-2">
               <Field label="Dari" htmlFor="l-from">
                 <TextInput
@@ -98,13 +93,6 @@ export function LedgerPage() {
             options={[
               { value: "jurnal" as const, label: "Jurnal" },
               { value: "neraca-saldo" as const, label: "Neraca saldo" },
-              { value: "laba-rugi" as const, label: "Laba rugi" },
-              ...(canViewAccounts
-                ? [{ value: "bagan" as const, label: "Bagan akun" }]
-                : []),
-              ...(canViewFiscalYears
-                ? [{ value: "tutup-buku" as const, label: "Tutup Buku" }]
-                : []),
             ]}
           />
         }
@@ -112,9 +100,6 @@ export function LedgerPage() {
 
       {tab === "jurnal" && <JournalSection range={range} />}
       {tab === "neraca-saldo" && <TrialBalanceSection range={range} />}
-      {tab === "laba-rugi" && <ProfitLossSection range={range} />}
-      {tab === "bagan" && canViewAccounts && <ChartSection />}
-      {tab === "tutup-buku" && canViewFiscalYears && <FiscalYearSection />}
     </div>
   );
 }
@@ -399,321 +384,5 @@ function TrialBalanceSection({
         )}
       </Panel>
     </>
-  );
-}
-
-/* ── profit and loss ───────────────────────────────────────────────────── */
-
-function ProfitLossSection({ range }: { range: { from: string; to: string } }) {
-  const pl = useQuery({
-    queryKey: [...scopeKey(), "profit-loss", range],
-    queryFn: () => getProfitAndLoss(range),
-  });
-
-  if (pl.isLoading || !pl.data) return <Skeleton className="h-96 w-full" />;
-  const p = pl.data;
-  const marginPct =
-    p.totalPendapatan === 0 ? 0 : (p.labaKotor / p.totalPendapatan) * 100;
-
-  return (
-    <>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Figure
-          label="Pendapatan bersih"
-          value={formatRupiahShort(p.totalPendapatan)}
-        />
-        <Figure
-          label="Laba kotor"
-          value={formatRupiahShort(p.labaKotor)}
-          hint={`Margin ${marginPct.toFixed(1)}%`}
-          tone="pine"
-        />
-        <Figure label="Total beban" value={formatRupiahShort(p.totalBeban)} />
-        <Figure
-          label="Laba bersih"
-          value={formatRupiahShort(p.labaBersih)}
-          tone={p.labaBersih >= 0 ? "pine" : "rust"}
-        />
-      </div>
-
-      <Panel>
-        <PanelHeader
-          title="Laporan laba rugi"
-          hint="Dihitung dari jurnal periode ini"
-        />
-        <div className="divide-y divide-line">
-          <Section
-            title="Pendapatan"
-            rows={p.pendapatan}
-            total={p.totalPendapatan}
-          />
-          <Section title="Beban" rows={p.beban} total={p.totalBeban} />
-          <div className="flex items-center justify-between px-5 py-4">
-            <span className="text-sm font-semibold text-ink">Laba bersih</span>
-            <span
-              className={cn(
-                "data text-lg font-semibold",
-                p.labaBersih >= 0 ? "text-pine-ink" : "text-rust-ink",
-              )}
-            >
-              {formatRupiah(p.labaBersih)}
-            </span>
-          </div>
-        </div>
-      </Panel>
-    </>
-  );
-}
-
-function Section({
-  title,
-  rows,
-  total,
-}: {
-  title: string;
-  rows: { akun: { id: string; kode: string; nama: string }; saldo: number }[];
-  total: number;
-}) {
-  const visible = rows.filter((r) => r.saldo !== 0);
-  return (
-    <div className="px-5 py-4">
-      <p className="label mb-2 text-2xs text-ink-muted">{title}</p>
-      {visible.length === 0 ? (
-        <p className="text-xs text-ink-muted">
-          Belum ada mutasi pada periode ini.
-        </p>
-      ) : (
-        <ul className="space-y-1.5">
-          {visible.map((r) => (
-            <li key={r.akun.id} className="flex justify-between gap-4 text-sm">
-              <span className="text-ink-muted">
-                <span className="data text-2xs">{r.akun.kode}</span>{" "}
-                {r.akun.nama}
-              </span>
-              <span className="data text-ink">{formatRupiah(r.saldo)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-2.5 flex justify-between gap-4 border-t border-line pt-2.5 text-sm font-semibold">
-        <span className="text-ink">Total {title.toLowerCase()}</span>
-        <span className="data text-ink">{formatRupiah(total)}</span>
-      </div>
-    </div>
-  );
-}
-
-/* ── chart of accounts ─────────────────────────────────────────────────── */
-
-/**
- * How many ancestors `kode` has, walking `induk` up to a root -- purely for
- * indentation. `seen` guards against a cyclical chart (should never happen,
- * but an infinite loop in a render function is worse than a flat row).
- */
-function accountDepth(
-  kode: string | undefined,
-  byKode: Map<string, string | undefined>,
-  seen: Set<string> = new Set(),
-): number {
-  if (!kode || seen.has(kode)) return 0;
-  seen.add(kode);
-  const parent = byKode.get(kode);
-  return parent ? 1 + accountDepth(parent, byKode, seen) : 0;
-}
-
-function ChartSection() {
-  const chart = useQuery({
-    queryKey: [...scopeKey(), "chart-of-accounts"],
-    queryFn: getChartOfAccounts,
-  });
-  const canManageAccounts = useAuthStore((s) => s.hasPermission(PERMISSIONS.ACCOUNTS_CREATE));
-  const [preview, setPreview] = useState<ChartUpgradeResult | null>(null);
-
-  const previewMutation = useDeskMutation({
-    mutationFn: () => upgradeChart(true),
-    errorTitle: "Pratinjau pembaruan bagan akun gagal",
-    onDone: (result) => setPreview(result),
-  });
-  const applyMutation = useDeskMutation({
-    mutationFn: () => upgradeChart(false),
-    errorTitle: "Pembaruan bagan akun gagal",
-    success: (result) => ({
-      title: "Bagan akun diperbarui",
-      description: `${result.akunDitambahkan.length} akun dan ${result.layoutDitambahkan.length} laporan ditambahkan.`,
-    }),
-    onDone: () => setPreview(null),
-  });
-
-  if (chart.isLoading) return <Skeleton className="h-96 w-full" />;
-
-  const indukByKode = new Map((chart.data ?? []).map((r) => [r.akun.kode, r.akun.induk]));
-
-  return (
-    <>
-      <Panel>
-        <PanelHeader
-          title="Bagan akun"
-          hint="Akun bertanda sistem dipakai aturan pemostingan dan tidak dapat dihapus"
-          actions={
-            canManageAccounts && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => previewMutation.mutate(undefined as never)}
-                disabled={previewMutation.isPending}
-              >
-                Perbarui bagan akun
-              </Button>
-            )
-          }
-        />
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-line bg-panel-sunk">
-                <th className="label px-5 py-2.5 text-2xs text-ink-muted">
-                  Kode
-                </th>
-                <th className="label px-5 py-2.5 text-2xs text-ink-muted">
-                  Nama akun
-                </th>
-                <th className="label px-5 py-2.5 text-2xs text-ink-muted">
-                  Tipe
-                </th>
-                <th className="label px-5 py-2.5 text-2xs text-ink-muted">
-                  Saldo normal
-                </th>
-                <th className="label px-5 py-2.5 text-right text-2xs text-ink-muted">
-                  Saldo berjalan
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {(chart.data ?? []).map((r) => (
-                <tr key={r.akun.id} className="border-b border-line">
-                  <td className="data px-5 py-2.5 text-xs text-ink-muted">
-                    {r.akun.kode}
-                  </td>
-                  <td
-                    className="px-5 py-2.5 text-sm text-ink"
-                    style={{ paddingLeft: `${1.25 + accountDepth(r.akun.kode, indukByKode) * 1.25}rem` }}
-                  >
-                    {r.akun.nama}
-                    {r.akun.sistem && (
-                      <span className="ml-2 rounded-sm bg-panel-raised px-1.5 py-0.5 text-2xs text-ink-muted">
-                        sistem
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-2.5 text-xs text-ink-muted">
-                    {r.akun.tipe}
-                  </td>
-                  <td className="px-5 py-2.5 text-xs capitalize text-ink-muted">
-                    {r.akun.saldoNormal}
-                  </td>
-                  <td className="data px-5 py-2.5 text-right text-sm text-ink">
-                    {formatRupiah(r.saldo)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-
-      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Perbarui bagan akun</DialogTitle>
-            <DialogDescription>
-              Menambahkan akun dan laporan standar yang belum ada. Akun dan
-              laporan yang sudah ada tidak diubah.
-            </DialogDescription>
-          </DialogHeader>
-
-          {preview && (
-            <div className="space-y-3 text-sm">
-              <p>
-                <span className="font-semibold text-ink">
-                  {preview.akunDitambahkan.length}
-                </span>{" "}
-                akun dan{" "}
-                <span className="font-semibold text-ink">
-                  {preview.layoutDitambahkan.length}
-                </span>{" "}
-                laporan akan ditambahkan.
-              </p>
-              {preview.akunDitambahkan.length > 0 && (
-                <p className="data text-xs text-ink-muted">
-                  {preview.akunDitambahkan.join(", ")}
-                </p>
-              )}
-              {preview.konflik.length > 0 && (
-                <div className="rounded-md border border-rust bg-rust/5 p-3 text-xs text-rust-ink">
-                  <p className="mb-1 font-semibold">
-                    {preview.konflik.length} kode bentrok, tidak akan diubah:
-                  </p>
-                  <ul className="space-y-0.5">
-                    {preview.konflik.map((k) => (
-                      <li key={k.kode}>
-                        <span className="data">{k.kode}</span> — {k.alasan}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {preview.akunDitambahkan.length === 0 &&
-                preview.layoutDitambahkan.length === 0 && (
-                  <p className="text-ink-muted">
-                    Bagan akun dan laporan sudah sesuai standar terkini.
-                  </p>
-                )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPreview(null)}>
-              Batal
-            </Button>
-            <Button
-              disabled={
-                !preview ||
-                (preview.akunDitambahkan.length === 0 && preview.layoutDitambahkan.length === 0) ||
-                applyMutation.isPending
-              }
-              onClick={() => applyMutation.mutate(undefined as never)}
-            >
-              Terapkan
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-function Figure({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: "pine" | "rust";
-}) {
-  const spine = { pine: "spine text-pine", rust: "spine text-rust" };
-  return (
-    <div
-      className={cn(
-        "rounded-md border border-line bg-panel p-4",
-        tone && spine[tone],
-      )}
-    >
-      <p className="label text-2xs text-ink-muted">{label}</p>
-      <p className="data mt-1.5 truncate text-figure font-semibold text-ink">{value}</p>
-      {hint && <p className="mt-2 text-xs text-ink-muted">{hint}</p>}
-    </div>
   );
 }

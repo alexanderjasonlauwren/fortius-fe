@@ -27,10 +27,6 @@ import {
   TextareaInput,
   Toggle,
 } from "@/components/common/Field";
-import { SupplierSection } from "@/features/settings/components/SupplierSection";
-import { VendorSection } from "@/features/settings/components/VendorSection";
-import { ExpenseCategorySection } from "@/features/settings/components/ExpenseCategorySection";
-import { BankSection } from "@/features/settings/components/BankSection";
 import { RegistrationPackageSection } from "@/features/settings/components/RegistrationPackageSection";
 import { NumberingSection } from "@/features/settings/components/NumberingSection";
 import { OperationsSection } from "@/features/settings/components/OperationsSection";
@@ -584,10 +580,18 @@ export function SettingsPage() {
 
         {tab === "master" && (
           <div className="space-y-4 lg:col-span-2">
-            <SupplierSection />
-            <VendorSection />
-            <ExpenseCategorySection />
-            <BankSection />
+            {/* Accounting parity P6 moved the finance master data next to the
+                work that uses it, as Jurnal keeps it. */}
+            <p className="text-xs text-ink-muted">
+              Vendor ada di{" "}
+              <Link to="/purchases?tab=vendor" className="font-semibold text-ink underline underline-offset-4">Pembelian</Link>,
+              kategori biaya di{" "}
+              <Link to="/expenses?tab=kategori" className="font-semibold text-ink underline underline-offset-4">Pengeluaran</Link>,
+              rekening kas &amp; bank di{" "}
+              <Link to="/cash-bank?tab=rekening" className="font-semibold text-ink underline underline-offset-4">Kas &amp; Bank</Link>,
+              dan penerbit SA di{" "}
+              <Link to="/sa" className="font-semibold text-ink underline underline-offset-4">Schedule Agreement</Link>.
+            </p>
             <RegistrationPackageSection />
             <NumberingSection />
           </div>

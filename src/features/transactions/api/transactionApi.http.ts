@@ -276,14 +276,14 @@ const EXPORT_COLUMNS: ExcelColumn<TransactionRow>[] = [
 
 async function exportTransactionsExcel(filters?: TransactionFilters): Promise<number> {
   const rows = await fetchRows(filters);
-  exportExcel(`rekap-transaksi-${timestampSuffix()}`, "Rekap Transaksi", EXPORT_COLUMNS, rows);
+  exportExcel(`daftar-penjualan-${timestampSuffix()}`, "Daftar Penjualan", EXPORT_COLUMNS, rows);
   return rows.length;
 }
 
 async function exportTransactionsCsv(filters?: TransactionFilters): Promise<number> {
   const rows = await fetchRows(filters);
   exportCsv(
-    `rekap-transaksi-${timestampSuffix()}`,
+    `daftar-penjualan-${timestampSuffix()}`,
     EXPORT_COLUMNS.map((c) => c.header),
     rows.map((row) =>
       EXPORT_COLUMNS.map((c) => {

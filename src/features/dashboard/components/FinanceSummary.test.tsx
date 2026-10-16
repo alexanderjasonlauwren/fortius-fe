@@ -7,7 +7,7 @@ import { PERMISSIONS } from "@/features/rbac/permissions";
 
 const state = vi.hoisted(() => ({
   permissions: [] as string[], scope: ["tenant-a", "branch-a"],
-  cash: vi.fn(), receivables: vi.fn(), margin: vi.fn(),
+  cash: vi.fn(), receivables: vi.fn(), margin: vi.fn(), report: vi.fn(),
 }));
 vi.mock("@/features/auth/store/authStore", () => ({
   useAuthStore: (selector: (store: { hasPermission: (permission: string) => boolean }) => unknown) =>
@@ -17,6 +17,7 @@ vi.mock("@/lib/scope", () => ({ scopeKey: () => state.scope }));
 vi.mock("../api/financeSummary", () => ({
   getVerifiedCash: state.cash, getMonthlyReceivables: state.receivables, getGrossMargin: state.margin,
 }));
+vi.mock("@/features/financereports/api/financereportsApi", () => ({ getFinanceReport: state.report }));
 import { useFinanceSummary } from "../hooks/useFinanceSummary";
 import { FinanceSummary } from "./FinanceSummary";
 
@@ -37,10 +38,35 @@ beforeEach(() => {
   state.cash.mockReset().mockResolvedValue({ complete: true, amount: 1000 });
   state.receivables.mockReset().mockResolvedValue({ complete: true, amount: 2000 });
   state.margin.mockReset().mockResolvedValue({ complete: true, amount: 3000 });
+  // A report's grand-total row, as the report pack returns it.
+  state.report.mockReset().mockImplementation(async (key: string) => ({
+    rows: [{
+      kind: "total", level: 0,
+      cells: key === "bank_summary" ? { closing: 50_600_000 }
+        : key === "ar_aging" ? { total: 2_700_000, current: 1_500_000 }
+        : { total: 400_000, current: 0 },
+    }],
+  }));
 });
 afterEach(cleanup);
 
 describe("Beranda financial summary", () => {
+  it("reads today's position off the reports when the report pack is granted, and drops the capped figures", async () => {
+    state.permissions = [PERMISSIONS.FINANCE_REPORTS_VIEW, PERMISSIONS.FINANCIAL_STATEMENTS_VIEW, PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.INVOICES_VIEW];
+    setup();
+    await waitFor(() => expect(screen.getByTitle("Rp 50.600.000")).toBeTruthy());
+    // Piutang past due = total - not yet due; hutang due within a week is
+    // aged as of a week ahead.
+    expect(screen.getByTitle("Rp 1.200.000")).toBeTruthy();
+    expect(screen.getByTitle("Rp 400.000")).toBeTruthy();
+    const ap = state.report.mock.calls.find((c) => c[0] === "ap_aging")!;
+    const ar = state.report.mock.calls.find((c) => c[0] === "ar_aging")!;
+    expect(ap[1].asOf > ar[1].asOf).toBe(true);
+    expect(state.cash).not.toHaveBeenCalled();
+    expect(state.receivables).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: /Dasbor keuangan/ }).getAttribute("href")).toBe("/finance-dashboard");
+  });
+
   it("hides the section and never fetches finance without permissions", async () => {
     setup();
     expect(screen.queryByRole("region", { name: "Ringkasan keuangan" })).toBeNull();

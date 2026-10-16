@@ -5,9 +5,11 @@ import { PERMISSIONS } from "./permissions";
 import { NAV_GROUPS, navGroupsFor, landingPathFor, titleFor, usesDriverConsole } from "@/layouts/nav";
 
 describe("financial report navigation", () => {
-  it("places the operational recap immediately after Beranda without duplicates", () => {
+  // Accounting parity P6 (client decision): Menu utama is Beranda, then the
+  // two finance entry points, then the operational recap.
+  it("keeps the operational recap in Menu utama after the finance entry points, without duplicates", () => {
     const items = NAV_GROUPS.flatMap((group) => group.items);
-    expect(items.slice(0, 2).map((item) => item.href)).toEqual(["/dashboard", "/reports"]);
+    expect(items.slice(0, 4).map((item) => item.href)).toEqual(["/dashboard", "/finance-dashboard", "/laporan", "/reports"]);
     expect(items.filter((item) => item.href === "/reports")).toHaveLength(1);
     // Renamed off "Laporan Keuangan" in the financial-statements plan's own
     // phase P2, so it stops colliding with the new page that name now
@@ -210,10 +212,37 @@ describe("the nav a role is shown", () => {
     expect(shown).not.toContain("/users");
   });
 
-  // Otherwise "Keuangan" renders as a heading with nothing under it.
+  // Otherwise a Keuangan heading renders with nothing under it.
   it("drops a group whose every item was filtered away", () => {
     const labels = navGroupsFor([PERMISSIONS.SA_VIEW]).map((g) => g.label);
-    expect(labels).not.toContain("Keuangan");
+    expect(labels).not.toContain("Keuangan · Transaksi");
+    expect(labels).not.toContain("Keuangan · Akun & Laporan");
+    expect(labels).toContain("Operasi harian");
+  });
+
+  // Accounting parity P6: Keuangan split the way Jurnal splits it, the
+  // reports one click away, and every page that had no link given one.
+  it("splits Keuangan into transactions and accounts & reports", () => {
+    const finance = navGroupsFor([
+      PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PURCHASES_VIEW, PERMISSIONS.JOURNALS_VIEW,
+      PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.FISCAL_YEARS_VIEW, PERMISSIONS.FINANCIAL_STATEMENTS_VIEW,
+    ]);
+    const group = (label: string) => finance.find((g) => g.label === label)?.items.map((i) => i.href) ?? [];
+    expect(group("Keuangan · Transaksi")).toEqual(["/receivables", "/payments", "/purchases"]);
+    expect(group("Keuangan · Akun & Laporan")).toEqual(["/accounts", "/ledger", "/opening-balance", "/fiscal-years", "/financial-statements"]);
+  });
+
+  it("puts Laporan and Dasbor Keuangan in Menu utama, the dashboard only with both its permissions", () => {
+    const main = (codes: string[]) => navGroupsFor(codes).find((g) => g.label === "Menu utama")?.items.map((i) => i.href) ?? [];
+    expect(main([PERMISSIONS.FINANCE_REPORTS_VIEW])).toEqual(["/dashboard", "/laporan"]);
+    expect(main([PERMISSIONS.FINANCE_REPORTS_VIEW, PERMISSIONS.FINANCIAL_STATEMENTS_VIEW]))
+      .toEqual(["/dashboard", "/finance-dashboard", "/laporan"]);
+  });
+
+  it("links dispatch funding under its new name and path", () => {
+    const shown = navGroupsFor([PERMISSIONS.PAYMENTS_VIEW]).flatMap((g) => g.items);
+    expect(shown.find((i) => i.href === "/dispatch-funding")?.name).toBe("Alokasi Dana Pengiriman");
+    expect(shown.some((i) => i.href === "/payment-control")).toBe(false);
   });
 
   // The two ungated routes stay reachable: an item with no permission means

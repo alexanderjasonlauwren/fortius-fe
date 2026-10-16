@@ -3,8 +3,10 @@
  * with what is still owed and when it falls due, and the two things done
  * daily from here: record a bill, pay one or several (accounting parity P3).
  */
+import { VendorSection } from "@/features/settings/components/VendorSection";
+import { useAuthStore } from "@/features/auth/store/authStore";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CircleDollarSign, Layers, Plus, ShoppingCart } from "lucide-react";
 import { scopeKey } from "@/lib/scope";
@@ -29,6 +31,12 @@ import { formatDateId, formatRupiah, formatRupiahShort } from "@/lib/format";
 type StatusFilter = NonNullable<PurchaseFilters["paymentStatus"]>;
 
 export function PurchasesPage() {
+  // Vendors lived in Pengaturan until accounting parity P6; Jurnal keeps them under Pembelian.
+  const [params] = useSearchParams();
+  const canSeeMaster = useAuthStore((st) => st.hasPermission(PERMISSIONS.SUPPLIERS_VIEW));
+  const [view, setView] = useState<"tagihan" | "vendor">(() =>
+    params.get("tab") === "vendor" && canSeeMaster ? "vendor" : "tagihan",
+  );
   const [status, setStatus] = useState<StatusFilter>("open");
   const [supplierId, setSupplierId] = useState("");
   const [search, setSearch] = useState("");
@@ -155,6 +163,19 @@ export function PurchasesPage() {
           </span>
         }
       />
+      {canSeeMaster && (
+        <SegmentedControl<"tagihan" | "vendor">
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "tagihan", label: "Tagihan vendor" },
+            { value: "vendor", label: "Vendor" },
+          ]}
+        />
+      )}
+      {view === "vendor" && <VendorSection />}
+      {view === "tagihan" && (
+        <>
 
       <Panel>
         <PanelHeader
@@ -198,6 +219,8 @@ export function PurchasesPage() {
       <RecordPurchaseDialog open={recording} onClose={() => setRecording(false)} onSaved={() => list.refetch()} />
       <PayBillDialog bill={paying} onClose={() => setPaying(null)} onPaid={() => list.refetch()} />
       <PayBillsDialog open={payingMany} onClose={() => setPayingMany(false)} onPaid={() => list.refetch()} />
+        </>
+      )}
     </div>
   );
 }

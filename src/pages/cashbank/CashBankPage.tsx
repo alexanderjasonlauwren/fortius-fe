@@ -5,6 +5,9 @@
  * complete and live-verified since the original 8-phase plan; this page
  * is its first console surface.
  */
+import { useSearchParams } from "react-router-dom";
+import { useAuthStore } from "@/features/auth/store/authStore";
+import { BankSection } from "@/features/settings/components/BankSection";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, FolderOpen, Plus, Wallet } from "lucide-react";
@@ -38,14 +41,23 @@ import { getStatusVariant, spineFor } from "@/lib/status";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
 
-type Tab = "transaksi" | "rekening-koran" | "rekonsiliasi";
+type Tab = "transaksi" | "rekening-koran" | "rekonsiliasi" | "rekening";
+
+const TABS: Tab[] = ["transaksi", "rekening-koran", "rekonsiliasi", "rekening"];
 
 /** What the voucher dialog is open for: a fresh one, editing a draft, or
  *  a new draft copied from an existing voucher. */
 type VoucherDialogState = { mode: "new" } | { mode: "edit" | "duplicate"; voucher: CashVoucher } | null;
 
 export function CashBankPage() {
-  const [tab, setTab] = useState<Tab>("transaksi");
+  // ?tab= opens a tab directly -- Rekening is linked from where it used to
+  // live in Pengaturan (accounting parity P6).
+  const [params] = useSearchParams();
+  const canSeeAccounts = useAuthStore((st) => st.hasPermission(PERMISSIONS.BANK_ACCOUNTS_VIEW));
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = params.get("tab") as Tab | null;
+    return t && TABS.includes(t) && (t !== "rekening" || canSeeAccounts) ? t : "transaksi";
+  });
   const queryClient = useQueryClient();
   // An edit changes the voucher the detail dialog caches, not only the list.
   const refreshVouchers = () => {
@@ -154,10 +166,13 @@ export function CashBankPage() {
               { value: "transaksi" as const, label: "Transaksi" },
               { value: "rekening-koran" as const, label: "Rekening Koran" },
               { value: "rekonsiliasi" as const, label: "Rekonsiliasi" },
+              ...(canSeeAccounts ? [{ value: "rekening" as const, label: "Rekening" }] : []),
             ]}
           />
         }
       />
+
+      {tab === "rekening" && <BankSection />}
 
       {tab === "transaksi" && (
         <Panel>

@@ -121,7 +121,7 @@ export const PERMISSIONS = {
   REGISTRATION_PACKAGES_CREATE: "finance.create.registration_packages",
   REGISTRATION_PACKAGES_UPDATE: "finance.update.registration_packages",
 
-  // The reconciliation ledger (Rekap Transaksi) is its own real resource,
+  // The reconciliation ledger (Daftar Penjualan, formerly Rekap Transaksi) is its own real resource,
   // backed by GET /transactions -- unlike Reports, this one has a single
   // endpoint and so a single, dedicated permission to gate on.
   TRANSACTIONS_VIEW: "finance.read.transactions",
@@ -257,6 +257,8 @@ export const PERMISSIONS = {
   EXPENSE_CATEGORIES_CREATE: "finance.create.expense_categories",
   EXPENSE_CATEGORIES_UPDATE: "finance.update.expense_categories",
   EXPENSE_CATEGORIES_DELETE: "finance.delete.expense_categories",
+  /** The tenant's kas and bank accounts, under Kas & Bank › Rekening. */
+  BANK_ACCOUNTS_VIEW: "masterdata.read.bank_accounts",
   SUPPLIERS_VIEW: "finance.read.suppliers",
   SUPPLIERS_CREATE: "finance.create.suppliers",
   SUPPLIERS_UPDATE: "finance.update.suppliers",

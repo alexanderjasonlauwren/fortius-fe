@@ -5,9 +5,12 @@ import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CornerDownLeft, Search, Store, Truck } from "lucide-react";
+import { ChartColumn, CornerDownLeft, Search, Store, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ALL_NAV_ITEMS, mayOpen, isAvailableForIntake } from "./nav";
+import { getReportCatalogue } from "@/features/financereports/api/financereportsApi";
+import { hubEntries } from "@/features/financereports/lib/catalogue";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useIntakePolicy } from "@/features/distribution/hooks/useIntakePolicy";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { outletLabel, outletLabelTitle } from "@/lib/lexicon";
@@ -51,6 +54,13 @@ export function CommandPalette({
   });
 
   const held = useAuthStore((s) => s.user?.permissions) ?? EMPTY_PERMISSIONS;
+  // Every report and statement by name, so "umur" or "arus" opens it
+  // straight from ⌘K -- the client wanted reports fast (accounting parity P6).
+  const catalogue = useQuery({
+    queryKey: [...scopeKey(), "finance-reports", "catalogue"],
+    queryFn: getReportCatalogue,
+    enabled: open && held.includes(PERMISSIONS.FINANCE_REPORTS_VIEW),
+  });
   const policy = useIntakePolicy();
   const intakeMode = policy.isSuccess ? policy.data : undefined;
 
@@ -84,8 +94,19 @@ export function CommandPalette({
       icon: Truck,
     }));
 
-    return [...nav, ...outlet, ...drivers];
-  }, [records.data, held, intakeMode]);
+    // A working list already in the menu (Daftar Penjualan) is listed once.
+    const navHrefs = new Set(nav.map((n) => n.href));
+    const reports: Entry[] = hubEntries(catalogue.data ?? [], (code) => held.includes(code)).filter((e) => !navHrefs.has(e.href)).map((e) => ({
+      id: `rpt-${e.key}`,
+      label: e.title,
+      hint: e.description,
+      group: "Laporan",
+      href: e.href,
+      icon: ChartColumn,
+    }));
+
+    return [...nav, ...reports, ...outlet, ...drivers];
+  }, [records.data, catalogue.data, held, intakeMode]);
 
   // Each opening starts clean. Reset during render rather than in an effect,
   // so the palette never paints one frame carrying the previous search.

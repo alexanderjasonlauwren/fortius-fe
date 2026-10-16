@@ -251,8 +251,8 @@ export function TransactionListPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Keuangan"
-        title="Rekap Transaksi"
-        description="Seluruh baris transaksi — surat jalan beserta tagihannya, ditambah kwitansi yang masuk lewat pindaian. Saring, lalu unduh untuk diolah di Excel."
+        title="Daftar Penjualan"
+        description="Setiap surat jalan beserta tagihan dan status bayarnya, ditambah kwitansi yang masuk lewat pindaian — daftar kerja untuk menagih yang belum ditagih atau belum lunas. Saring, lalu unduh untuk diolah di Excel."
         actions={
           <CanAccess permission={PERMISSIONS.TRANSACTIONS_EXPORT}>
             <Button

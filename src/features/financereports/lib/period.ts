@@ -96,3 +96,50 @@ export function resolveRange(state: PeriodState): { from: string; to: string } {
     }
   }
 }
+
+/* ── remembered period ─────────────────────────────────────────────────── */
+
+type PeriodStorage = Pick<Storage, "getItem" | "setItem">;
+
+function browserStorage(): PeriodStorage | undefined {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+const PERIOD_KEYS = ["p", "d", "y", "m", "from", "to"];
+
+function storageKey(report: string): string {
+  return `sidistrib.report-period.${report}`;
+}
+
+/**
+ * The period a report opens on: the URL's when it names one (a shared or
+ * bookmarked link wins), otherwise the last one this browser used for this
+ * report, so reopening Umur Piutang shows the month you were looking at.
+ */
+export function recallPeriod(report: string, params: URLSearchParams, storage = browserStorage()): URLSearchParams {
+  if (PERIOD_KEYS.some((k) => params.has(k))) return params;
+  try {
+    const saved = storage?.getItem(storageKey(report));
+    if (!saved) return params;
+    const merged = new URLSearchParams(params);
+    new URLSearchParams(saved).forEach((v, k) => {
+      if (PERIOD_KEYS.includes(k)) merged.set(k, v);
+    });
+    return merged;
+  } catch {
+    return params;
+  }
+}
+
+export function rememberPeriod(report: string, state: PeriodState, storage = browserStorage()): void {
+  try {
+    storage?.setItem(storageKey(report), periodToParams(state).toString());
+  } catch {
+    // Private mode or a full quota: the report still works, it just won't
+    // remember.
+  }
+}
