@@ -297,6 +297,31 @@ export interface SIM3LONVarianceRow {
   kind: SIM3LONVarianceKind;
 }
 
+/** One agreement kind's share of a branch's monthly quota. */
+export interface QuotaSummaryKind {
+  code: string;
+  name: string;
+  totalQty: number;
+}
+
+/**
+ * A branch's quota for one month. Daily quantities are what SIM3LON Penyaluran
+ * records per date; dates after today carry nothing yet.
+ */
+export interface QuotaSummary {
+  periodMonth: string;
+  /** `null` unless the month is the current one. */
+  today: string | null;
+  todayQty: number | null;
+  days: Array<{ date: string; qty: number }>;
+  allocationQty: number;
+  deliveredQty: number;
+  /** Negative when more was distributed than allocated. */
+  remainingQty: number;
+  outletCount: number;
+  kinds: QuotaSummaryKind[];
+}
+
 export interface SIM3LONVarianceReport {
   batchId: string | null;
   planningStartDate: string | null;

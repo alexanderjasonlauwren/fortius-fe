@@ -9,11 +9,12 @@ import { UploadSAForm } from "@/features/sa/components/UploadSAForm";
 import { ImportTargetsDialog } from "@/features/sa/components/ImportTargetsDialog";
 import { SIM3LONImportDialog } from "@/features/sa/components/SIM3LONImportDialog";
 import { LivePenyaluranPanel } from "@/features/sa/components/LivePenyaluranPanel";
+import { QuotaSummaryPanel } from "@/features/sa/components/QuotaSummaryPanel";
 import { PlanningCutoverDialog } from "@/features/sa/components/PlanningCutoverDialog";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { PageHeader } from "@/components/common/PageHeader";
-import { Panel, PanelBody, PanelHeader, Meter } from "@/components/common/Panel";
+import { Panel, PanelBody, PanelHeader } from "@/components/common/Panel";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import {
   Dialog,
@@ -23,7 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { formatNumber, formatPercentId } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import type { ScheduleAgreement } from "@/features/sa/types";
 import type { UploadSAFormValues } from "@/features/sa/schema";
 import { supplierLabel, unitLabel } from "@/lib/lexicon";
@@ -62,9 +63,6 @@ export function SAManagementPage() {
   );
 
   const live = saList.filter((s) => s.status === "Aktif" || s.status === "Limit");
-  const totalKuota = live.reduce((sum, s) => sum + s.totalKuota, 0);
-  const sisaKuota = live.reduce((sum, s) => sum + s.sisaKuota, 0);
-  const terpakai = totalKuota - sisaKuota;
   const drafts = saList.filter((s) => s.status === "Draft");
   const expiringSoon = live.filter((s) => s.sisaHari >= 0 && s.sisaHari <= 7);
 
@@ -134,34 +132,14 @@ export function SAManagementPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Panel spine={sisaKuota === 0 ? "text-rust" : "text-signal"}>
-          <PanelHeader title="Kuota tersedia" hint="Seluruh agreement aktif" />
-          <PanelBody>
-            <p className="data text-display font-semibold text-ink">
-              {formatNumber(sisaKuota)}
-            </p>
-            <p className="mt-1 text-sm text-ink-muted">{unitLabel()} siap dijadwalkan</p>
-            <Meter
-              className="mt-4"
-              value={terpakai}
-              max={totalKuota}
-              tone="ink"
-              label="Kuota terpakai"
-            />
-            <p className="mt-2 text-xs text-ink-muted">
-              <span className="data">{formatNumber(terpakai)}</span> dari{" "}
-              <span className="data">{formatNumber(totalKuota)}</span> sudah ditarik (
-              {formatPercentId(totalKuota === 0 ? 0 : (terpakai / totalKuota) * 100)})
-            </p>
-          </PanelBody>
-        </Panel>
+        <QuotaSummaryPanel className="lg:col-span-2" />
 
-        <Panel className="lg:col-span-2">
+        <Panel>
           <PanelHeader title="Alur kuota" />
           <PanelBody>
             {/* Numbered because this genuinely is a sequence — quota cannot move
                 to the next step until the previous one is done. */}
-            <ol className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <ol className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
               {[
                 `${supplierLabel()} menerbitkan agreement. Unggah dokumennya, dan sistem mencatatnya sebagai draf.`,
                 "Aktifkan agreement setelah dokumen diverifikasi. Kuota baru dapat ditarik setelah langkah ini.",

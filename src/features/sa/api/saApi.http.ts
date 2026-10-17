@@ -9,9 +9,10 @@
  */
 import { getList, getOne, send, upload } from "@/lib/api";
 import type { FilterSpec } from "@/lib/listQuery";
-import { scopeKey } from "@/lib/scope";
+import { getActiveScope, scopeKey } from "@/lib/scope";
 import type {
   PlanningCutoverReport,
+  QuotaSummary,
   SAImportApplied,
   SAImportBatch,
   SAImportChangeKind,
@@ -353,6 +354,19 @@ export interface PlanningCutoverResponse {
   }>;
   blockers: WireBlocker[];
   warnings: WireBlocker[];
+}
+
+/** Mirrors the schedule agreement usecase's QuotaSummaryResponse. */
+interface QuotaSummaryResponse {
+  period_month: string;
+  today?: string;
+  today_qty?: number;
+  days: Array<{ date: string; qty: number }>;
+  allocation_qty: number;
+  delivered_qty: number;
+  remaining_qty: number;
+  outlet_count: number;
+  kinds: Array<{ code: string; name: string; total_qty: number }>;
 }
 
 /** Mirrors the SIM3LON usecase's VarianceResponse. */
@@ -727,6 +741,28 @@ export const saApiHttp: ScheduleAgreementApi = {
     );
     assertScope(originScope);
     return toSIM3LONVariances(report);
+  },
+
+  async getQuotaSummary(month: string): Promise<QuotaSummary> {
+    const originScope = scopeKey();
+    // The branch picked in the scope bar when there is one; consolidated
+    // scope falls back to the pool agreements are recorded against.
+    const branchId = getActiveScope().branchId ?? (await defaultBranchID());
+    const row = await getOne<QuotaSummaryResponse>(
+      `/branches/${branchId}/quota-summary?${new URLSearchParams({ month }).toString()}`,
+    );
+    assertScope(originScope);
+    return {
+      periodMonth: row.period_month,
+      today: row.today ?? null,
+      todayQty: row.today_qty ?? null,
+      days: row.days,
+      allocationQty: row.allocation_qty,
+      deliveredQty: row.delivered_qty,
+      remainingQty: row.remaining_qty,
+      outletCount: row.outlet_count,
+      kinds: row.kinds.map((kind) => ({ code: kind.code, name: kind.name, totalQty: kind.total_qty })),
+    };
   },
 
   async getSupplierOptions(): Promise<string[]> {

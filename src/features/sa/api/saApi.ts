@@ -21,6 +21,7 @@ export const syncLivePenyaluran = api.syncLivePenyaluran.bind(api);
 export const getLivePenyaluranCandidates = api.getLivePenyaluranCandidates.bind(api);
 export const setPlanningCutover = api.setPlanningCutover.bind(api);
 export const getSIM3LONVariances = api.getSIM3LONVariances.bind(api);
+export const getQuotaSummary = api.getQuotaSummary.bind(api);
 export const getSIM3LONDefaultProduct = api.getSIM3LONDefaultProduct.bind(api);
 export const setSIM3LONDefaultProduct = api.setSIM3LONDefaultProduct.bind(api);
 

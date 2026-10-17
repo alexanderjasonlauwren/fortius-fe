@@ -13,8 +13,8 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { printDocument } from "@/lib/export";
-import type { BeritaAcaraGroup, BeritaAcaraLine } from "@/features/transportation/api/contract";
-import { formatTariff } from "@/features/transportation/lib/rate";
+import type { BeritaAcaraGroup, BeritaAcaraLine, LoadingOrderLine } from "@/features/transportation/api/contract";
+import { formatRate, formatTariff } from "@/features/transportation/lib/rate";
 
 const groupColumns: Column<BeritaAcaraGroup>[] = [
   {
@@ -113,7 +113,100 @@ const lineColumns: Column<BeritaAcaraLine>[] = [
   },
 ];
 
+const loColumns: Column<LoadingOrderLine>[] = [
+  { key: "no", header: "No.", render: (row) => <span className="data text-xs text-ink-muted">{row.no}</span> },
+  {
+    key: "tanggal",
+    header: "Tanggal",
+    render: (row) => <span className="data text-xs text-ink">{formatDateId(row.date)}</span>,
+    sortValue: (row) => row.date,
+  },
+  { key: "lo", header: "Nomor DO/LO", render: (row) => <span className="data text-xs text-ink">{row.loNumber}</span> },
+  { key: "so", header: "No. SO", render: (row) => <span className="data text-xs text-ink-muted">{row.soNumber ?? "—"}</span> },
+  {
+    key: "qty",
+    header: "Tabung",
+    align: "right",
+    render: (row) => <span className="data text-xs text-ink">{row.qtyPcs.toLocaleString("id-ID")}</span>,
+  },
+  {
+    key: "kg",
+    header: "Kg",
+    align: "right",
+    render: (row) => <span className="data text-xs text-ink">{row.qtyKg.toLocaleString("id-ID")}</span>,
+  },
+  {
+    key: "rate",
+    header: "Tarif/kg",
+    align: "right",
+    render: (row) => <span className="data text-xs text-ink-muted">{formatRate(row.ratePerKg)}</span>,
+  },
+  {
+    key: "amount",
+    header: "Total",
+    align: "right",
+    render: (row) => <span className="data text-xs font-semibold text-ink">{formatRupiah(row.amount)}</span>,
+  },
+];
+
+/** "MARET 2026" -- the BA LO names the month its LOs fall in. */
+function periodMonth(periodStart?: string): string {
+  if (!periodStart) return "";
+  const d = new Date(`${periodStart}T00:00:00`);
+  return d.toLocaleDateString("id-ID", { month: "long", year: "numeric" }).toUpperCase();
+}
+
+/**
+ * The BA LO as the client uploads it to Pertamina for the BAST: one row per
+ * LO with its tabung, kg, Rp/kg and total, the totals, and the director's
+ * signature (their March 2026 BA LO is the model).
+ */
+function baLoHtml(doc: BeritaAcaraDocument): string {
+  const { header, footer, signatory } = doc;
+  const rates = footer.rates.map((r) => formatRate(r.rate)).join(" / ");
+  return `
+    <div style="text-align:center">
+      <h1 style="margin-bottom:2px">BERITA ACARA</h1>
+      <p style="margin:0;font-weight:600">TAGIHAN TRANSPORT FEE AGEN LPG 3 KG</p>
+      <p style="margin:0;font-weight:600">PERIODE BULAN ${periodMonth(header.periodStart)}</p>
+      <p style="margin:0;font-weight:600">${header.tenantLegalName.toUpperCase()}</p>
+    </div>
+    <table style="margin-top:16px">
+      <thead>
+        <tr>
+          <th>No.</th><th>Tanggal Pengiriman</th><th>Nomor DO/LO</th>
+          <th style="text-align:right">Jumlah (Tabung)</th><th style="text-align:right">Jumlah (KG)</th>
+          <th style="text-align:right">Tarif/KG (Rp)</th><th style="text-align:right">Total Rupiah</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${doc.loadingOrders
+          .map(
+            (l) => `<tr>
+              <td>${l.no}</td><td>${l.date}</td><td class="code">${l.loNumber}</td>
+              <td class="num">${l.qtyPcs.toLocaleString("id-ID")}</td><td class="num">${l.qtyKg.toLocaleString("id-ID")}</td>
+              <td class="num">${formatRate(l.ratePerKg)}</td><td class="num">${formatRupiah(l.amount)}</td>
+            </tr>`,
+          )
+          .join("")}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">Total</td>
+          <td class="num">${footer.totalQty.toLocaleString("id-ID")}</td>
+          <td class="num">${footer.totalWeightKg.toLocaleString("id-ID")}</td>
+          <td class="num">${rates}</td>
+          <td class="num">${formatRupiah(footer.amount)}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <div class="sign">
+      <div>${signatory.companyName}<span>${signatory.title ?? "Direktur"}</span><span style="margin-top:56px">${signatory.name ?? ""}</span></div>
+    </div>`;
+}
+
 function documentHtml(doc: BeritaAcaraDocument): string {
+  if (doc.kind === "lo") return baLoHtml(doc);
   const { header, footer, signatory } = doc;
   return `
     <p class="eyebrow">${header.tenantLegalName}${header.tenantAddress ? " · " + header.tenantAddress : ""}</p>
@@ -208,14 +301,16 @@ export function TransportationClaimDocumentPage() {
       </Button>
 
       <PageHeader
-        eyebrow={`Berita Acara · ${header.branchName}`}
+        eyebrow={`${doc.kind === "lo" ? "BA LO · LO dari SIM3LON" : "Berita Acara"} · ${header.branchName}`}
         title={header.claimNumber}
         description={`Periode ${formatDateId(header.periodStart)} – ${formatDateId(header.periodEnd)}. ${header.handoverReference ? `No. BAST ${header.handoverReference}.` : "Belum ada nomor BAST."}`}
         meta={<StatusBadge variant={getStatusVariant(CLAIM_STATUS_LABEL[header.claimStatus])} label={CLAIM_STATUS_LABEL[header.claimStatus]} />}
         actions={
           <Button
             variant="outline"
-            onClick={() => printDocument(`Berita Acara ${header.claimNumber}`, documentHtml(doc))}
+            onClick={() =>
+              printDocument(`${doc.kind === "lo" ? "BA LO" : "Berita Acara"} ${header.claimNumber}`, documentHtml(doc))
+            }
           >
             <Printer className="h-3.5 w-3.5" />
             Cetak
@@ -238,10 +333,15 @@ export function TransportationClaimDocumentPage() {
         <Stat label="Total tabung" value={footer.totalQty.toLocaleString("id-ID")} />
         <Stat label="Total kilogram" value={footer.totalWeightKg.toLocaleString("id-ID")} unit="kg" />
         <Stat label="Nilai klaim" value={formatRupiah(footer.amount)} />
-        <Stat label="Jumlah lini" value={`${footer.lineCount} lini / ${footer.groupCount} kelompok`} />
+        <Stat
+          label={doc.kind === "lo" ? "Jumlah LO" : "Jumlah lini"}
+          value={doc.kind === "lo" ? `${footer.lineCount} LO` : `${footer.lineCount} lini / ${footer.groupCount} kelompok`}
+        />
       </div>
 
-      {footer.roundingDifference !== 0 && (
+      {/* A difference under half a rupiah is float noise from summing the
+          lines, not a real gap between the total and the lines. */}
+      {Math.abs(footer.roundingDifference) >= 0.5 && (
         <p className="text-xs text-ink-muted">
           Selisih pembulatan {formatRupiah(footer.roundingDifference)} antara nilai klaim
           ({formatRupiah(footer.amount)}, dihitung dari total kg &times; tarif) dan jumlah baris
@@ -250,6 +350,25 @@ export function TransportationClaimDocumentPage() {
         </p>
       )}
 
+      {doc.kind === "lo" && (
+        <Panel>
+          <PanelHeader
+            title="Loading Order dari SIM3LON"
+            hint={`${doc.loadingOrders.length} LO · tarif ${footer.rates.map((r) => formatTariff(r.rate, "per_kg")).join(", ")}`}
+          />
+          <DataTable
+            columns={loColumns}
+            data={doc.loadingOrders}
+            isLoading={false}
+            rowKey={(row) => row.loNumber}
+            emptyIcon={FileText}
+            emptyMessage="Belum ada LO"
+            dense
+          />
+        </Panel>
+      )}
+
+      {doc.kind !== "lo" && (
       <Panel>
         <PanelHeader
           title="Ringkasan per muatan"
@@ -267,6 +386,9 @@ export function TransportationClaimDocumentPage() {
         />
       </Panel>
 
+      )}
+
+      {doc.kind !== "lo" && (
       <Panel>
         <PanelHeader title="Rincian per pengiriman" hint={`${doc.lines.length} baris`} />
         <DataTable
@@ -279,6 +401,7 @@ export function TransportationClaimDocumentPage() {
           dense
         />
       </Panel>
+      )}
 
       <Panel>
         <PanelHeader title="Tanda tangan" />

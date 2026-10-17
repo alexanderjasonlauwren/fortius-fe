@@ -584,6 +584,8 @@ export interface TransportationClaimEntity extends Scoped {
   /** Settlement facts -- present only once claimStatus is "paid". */
   settledAt?: string;
   settledAmount?: number;
+  /** Tax Pertamina deducted before paying; with settledAmount it settles the claim. */
+  taxWithheld?: number;
   settlementMode?: "cash" | "bank";
   /** Which deliveries this claim's generated lines actually cover. */
   deliveryIds: ID[];

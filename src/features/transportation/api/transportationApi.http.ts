@@ -42,6 +42,7 @@ interface ClaimResponse {
   status_updated_at?: string;
   settled_at?: string;
   settled_amount?: number;
+  tax_withheld?: number;
   settlement_mode?: "cash" | "bank";
   delivery_ids?: string[];
   version: number;
@@ -68,6 +69,7 @@ function toView(row: ClaimResponse): ClaimView {
     statusUpdatedAt: row.status_updated_at,
     settledAt: row.settled_at,
     settledAmount: row.settled_amount,
+    taxWithheld: row.tax_withheld,
     settlementMode: row.settlement_mode,
     deliveryIds: row.delivery_ids ?? [],
     version: row.version,
@@ -116,6 +118,7 @@ async function updateClaimStatus(input: UpdateClaimStatusInput): Promise<ClaimVi
       status_note: input.statusNote,
       settled_at: input.settledAt,
       settled_amount: input.settledAmount,
+      tax_withheld: input.taxWithheld,
       settlement_mode: input.settlementMode,
     }),
   );
@@ -129,8 +132,24 @@ async function generateLines(id: ID): Promise<ClaimView> {
   return toView(await send<ClaimResponse>("post", `/transportation-claims/${id}/lines/generate`));
 }
 
+async function generateFromSim3lon(id: ID): Promise<ClaimView> {
+  return toView(await send<ClaimResponse>("post", `/transportation-claims/${id}/lines/from-sim3lon`));
+}
+
 /** Mirrors the backend's transportationclaim.BeritaAcaraResponse. */
 interface BeritaAcaraResponse {
+  kind?: "lo" | "deliveries";
+  loading_orders?: Array<{
+    no: number;
+    date: string;
+    lo_number: string;
+    so_number?: string;
+    material: string;
+    qty_pcs: number;
+    qty_kg: number;
+    rate_per_kg: number;
+    amount: number;
+  }>;
   header: {
     claim_number: string;
     handover_reference?: string;
@@ -187,6 +206,18 @@ interface BeritaAcaraResponse {
 async function getDocument(id: ID): Promise<BeritaAcaraDocument> {
   const row = await getOne<BeritaAcaraResponse>(`/transportation-claims/${id}/document`);
   return {
+    kind: row.kind === "lo" ? "lo" : "deliveries",
+    loadingOrders: (row.loading_orders ?? []).map((o) => ({
+      no: o.no,
+      date: o.date,
+      loNumber: o.lo_number,
+      soNumber: o.so_number,
+      material: o.material,
+      qtyPcs: o.qty_pcs,
+      qtyKg: o.qty_kg,
+      ratePerKg: o.rate_per_kg,
+      amount: o.amount,
+    })),
     header: {
       claimNumber: row.header.claim_number,
       handoverReference: row.header.handover_reference,
@@ -314,6 +345,7 @@ export const transportationApiHttp: TransportationClaimApi = {
   updateClaimStatus,
   deleteClaim,
   generateLines,
+  generateFromSim3lon,
   getDocument,
   getRecap,
 };

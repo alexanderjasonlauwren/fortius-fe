@@ -30,6 +30,9 @@ import {
 import { RegistrationPackageSection } from "@/features/settings/components/RegistrationPackageSection";
 import { NumberingSection } from "@/features/settings/components/NumberingSection";
 import { OperationsSection } from "@/features/settings/components/OperationsSection";
+import { TransportFeeRateSection } from "@/features/settings/components/TransportFeeRateSection";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { Button } from "@/components/ui/button";
 import { cn, getInitials } from "@/lib/utils";
 import type { SettingsEntity } from "@/types/domain";
@@ -515,6 +518,11 @@ export function SettingsPage() {
             page: geofence radius, stop duration, planning lead time and whether
             driver location is recorded. Same iam.tenant_settings row. */}
         {tab === "operasi" && <OperationsSection />}
+        {tab === "operasi" && (
+          <CanAccess permission={PERMISSIONS.TRANSPORT_TARIFFS_VIEW}>
+            <TransportFeeRateSection />
+          </CanAccess>
+        )}
 
         {tab === "istilah" && (
         <Panel className="lg:col-span-2">

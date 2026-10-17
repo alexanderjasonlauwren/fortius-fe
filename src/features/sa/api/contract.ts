@@ -11,6 +11,7 @@
  */
 import type {
   PlanningCutoverReport,
+  QuotaSummary,
   SAImportApplied,
   SAImportBatch,
   SAImportSummary,
@@ -72,6 +73,8 @@ export interface ScheduleAgreementApi {
    * planning start date on. Computed on every read; nothing is rewritten.
    */
   getSIM3LONVariances(productId: string, month: string): Promise<SIM3LONVarianceReport>;
+  /** The scoped branch's quota for one month, `YYYY-MM`: daily, then monthly. */
+  getQuotaSummary(month: string): Promise<QuotaSummary>;
 
   /**
    * The tenant's configured preselection for the import dialog's product

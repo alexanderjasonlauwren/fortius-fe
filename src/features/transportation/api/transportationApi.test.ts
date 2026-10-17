@@ -284,7 +284,7 @@ describe("tariff display", () => {
     const { unitLabel } = await import("@/lib/lexicon");
     // The tenant's own word for a unit: "tabung" for an LPG agent.
     expect(formatTariff(1050, "per_unit")).toBe(`Rp 1.050/${unitLabel()}`);
-    expect(formatTariff(354.64, "per_kg")).toBe("Rp 355/kg");
+    expect(formatTariff(354.64, "per_kg")).toBe("Rp 354,64/kg");
   });
 });
 
@@ -340,5 +340,56 @@ describe("getRecap", () => {
     expect(report.rows[0].claimedAmount).toBe(5_957_952);
     expect(report.rows[0].avgDaysToSettle).toBeUndefined();
     expect(report.totals.outstandingAmount).toBe(5_957_952);
+  });
+});
+
+describe("BA LO from SIM3LON", () => {
+  it("pulls a draft's LOs through its own sub-route", async () => {
+    send.mockResolvedValue(claimWire({ claimed_amount: 12_937_267.2, total_qty: 12_160, total_weight_kg: 36_480 }));
+    const out = await transportationApiHttp.generateFromSim3lon("11111111-1111-4111-8111-111111111111");
+    expect(send).toHaveBeenCalledWith(
+      "post",
+      "/transportation-claims/11111111-1111-4111-8111-111111111111/lines/from-sim3lon",
+    );
+    expect(out.totalWeightKg).toBe(36_480);
+  });
+
+  it("reads a BA LO document's LO lines and keeps a delivery document as it was", async () => {
+    const base = {
+      header: { claim_number: "BAST-1", handover_date: "2026-04-02", tenant_legal_name: "PT Bhakta", branch_name: "SLT", claim_status: "draft" },
+      groups: [],
+      lines: [],
+      footer: {
+        line_count: 1, group_count: 0, total_qty: 360, total_weight_kg: 1080,
+        rates: [{ rate_basis: "per_kg", rate: 354.64, qty: 360, weight_kg: 1080, amount: 383_011.2 }],
+        amount: 383_011.2, sum_of_line_amounts: 383_011.2, rounding_difference: 0, drifted_line_count: 0,
+      },
+      signatory: { company_name: "PT Bhakta", title: "Direktur" },
+    };
+    getOne.mockResolvedValueOnce({
+      ...base,
+      kind: "lo",
+      loading_orders: [{ no: 1, date: "2026-03-02", lo_number: "8135493179", so_number: "0002633368",
+        material: "REFILL/ISI LPG @3KG (NET)", qty_pcs: 360, qty_kg: 1080, rate_per_kg: 354.64, amount: 383_011.2 }],
+    });
+    const lo = await transportationApiHttp.getDocument("c-1");
+    expect(lo.kind).toBe("lo");
+    expect(lo.loadingOrders[0]).toMatchObject({ loNumber: "8135493179", qtyKg: 1080, ratePerKg: 354.64 });
+
+    getOne.mockResolvedValueOnce(base);
+    const deliveries = await transportationApiHttp.getDocument("c-2");
+    expect(deliveries.kind).toBe("deliveries");
+    expect(deliveries.loadingOrders).toEqual([]);
+  });
+
+  it("sends the tax Pertamina withheld with a payment", async () => {
+    send.mockResolvedValue(claimWire({ claim_status: "paid", settled_amount: 12_678_521.86, tax_withheld: 258_745.34 }));
+    const out = await transportationApiHttp.updateClaimStatus({
+      id: "c-1", version: 3, claimStatus: "paid", settledAt: "2026-04-20",
+      settledAmount: 12_678_521.86, taxWithheld: 258_745.34, settlementMode: "bank",
+    });
+    const [, , body] = send.mock.calls[0];
+    expect(body).toMatchObject({ settled_amount: 12_678_521.86, tax_withheld: 258_745.34 });
+    expect(out.taxWithheld).toBe(258_745.34);
   });
 });

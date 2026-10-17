@@ -9,13 +9,7 @@ import { scopeKey } from "@/lib/scope";
 import { formatNumber } from "@/lib/format";
 import { applySIM3LON, getLivePenyaluranCandidates, getSIM3LONReconciliation, syncLivePenyaluran } from "../api/saApi";
 import { buildSIM3LONApplyReview } from "../hooks/useSIM3LONImport";
-
-function currentJakartaMonth(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit",
-  }).formatToParts(new Date());
-  return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}`;
-}
+import { currentJakartaMonth } from "../lib/period";
 
 export function LivePenyaluranPanel() {
   const [period, setPeriod] = useState(currentJakartaMonth);
@@ -36,7 +30,7 @@ export function LivePenyaluranPanel() {
   });
   const apply = useDeskMutation({
     mutationFn: ({ id }: { id: string }) => applySIM3LON(id, buildSIM3LONApplyReview(review.data!)),
-    success: "Kandidat Penyaluran diterapkan ke SA Base",
+    success: "Penyaluran diterapkan ke SA",
     errorTitle: "Kandidat Penyaluran belum dapat diterapkan",
     onDone: () => setSelectedId(null),
   });
@@ -59,7 +53,7 @@ export function LivePenyaluranPanel() {
           </Button>
         </div>
         <p className="text-xs text-ink-muted">
-          Sinkronisasi menyimpan bukti sumber lebih dulu. Perubahan aman dapat diterapkan otomatis setelah kalibrasi server; perubahan historis, Fakultatif, dan rencana berjalan perlu ditinjau.
+          Penyaluran SIM3LON adalah sumber kebenaran SA. Setiap sinkronisasi menyimpan bukti sumber, lalu memperbarui alokasi pangkalan, kuota Base dan Fakultatif, serta target harian sebulan penuh. Bila penerapan otomatis dimatikan di server, tinjau dan terapkan kandidat di bawah.
         </p>
         {candidates.isPending && <p className="text-xs text-ink-muted">Memuat kandidat…</p>}
         {candidates.isError && <p className="text-xs text-rust-ink">{(candidates.error as Error).message}</p>}
@@ -100,7 +94,7 @@ export function LivePenyaluranPanel() {
                 {review.data.reviewReady && selected?.status === "parsed" && (
                   <Button size="sm" onClick={() => apply.mutate({ id: selectedId })} disabled={pending}>
                     {apply.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Terima dan terapkan ke SA Base
+                    Terapkan ke SA
                   </Button>
                 )}
               </>

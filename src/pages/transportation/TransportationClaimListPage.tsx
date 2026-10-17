@@ -2,11 +2,12 @@ import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Calculator, Eye, FileText, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { BarChart3, Calculator, CloudDownload, Eye, FileText, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import {
   createClaim,
   deleteClaim,
   generateLines,
+  generateFromSim3lon,
   getClaims,
   updateClaim,
   updateClaimStatus,
@@ -32,7 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { formatRupiah } from "@/lib/format";
+import { formatNumber, formatRupiah } from "@/lib/format";
 import type { ClaimStatus } from "@/types/domain";
 
 interface FormState {
@@ -61,9 +62,10 @@ interface StatusFormState {
   statusNote: string;
   settledAt: string;
   settledAmount: string;
+  taxWithheld: string;
   settlementMode: "cash" | "bank";
   labelForTitle: string;
-  /** The claim's own claimedAmount -- settledAmount must match it exactly. */
+  /** The claim's own claimedAmount -- settledAmount + taxWithheld must make it up. */
   expectedAmount: number;
 }
 
@@ -114,6 +116,15 @@ export function TransportationClaimListPage() {
     }),
   });
 
+  // The BA LO: the period's LPG 3 kg Loading Orders from SIM3LON, per kg.
+  const loMutation = useDeskMutation({
+    mutationFn: (id: string) => generateFromSim3lon(id),
+    errorTitle: "LO dari SIM3LON tidak dapat diambil",
+    success: (c) => ({
+      title: `${c.claimNumber}: ${formatNumber(c.totalWeightKg)} kg dari SIM3LON senilai ${formatRupiah(c.claimedAmount)}`,
+    }),
+  });
+
   const statusMutation = useDeskMutation({
     mutationFn: (values: StatusFormState) =>
       updateClaimStatus({
@@ -126,6 +137,10 @@ export function TransportationClaimListPage() {
         settledAmount:
           values.claimStatus === "paid" && values.settledAmount
             ? Number(values.settledAmount)
+            : undefined,
+        taxWithheld:
+          values.claimStatus === "paid" && Number(values.taxWithheld) > 0
+            ? Number(values.taxWithheld)
             : undefined,
         settlementMode: values.claimStatus === "paid" ? values.settlementMode : undefined,
       }),
@@ -155,6 +170,7 @@ export function TransportationClaimListPage() {
       statusNote: "",
       settledAt: row.settledAt ?? "",
       settledAmount: row.settledAmount ? String(row.settledAmount) : String(row.claimedAmount || ""),
+      taxWithheld: row.taxWithheld ? String(row.taxWithheld) : "",
       settlementMode: row.settlementMode ?? "bank",
       labelForTitle: row.claimNumber,
       expectedAmount: row.claimedAmount,
@@ -261,6 +277,16 @@ export function TransportationClaimListPage() {
                 onClick={() => generateMutation.mutate(row.id)}
               >
                 <Calculator className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Ambil LO dari SIM3LON ${row.claimNumber}`}
+                title="Ambil LO dari SIM3LON (BA LO): setiap LO LPG 3 kg pada periode ini × tarif per kg"
+                disabled={loMutation.isPending}
+                onClick={() => loMutation.mutate(row.id)}
+              >
+                <CloudDownload className="h-3.5 w-3.5" />
               </Button>
             </CanAccess>
           )}
@@ -518,11 +544,10 @@ export function TransportationClaimListPage() {
                   />
                 </Field>
 
-                {/* Only relevant on the transition to "paid" -- all three are
-                    required together, and settledAmount must match the
-                    claim's own claimedAmount exactly (mirrors the backend's
-                    own UpdateStatusRequest rule: a short payment or a
-                    withholding is not yet handled). */}
+                {/* Only relevant on the transition to "paid" -- date, amount
+                    and method are required together, and the money received
+                    plus the tax Pertamina withheld must make up the claim's
+                    own claimedAmount (the backend's UpdateStatusRequest rule). */}
                 {statusEditing.claimStatus === "paid" && (
                   <>
                     <Field label="Tanggal pelunasan" htmlFor="tc-settled-at" required>
@@ -536,9 +561,9 @@ export function TransportationClaimListPage() {
                       />
                     </Field>
                     <Field
-                      label="Jumlah pelunasan"
+                      label="Uang diterima"
                       htmlFor="tc-settled-amount"
-                      hint={`Harus sama dengan nilai klaim: ${formatRupiah(statusEditing.expectedAmount)}.`}
+                      hint={`Diterima + pajak dipotong harus sama dengan nilai klaim: ${formatRupiah(statusEditing.expectedAmount)}.`}
                       required
                     >
                       <TextInput
@@ -549,6 +574,29 @@ export function TransportationClaimListPage() {
                         onChange={(e) =>
                           setStatusEditing({ ...statusEditing, settledAmount: e.target.value })
                         }
+                      />
+                    </Field>
+                    <Field
+                      label="Pajak dipotong Pertamina"
+                      htmlFor="tc-tax-withheld"
+                      hint="Sesuai bukti potong; dicatat ke Pajak Dibayar Dimuka. Kosongkan bila tidak ada."
+                    >
+                      <TextInput
+                        id="tc-tax-withheld"
+                        type="number"
+                        mono
+                        value={statusEditing.taxWithheld}
+                        onChange={(e) => {
+                          const tax = e.target.value;
+                          // The money that arrived is what is left once the
+                          // tax is taken out; the operator can still correct it.
+                          const left = statusEditing.expectedAmount - (Number(tax) || 0);
+                          setStatusEditing({
+                            ...statusEditing,
+                            taxWithheld: tax,
+                            settledAmount: left > 0 ? String(Math.round(left * 100) / 100) : statusEditing.settledAmount,
+                          });
+                        }}
                       />
                     </Field>
                     <Field label="Metode pembayaran" htmlFor="tc-settlement-mode" required>

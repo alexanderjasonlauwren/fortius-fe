@@ -1,8 +1,8 @@
 /**
- * A product's transport-fee rates (client decision G5, 2026-10-17): what the
- * principal pays per tabung delivered -- or, for a rate still set that way,
- * per kg hauled -- from a date. A new rate closes the open one the day before
- * it starts; a rate is a fact about a period, so rows are never edited.
+ * A product's transport-fee rates: what Pertamina pays per kg of LPG the
+ * agent loads (the BA LO, Rp 354,64/kg in March 2026), or per tabung where a
+ * rate is set that way, from a date. A new rate closes the open one the day
+ * before it starts; a rate is a fact about a period, so rows are never edited.
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -20,12 +20,22 @@ import { unitLabel } from "@/lib/lexicon";
 import { scopeKey } from "@/lib/scope";
 import { todayIso } from "@/features/financereports/lib/period";
 
-export function TransportTariffPanel({ productId }: { productId: string }) {
+export function TransportTariffPanel({
+  productId,
+  fixedBasis,
+  className = "mt-4",
+}: {
+  productId: string;
+  /** Pengaturan sets the BA LO's rate, which is always per kg. */
+  fixedBasis?: RateBasis;
+  className?: string;
+}) {
   const tariffs = useQuery({
     queryKey: [...scopeKey(), "products", productId, "tariffs"],
     queryFn: () => getTariffs(productId),
   });
-  const [basis, setBasis] = useState<RateBasis>("per_unit");
+  const [chosenBasis, setBasis] = useState<RateBasis>("per_kg");
+  const basis = fixedBasis ?? chosenBasis;
   const [rate, setRate] = useState("");
   const [from, setFrom] = useState(todayIso);
   const [reference, setReference] = useState("");
@@ -41,11 +51,13 @@ export function TransportTariffPanel({ productId }: { productId: string }) {
   });
 
   return (
-    <Panel className="mt-4">
-      <PanelHeader
-        title="Tarif transport fee"
-        hint={`Dipakai klaim transport fee: jumlah ${unitLabel()} terkirim × tarif per ${unitLabel()}, atau kg × tarif per kg untuk tarif lama.`}
-      />
+    <Panel className={className}>
+      {!fixedBasis && (
+        <PanelHeader
+          title="Tarif transport fee"
+          hint={`Dipakai klaim transport fee (BA LO): kg × tarif per kg, berlaku per tanggal LO. Tarif per ${unitLabel()} hanya untuk klaim dari surat jalan.`}
+        />
+      )}
       {tariffs.isLoading ? (
         <Skeleton className="h-24 w-full" />
       ) : (tariffs.data ?? []).length === 0 ? (
@@ -65,13 +77,15 @@ export function TransportTariffPanel({ productId }: { productId: string }) {
       )}
       <CanAccess permission={PERMISSIONS.TRANSPORT_TARIFFS_CREATE}>
         <div className="flex flex-wrap items-end gap-3 border-t border-line p-4">
-          <Field label="Dasar tarif" htmlFor="tt-basis">
-            <SegmentedControl<RateBasis>
-              value={basis}
-              onChange={setBasis}
-              options={[{ value: "per_unit", label: `Per ${unitLabel()}` }, { value: "per_kg", label: "Per kg" }]}
-            />
-          </Field>
+          {!fixedBasis && (
+            <Field label="Dasar tarif" htmlFor="tt-basis">
+              <SegmentedControl<RateBasis>
+                value={basis}
+                onChange={setBasis}
+                options={[{ value: "per_kg", label: "Per kg" }, { value: "per_unit", label: `Per ${unitLabel()}` }]}
+              />
+            </Field>
+          )}
           <Field label={`Tarif (Rp/${basis === "per_kg" ? "kg" : unitLabel()})`} htmlFor="tt-rate">
             <TextInput id="tt-rate" type="number" min={0} step="any" mono className="w-36" value={rate} onChange={(e) => setRate(e.target.value)} />
           </Field>

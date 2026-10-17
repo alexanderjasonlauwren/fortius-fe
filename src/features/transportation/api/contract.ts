@@ -57,9 +57,9 @@ export interface UpdateClaimInput {
 /**
  * Records what the agent read off iVendor. settledAt/settledAmount/settlementMode
  * are read only when claimStatus is "paid" -- all three are required together
- * on that one transition, and settledAmount must match the claim's own
- * claimedAmount (a short payment or a withholding is not yet handled -- see
- * the backend's own UpdateStatusRequest doc).
+ * on that one transition, and settledAmount + taxWithheld must equal the
+ * claim's own claimedAmount: Pertamina pays net of the tax it deducts, and the
+ * tax is booked to Pajak Dibayar Dimuka.
  */
 export interface UpdateClaimStatusInput {
   id: ID;
@@ -69,6 +69,7 @@ export interface UpdateClaimStatusInput {
   statusNote?: string;
   settledAt?: string;
   settledAmount?: number;
+  taxWithheld?: number;
   settlementMode?: "cash" | "bank";
 }
 
@@ -153,7 +154,23 @@ export interface Signatory {
   city?: string;
 }
 
+/** One row of the BA LO: an LO from SIM3LON, priced per kg. */
+export interface LoadingOrderLine {
+  no: number;
+  date: string;
+  loNumber: string;
+  soNumber?: string;
+  material: string;
+  qtyPcs: number;
+  qtyKg: number;
+  ratePerKg: number;
+  amount: number;
+}
+
 export interface BeritaAcaraDocument {
+  /** "lo": the BA LO, one line per SIM3LON LO; "deliveries": from this system's surat jalan. */
+  kind: "lo" | "deliveries";
+  loadingOrders: LoadingOrderLine[];
   header: BeritaAcaraHeader;
   groups: BeritaAcaraGroup[];
   lines: BeritaAcaraLine[];
@@ -206,6 +223,8 @@ export interface TransportationClaimApi {
   deleteClaim(id: ID): Promise<void>;
   /** (Re)derives a draft's lines from deliveries in its own period and recomputes its amount. */
   generateLines(id: ID): Promise<ClaimView>;
+  /** Fills a draft from the period's LPG 3 kg LOs in SIM3LON, priced per kg (the BA LO). */
+  generateFromSim3lon(id: ID): Promise<ClaimView>;
   getDocument(id: ID): Promise<BeritaAcaraDocument>;
   getRecap(filters?: RecapFilters): Promise<RecapReport>;
 }
