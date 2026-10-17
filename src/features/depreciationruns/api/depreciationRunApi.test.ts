@@ -71,13 +71,4 @@ describe("writing", () => {
     expect(path).toBe("/depreciation-runs");
     expect(body).toEqual({ period: "2026-10" });
   });
-
-  it("sends the version to void a run", async () => {
-    send.mockResolvedValue(detailWire({ status: "void" }));
-    await depreciationRunApiHttp.voidRun(ID, 3);
-    const [method, path, body] = send.mock.calls[0];
-    expect(method).toBe("post");
-    expect(path).toBe(`/depreciation-runs/${ID}/void`);
-    expect(body).toEqual({ version: 3 });
-  });
 });

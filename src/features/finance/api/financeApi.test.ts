@@ -141,13 +141,6 @@ describe("invoice status", () => {
     expect(send.mock.calls[1][2]).toMatchObject({ due_date: undefined, branch_id: undefined, reference_number: undefined });
   });
 
-  it("voids under the version the caller read, with the reason", async () => {
-    send.mockResolvedValue(invoiceWire({ payment_status: "void", version: 2 }));
-    getList.mockResolvedValue({ items: [], pagination: {} });
-    await financeApiHttp.voidInvoice(INVOICE_ID, 1, "salah outlet");
-    expect(send).toHaveBeenCalledWith("post", `/invoices/${INVOICE_ID}/void`, { version: 1, reason: "salah outlet" });
-  });
-
   it("prints a product line by its product's name and a manual line by its text", async () => {
     getOne.mockResolvedValue(invoiceWire({
       lines: [
@@ -246,6 +239,17 @@ describe("payments", () => {
     });
     const [p] = await financeApiHttp.getPayments();
     expect(p.belumDialokasikan).toBe(60_000);
+  });
+
+  /** A refund being paid back holds its share too (client answer 5). */
+  it("leaves out what is being refunded from what is left", async () => {
+    getList.mockResolvedValue({
+      items: [paymentWire({ amount: 1_000_000, allocated: 500_000, refunded: 300_000 })],
+      pagination: {},
+    });
+    const [p] = await financeApiHttp.getPayments();
+    expect(p.belumDialokasikan).toBe(200_000);
+    expect(p.dikembalikan).toBe(300_000);
   });
 
   /** The receipts list names the invoices each receipt paid, from the

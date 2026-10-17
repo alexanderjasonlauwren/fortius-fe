@@ -252,6 +252,15 @@ export const PERMISSIONS = {
   TRANSPORT_TARIFFS_CREATE: "masterdata.create.transport_fee_tariffs",
   INVENTORY_VIEW: "finance.read.inventory",
   INVENTORY_CREATE: "finance.create.inventory",
+  // Client answer 5 (2026-10-18): voids and refunds of overpaid receipts go
+  // through a second person's approval. CREATE asks (plus the document's own
+  // void permission); APPROVE decides, never one's own request.
+  VOID_REQUESTS_VIEW: "finance.read.void_requests",
+  VOID_REQUESTS_CREATE: "finance.create.void_requests",
+  VOID_REQUESTS_APPROVE: "finance.approve.void_requests",
+  PAYMENT_REFUNDS_VIEW: "finance.read.payment_refunds",
+  PAYMENT_REFUNDS_CREATE: "finance.create.payment_refunds",
+  PAYMENT_REFUNDS_APPROVE: "finance.approve.payment_refunds",
 
   /**
    * Sub-ledger admin (gap-closing plan, Phase F) -- verified against the

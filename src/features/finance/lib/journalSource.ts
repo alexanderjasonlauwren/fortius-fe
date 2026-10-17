@@ -18,6 +18,7 @@ export const JOURNAL_SOURCE_LABEL: Record<JournalSourceType, string> = {
   purchasePayment: "Pembayaran tagihan",
   assetAcquisition: "Perolehan aset",
   assetDisposal: "Pelepasan aset",
+  paymentRefund: "Pengembalian dana",
 };
 
 /**
@@ -33,6 +34,7 @@ export function journalSourceHref(type: JournalSourceType, sourceId?: string): s
     case "creditNote":
       return "/receivables";
     case "payment":
+    case "paymentRefund":
       return "/payments";
     case "delivery":
       return "/transactions";

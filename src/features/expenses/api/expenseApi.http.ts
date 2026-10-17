@@ -116,10 +116,6 @@ async function cancelExpense(id: string, version: number, reason?: string): Prom
   return toView(await send<ExpenseResponse>("post", `/expenses/${id}/cancel`, { version, reason: reason || undefined }));
 }
 
-async function voidExpense(id: string, version: number, reason: string): Promise<ExpenseView> {
-  return toView(await send<ExpenseResponse>("post", `/expenses/${id}/void`, { version, reason }));
-}
-
 async function approveExpense(input: ExpenseDecisionInput): Promise<ExpenseView> {
   return toView(await send<ExpenseResponse>("post", `/expenses/${input.id}/approve`, {
     version: input.version,
@@ -135,5 +131,5 @@ async function rejectExpense(input: ExpenseDecisionInput): Promise<ExpenseView> 
 }
 
 export const expenseApiHttp: ExpenseApi = {
-  getExpenses, getExpense, createExpense, updateExpense, cancelExpense, voidExpense, approveExpense, rejectExpense,
+  getExpenses, getExpense, createExpense, updateExpense, cancelExpense, approveExpense, rejectExpense,
 };

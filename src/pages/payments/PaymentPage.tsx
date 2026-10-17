@@ -3,7 +3,9 @@ import { AttachmentsButton } from "@/features/attachments/components/Attachments
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Ban, CheckCircle2, Plus, Split, Wallet, XCircle } from "lucide-react";
+import { Ban, CheckCircle2, Plus, Split, Undo2, Wallet, XCircle } from "lucide-react";
+import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
+import { RefundDialog } from "@/features/approvals/components/RefundDialog";
 import {
   getOpenInvoices,
   getPaymentMethods,
@@ -64,9 +66,11 @@ export function PaymentPage() {
     action: "verify" | "reject";
   } | null>(null);
   const [alasan, setAlasan] = useState("");
-  // Rejecting a receipt that was already verified is its void: the same
-  // backend action, reversing the journal it posted.
-  const voiding = decision?.action === "reject" && decision.payment.status === "Terverifikasi";
+  // Rejecting a receipt that was already verified reverses its journal: a
+  // void, asked for and approved (client answer 5). The decision dialog
+  // below is only for pending receipts.
+  const [voidingPayment, setVoidingPayment] = useState<PaymentView | null>(null);
+  const [refunding, setRefunding] = useState<PaymentView | null>(null);
   const [allocating, setAllocating] = useState<PaymentView | null>(null);
   // Arriving from Alokasi Dana Pengiriman's "Alokasikan" dialog with no receipt yet
   // recorded: ?outlet=<id> opens this dialog with that outlet pre-selected,
@@ -159,21 +163,27 @@ export function PaymentPage() {
     {
       key: "alokasi",
       header: "Alokasi",
-      render: (row) =>
-        row.alokasi.length === 0 ? (
-          <span className="text-2xs font-medium text-signal-ink">Belum dialokasikan</span>
-        ) : (
-          <>
+      render: (row) => (
+        <>
+          {row.alokasi.length > 0 && (
             <span className="data block text-2xs text-ink">
               {row.alokasi.map((a) => a.nomor).join(", ")}
             </span>
-            {row.belumDialokasikan > 0.5 && (
-              <span className="data block text-2xs text-signal-ink">
-                sisa {formatRupiah(row.belumDialokasikan)}
-              </span>
-            )}
-          </>
-        ),
+          )}
+          {row.dikembalikan > 0.5 && (
+            <span className="data block text-2xs text-ink-muted">
+              dikembalikan {formatRupiah(row.dikembalikan)}
+            </span>
+          )}
+          {row.belumDialokasikan > 0.5 && (
+            <span className="data block text-2xs font-medium text-signal-ink">
+              {row.alokasi.length === 0 && row.dikembalikan <= 0.5
+                ? "Belum dialokasikan"
+                : `sisa ${formatRupiah(row.belumDialokasikan)}`}
+            </span>
+          )}
+        </>
+      ),
       sortValue: (row) => row.belumDialokasikan,
     },
     {
@@ -206,17 +216,22 @@ export function PaymentPage() {
               Alokasikan
             </Button>
           )}
+          {row.status === "Terverifikasi" && row.belumDialokasikan > 0.5 && (
+            <CanAccess permission={PERMISSIONS.PAYMENT_REFUNDS_CREATE}>
+              <Button size="xs" variant="ghost" aria-label={`Kembalikan dana ${row.nomor}`}
+                title="Kembalikan dana (mis. transfer ganda)" onClick={() => setRefunding(row)}>
+                <Undo2 className="h-3 w-3" />
+              </Button>
+            </CanAccess>
+          )}
           {row.status === "Terverifikasi" && (
-            <CanAccess permission={PERMISSIONS.PAYMENTS_REJECT}>
+            <CanAccess permissions={[PERMISSIONS.PAYMENTS_REJECT, PERMISSIONS.VOID_REQUESTS_CREATE]} requireAll>
               <Button
                 size="xs"
                 variant="ghost"
-                aria-label={`Batalkan ${row.nomor}`}
+                aria-label={`Ajukan pembatalan ${row.nomor}`}
                 className="hover:bg-rust-soft hover:text-rust-ink"
-                onClick={() => {
-                  setAlasan("");
-                  setDecision({ payment: row, action: "reject" });
-                }}
+                onClick={() => setVoidingPayment(row)}
               >
                 <Ban className="h-3 w-3" />
               </Button>
@@ -326,16 +341,12 @@ export function PaymentPage() {
             <DialogTitle>
               {decision?.action === "verify"
                 ? `Verifikasi ${decision?.payment.nomor}`
-                : voiding
-                  ? `Batalkan ${decision?.payment.nomor}`
-                  : `Tolak ${decision?.payment.nomor}`}
+                : `Tolak ${decision?.payment.nomor}`}
             </DialogTitle>
             <DialogDescription>
               {decision?.action === "verify"
                 ? "Kas diakui di buku besar dan piutang berkurang sebesar alokasinya."
-                : voiding
-                  ? "Untuk penerimaan yang sudah diverifikasi tetapi ternyata batal (transfer ditarik, giro tolak). Jurnalnya dibalik hari ini dan tagihan yang dilunasinya terbuka kembali."
-                  : "Alokasi ke tagihan dibatalkan dan piutang kembali terbuka."}
+                : "Alokasi ke tagihan dibatalkan dan piutang kembali terbuka."}
             </DialogDescription>
           </DialogHeader>
 
@@ -366,7 +377,7 @@ export function PaymentPage() {
           )}
 
           <Field
-            label={decision?.action === "reject" ? (voiding ? "Alasan pembatalan" : "Alasan penolakan") : "Catatan"}
+            label={decision?.action === "reject" ? "Alasan penolakan" : "Catatan"}
             htmlFor="alasan"
             required={decision?.action === "reject"}
           >
@@ -402,11 +413,20 @@ export function PaymentPage() {
                 })
               }
             >
-              {decision?.action === "reject" ? (voiding ? "Batalkan penerimaan" : "Tolak penerimaan") : "Verifikasi"}
+              {decision?.action === "reject" ? "Tolak penerimaan" : "Verifikasi"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RequestVoidDialog
+        target={voidingPayment ? {
+          documentType: "payment", documentId: voidingPayment.id, version: voidingPayment.version,
+          label: voidingPayment.nomor,
+          effect: "Untuk penerimaan yang ternyata batal (transfer ditarik, giro tolak): jurnalnya dibalik dan tagihan yang dilunasinya terbuka kembali. Untuk transfer ganda, gunakan Kembalikan dana.",
+        } : null}
+        onClose={() => setVoidingPayment(null)}
+      />
+      <RefundDialog payment={refunding} onClose={() => setRefunding(null)} />
     </div>
   );
 }

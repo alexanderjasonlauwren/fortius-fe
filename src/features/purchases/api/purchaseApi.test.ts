@@ -149,18 +149,14 @@ describe("bill payments and voids", () => {
     });
   });
 
-  it("pays part of a bill, and voids a payment or a bill under the version read", async () => {
+  it("pays part of a bill", async () => {
     send.mockResolvedValue(wire({ payment_status: "partial" }));
     await purchaseApiHttp.recordPurchasePayment({
       purchaseId: ID, amount: 40_000, paidOn: "2026-10-10", bankAccountId: "ba-1", bankReference: " TRF-9 ",
     });
-    await purchaseApiHttp.voidPurchasePayment(ID, "p-1", 2, "transfer ditarik");
-    await purchaseApiHttp.voidPurchase(ID, 3, "tagihan ganda");
     expect(send.mock.calls[0]).toEqual(["post", `/purchases/${ID}/payments`, {
       amount: 40_000, paid_on: "2026-10-10", bank_account_id: "ba-1", bank_reference: "TRF-9", notes: undefined,
     }]);
-    expect(send.mock.calls[1]).toEqual(["post", `/purchases/${ID}/payments/p-1/void`, { version: 2, reason: "transfer ditarik" }]);
-    expect(send.mock.calls[2]).toEqual(["post", `/purchases/${ID}/void`, { version: 3, reason: "tagihan ganda" }]);
   });
 });
 

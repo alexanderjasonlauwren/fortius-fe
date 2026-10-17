@@ -33,6 +33,7 @@ import { ReportsPage } from "./pages/reports/ReportsPage";
 import { AccountsPage } from "./pages/accounts/AccountsPage";
 import { FinanceDashboardPage } from "./pages/financedashboard/FinanceDashboardPage";
 import { FiscalYearsPage } from "./pages/fiscalyears/FiscalYearsPage";
+import { ApprovalsPage } from "./pages/approvals/ApprovalsPage";
 import { InventoryPage } from "./pages/inventory/InventoryPage";
 import { FinanceReportsPage } from "./pages/financereports/FinanceReportsPage";
 import { FinanceReportPage } from "./pages/financereports/FinanceReportPage";
@@ -208,6 +209,12 @@ const router = createBrowserRouter([
       { path: "accounts", element: (
         <RequirePermission permission={PERMISSIONS.ACCOUNTS_VIEW}>
           <AccountsPage />
+        </RequirePermission>
+      ) },
+      // Client answer 5: voids and refunds wait here for a second person.
+      { path: "approvals", element: (
+        <RequirePermission permission={PERMISSIONS.VOID_REQUESTS_VIEW}>
+          <ApprovalsPage />
         </RequirePermission>
       ) },
       { path: "inventory", element: (

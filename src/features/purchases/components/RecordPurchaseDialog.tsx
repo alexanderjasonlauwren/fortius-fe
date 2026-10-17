@@ -182,7 +182,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
                     <SelectInput id={`pur-line-product-${line.key}`} value={line.productId}
                       onChange={(e) => update(line.key, { productId: e.target.value })}>
                       <option value="">— Pilih —</option>
-                      {(products.data ?? []).map((p) => (
+                      {(products.data ?? []).filter((p) => p.productKind !== "container").map((p) => (
                         <option key={p.id} value={p.id}>{p.kode} — {p.nama}</option>
                       ))}
                     </SelectInput>

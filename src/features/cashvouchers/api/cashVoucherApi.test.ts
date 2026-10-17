@@ -108,16 +108,6 @@ describe("lifecycle", () => {
     await cashVoucherApiHttp.postCashVoucher(ID, 1);
     expect(send.mock.calls[0]).toEqual(["post", `/cash-vouchers/${ID}/post`, { version: 1 }]);
   });
-
-  it("voids with a version guard and a reason", async () => {
-    send.mockResolvedValue(wire({ status: "void" }));
-    await cashVoucherApiHttp.voidCashVoucher(ID, 2, "Salah input nominal");
-    expect(send.mock.calls[0]).toEqual([
-      "post",
-      `/cash-vouchers/${ID}/void`,
-      { version: 2, reason: "Salah input nominal" },
-    ]);
-  });
 });
 
 describe("reference, contact and draft delete (parity P3)", () => {

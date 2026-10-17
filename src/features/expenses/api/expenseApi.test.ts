@@ -71,14 +71,12 @@ describe("expense corrections", () => {
     ]);
   });
 
-  it("edits, withdraws and voids under the version read", async () => {
+  it("edits and withdraws under the version read", async () => {
     send.mockResolvedValue(wire);
     await expenseApiHttp.updateExpense(wire.id, 2, { lines: [{ category: "fuel", amount: 1 }], paymentMode: "bank", incurredAt: "2026-09-13" });
     await expenseApiHttp.cancelExpense(wire.id, 3, "");
-    await expenseApiHttp.voidExpense(wire.id, 5, "nota ganda");
     expect(send.mock.calls[0][0]).toBe("put");
     expect(send.mock.calls[0][2]).toMatchObject({ version: 2, payment_mode: "bank", lines: [{ category: "fuel", amount: 1 }] });
     expect(send.mock.calls[1]).toEqual(["post", `/expenses/${wire.id}/cancel`, { version: 3, reason: undefined }]);
-    expect(send.mock.calls[2]).toEqual(["post", `/expenses/${wire.id}/void`, { version: 5, reason: "nota ganda" }]);
   });
 });

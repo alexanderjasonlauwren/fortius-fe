@@ -196,18 +196,6 @@ async function recordPurchasePayment(input: RecordPurchasePaymentInput): Promise
   return toView(row);
 }
 
-async function voidPurchasePayment(
-  purchaseId: string, paymentId: string, version: number, reason: string,
-): Promise<PurchaseView> {
-  return toView(await send<PurchaseResponse>(
-    "post", `/purchases/${purchaseId}/payments/${paymentId}/void`, { version, reason },
-  ));
-}
-
-async function voidPurchase(id: string, version: number, reason: string): Promise<PurchaseView> {
-  return toView(await send<PurchaseResponse>("post", `/purchases/${id}/void`, { version, reason }));
-}
-
 async function payPurchase(input: PayPurchaseInput): Promise<PurchaseView> {
   const row = await send<PurchaseResponse>("post", `/purchases/${input.id}/pay`, {
     version: input.version,
@@ -219,5 +207,5 @@ async function payPurchase(input: PayPurchaseInput): Promise<PurchaseView> {
 
 export const purchaseApiHttp: PurchaseApi = {
   getPurchases, getPurchase, recordGeneralPurchase, recordPurchasePayment,
-  voidPurchasePayment, voidPurchase, payPurchase,
+  payPurchase,
 };

@@ -30,7 +30,7 @@ interface FormState {
   stok: number;
   stokMinimum: number;
   aktif: boolean;
-  productKind: "commodity" | "accessory";
+  productKind: "commodity" | "accessory" | "container";
   inventoryAccountCode: string;
   revenueAccountCode: string;
   cogsAccountCode: string;
@@ -298,11 +298,15 @@ export function ProductFormPage() {
               label="Jenis"
               htmlFor="product-kind"
               className="sm:col-span-2"
-              hint={isEdit ? "Tidak dapat diubah setelah dibuat." : undefined}
+              hint={isEdit
+                ? "Tidak dapat diubah setelah dibuat."
+                : form.productKind === "container"
+                  ? "Tabung kosong hanya dihitung jumlahnya di stok opname; tidak dibeli, dijual, atau dinilai."
+                  : undefined}
             >
               {isEdit ? (
                 <p className="py-1.5 text-sm text-ink">
-                  {form.productKind === "accessory" ? "Perlengkapan" : "Komoditas"}
+                  {form.productKind === "accessory" ? "Perlengkapan" : form.productKind === "container" ? "Tabung kosong" : "Komoditas"}
                 </p>
               ) : (
                 <SegmentedControl
@@ -311,6 +315,7 @@ export function ProductFormPage() {
                   options={[
                     { value: "commodity" as const, label: "Komoditas" },
                     { value: "accessory" as const, label: "Perlengkapan" },
+                    { value: "container" as const, label: "Tabung kosong" },
                   ]}
                 />
               )}

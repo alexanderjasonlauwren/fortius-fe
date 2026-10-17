@@ -87,6 +87,16 @@ const FRIENDLY: Record<string, string> = {
   PERIOD_IN_REVIEW:
     "Periode ini sedang direview. Hanya tim keuangan yang dapat mencatat transaksi di bulan ini sampai review selesai.",
   USE_STOCK_COUNT: "Akun ini memegang stok produk. Koreksi lewat stok opname per produk di menu Persediaan.",
+  VOID_APPROVAL_REQUIRED: "Pembatalan dokumen yang sudah dijurnal harus diajukan dan disetujui. Gunakan Ajukan pembatalan.",
+  OWN_REQUEST: "Pengajuan Anda sendiri harus disetujui orang lain.",
+  EVIDENCE_REQUIRED: "Lampirkan bukti (mis. mutasi rekening) sebelum pengajuan ini disetujui.",
+  VOID_ALREADY_REQUESTED: "Dokumen ini sudah punya pengajuan pembatalan yang menunggu persetujuan.",
+  REQUEST_DECIDED: "Pengajuan ini sudah diputuskan orang lain. Muat ulang halaman.",
+  REFUND_EXCEEDS_AVAILABLE: "Jumlah melebihi sisa penerimaan yang belum dialokasikan atau dikembalikan.",
+  PAYMENT_NOT_VERIFIED: "Hanya penerimaan yang sudah diverifikasi yang bisa dikembalikan.",
+  PAYMENT_REFUNDED:
+    "Penerimaan ini punya pengembalian dana yang diajukan atau disetujui. Selesaikan pengembalian itu dulu.",
+  CONTAINER_NOT_TRADED: "Tabung kosong hanya dihitung jumlahnya; tidak dibeli atau dijual.",
 };
 
 /**

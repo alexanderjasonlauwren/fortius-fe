@@ -34,11 +34,15 @@ function formatSize(bytes: number): string {
 export interface AttachmentsPanelProps {
   ownerType: AttachmentOwnerType;
   ownerId: string;
+  /** Shows the files without add or remove -- the evidence of a decided
+   *  void or refund request, which the database keeps as it was. */
+  readOnly?: boolean;
 }
 
-export function AttachmentsPanel({ ownerType, ownerId }: AttachmentsPanelProps) {
+export function AttachmentsPanel({ ownerType, ownerId, readOnly = false }: AttachmentsPanelProps) {
   const { toast } = useToast();
-  const canManage = useAuthStore((s) => s.hasPermission(ATTACHMENT_PERMISSIONS[ownerType].manage));
+  const mayManage = useAuthStore((s) => s.hasPermission(ATTACHMENT_PERMISSIONS[ownerType].manage));
+  const canManage = mayManage && !readOnly;
   const input = useRef<HTMLInputElement>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const queryKey = [...scopeKey(), "attachments", ownerType, ownerId];

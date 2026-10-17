@@ -116,9 +116,7 @@ export interface CashVoucherApi {
   /** Writes the one balanced journal this voucher will ever post directly
    *  -- a later correction is a void, not an edit. */
   postCashVoucher(id: string, version: number): Promise<CashVoucher>;
-  /** Posts the mirror of the original journal and marks the voucher void.
-   *  Refused for a voucher still draft. */
-  voidCashVoucher(id: string, version: number, reason: string): Promise<CashVoucher>;
-  /** Removes a draft; a posted voucher is voided instead. */
+  /** Removes a draft; a posted voucher is voided through a void request
+   *  (features/approvals). */
   deleteCashVoucher(id: string): Promise<void>;
 }

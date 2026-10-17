@@ -24,7 +24,7 @@ import { CashVoucherDialog } from "@/features/cashvouchers/components/CashVouche
 import { VoucherDetailDialog } from "@/features/cashvouchers/components/VoucherDetailDialog";
 import { VOUCHER_STATUS_LABEL, VOUCHER_TYPE_LABEL, voucherParty } from "@/features/cashvouchers/lib/labels";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { VoidVoucherDialog } from "@/features/cashvouchers/components/VoidVoucherDialog";
+import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { listImports, getReconciliation } from "@/features/bankstatements/api/bankStatementApi";
 import { ImportBankStatementDialog } from "@/features/bankstatements/components/ImportBankStatementDialog";
 import { BankStatementDetailDialog } from "@/features/bankstatements/components/BankStatementDetailDialog";
@@ -357,7 +357,14 @@ export function CashBankPage() {
         onConfirm={() => deleting && deleteMutation.mutate(deleting)}
         onCancel={() => setDeleting(null)}
       />
-      <VoidVoucherDialog voucher={voidTarget} onClose={() => setVoidTarget(null)} onVoided={refreshVouchers} />
+      <RequestVoidDialog
+        target={voidTarget ? {
+          documentType: "cash_voucher", documentId: voidTarget.id, version: voidTarget.version,
+          label: voidTarget.voucherNumber, effect: "Jurnal voucher ini dibalik dengan jurnal pembalik.",
+        } : null}
+        onClose={() => setVoidTarget(null)}
+        onRequested={refreshVouchers}
+      />
       <ImportBankStatementDialog
         open={importDialogOpen}
         onClose={() => setImportDialogOpen(false)}

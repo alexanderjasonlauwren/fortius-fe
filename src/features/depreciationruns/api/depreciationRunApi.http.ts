@@ -62,13 +62,8 @@ async function createRun(period: string): Promise<DepreciationRunView> {
   return toView(await send<RunResponse>("post", "/depreciation-runs", { period }));
 }
 
-async function voidRun(id: string, version: number): Promise<DepreciationRunView> {
-  return toView(await send<RunResponse>("post", `/depreciation-runs/${id}/void`, { version }));
-}
-
 export const depreciationRunApiHttp: DepreciationRunApi = {
   listRuns,
   getRun,
   createRun,
-  voidRun,
 };

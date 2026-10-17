@@ -203,11 +203,6 @@ async function getInvoice(id: string): Promise<InvoiceDetailView> {
   };
 }
 
-async function voidInvoice(id: string, version: number, reason: string): Promise<InvoiceView> {
-  const row = await send<InvoiceResponse>("post", `/invoices/${id}/void`, { version, reason });
-  return toInvoiceView(row, await outletsById(), todayIso());
-}
-
 /** 100 is every list definition's MaxPageSize; the server refuses more. */
 async function fetchInvoices(filters?: { outletId?: string; search?: string }) {
   const page = await getList<InvoiceResponse>("/invoices", {
@@ -347,6 +342,7 @@ interface PaymentResponse {
   rejection_reason?: string;
   notes?: string;
   allocated: number;
+  refunded?: number;
   allocations?: { invoice_id: string; invoice_number: string; amount: number }[];
   version: number;
   created_at: string;
@@ -384,7 +380,8 @@ function toPaymentView(row: PaymentResponse, outlets: Map<string, OutletView>): 
     outlet: outlets.get(row.outlet_id)?.nama ?? "—",
     tanggal: row.payment_date.slice(0, 10),
     jumlah: row.amount,
-    belumDialokasikan: row.amount - row.allocated,
+    belumDialokasikan: row.amount - row.allocated - (row.refunded ?? 0),
+    dikembalikan: row.refunded ?? 0,
     bank: row.bank_name ?? "—",
     // The full account number never leaves the server unencrypted -- see
     // core.payments.bank_account_number_encrypted's own column comment.
@@ -397,6 +394,7 @@ function toPaymentView(row: PaymentResponse, outlets: Map<string, OutletView>): 
     })),
     keterangan: row.notes,
     diverifikasiOleh: row.verified_at ? "Terverifikasi" : undefined,
+    version: row.version,
   };
 }
 
@@ -687,6 +685,7 @@ const SOURCE_TYPE: Record<string, JournalView["sourceType"]> = {
   purchase_payment: "purchasePayment",
   asset_acquisition: "assetAcquisition",
   asset_disposal: "assetDisposal",
+  payment_refund: "paymentRefund",
 };
 
 function toJournalView(row: JournalResponse): JournalView {
@@ -1043,7 +1042,6 @@ export const financeApiHttp: FinanceApi = {
   applyCreditNote,
   cancelCreditNote,
   getInvoice,
-  voidInvoice,
   getJournals,
   createManualJournal,
   reverseJournal,

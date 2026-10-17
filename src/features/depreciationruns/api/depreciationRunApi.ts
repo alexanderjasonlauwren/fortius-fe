@@ -8,4 +8,3 @@ const api: DepreciationRunApi = depreciationRunApiHttp;
 export const listRuns = api.listRuns.bind(api);
 export const getRun = api.getRun.bind(api);
 export const createRun = api.createRun.bind(api);
-export const voidRun = api.voidRun.bind(api);

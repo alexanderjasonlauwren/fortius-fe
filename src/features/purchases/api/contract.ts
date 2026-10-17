@@ -121,8 +121,5 @@ export interface PurchaseApi {
   recordGeneralPurchase(input: RecordGeneralPurchaseInput): Promise<PurchaseView>;
   /** Pays part or all of one bill. */
   recordPurchasePayment(input: RecordPurchasePaymentInput): Promise<PurchaseView>;
-  voidPurchasePayment(purchaseId: string, paymentId: string, version: number, reason: string): Promise<PurchaseView>;
-  /** Voids a vendor bill with no live payment; SA redemptions are refused. */
-  voidPurchase(id: string, version: number, reason: string): Promise<PurchaseView>;
   payPurchase(input: PayPurchaseInput): Promise<PurchaseView>;
 }

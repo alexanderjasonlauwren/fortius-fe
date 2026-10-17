@@ -17,7 +17,9 @@ export type AttachmentOwnerType =
   | "expense"
   | "cash_voucher"
   | "journal"
-  | "asset";
+  | "asset"
+  | "void_request"
+  | "payment_refund";
 
 /** Who may see and who may add or remove the files on each kind of
  *  document -- the owner's own read and create permissions, mirroring the
@@ -31,6 +33,8 @@ export const ATTACHMENT_PERMISSIONS: Record<AttachmentOwnerType, { view: Permiss
   cash_voucher: { view: PERMISSIONS.CASH_VOUCHERS_VIEW, manage: PERMISSIONS.CASH_VOUCHERS_CREATE },
   journal: { view: PERMISSIONS.JOURNALS_VIEW, manage: PERMISSIONS.JOURNALS_CREATE },
   asset: { view: PERMISSIONS.ASSETS_VIEW, manage: PERMISSIONS.ASSETS_CREATE },
+  void_request: { view: PERMISSIONS.VOID_REQUESTS_VIEW, manage: PERMISSIONS.VOID_REQUESTS_CREATE },
+  payment_refund: { view: PERMISSIONS.PAYMENT_REFUNDS_VIEW, manage: PERMISSIONS.PAYMENT_REFUNDS_CREATE },
 };
 
 /** What the backend accepts (core/storage contenttype.go, finance_attachment). */

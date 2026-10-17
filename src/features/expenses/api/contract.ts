@@ -94,8 +94,6 @@ export interface ExpenseApi {
   updateExpense(id: string, version: number, input: CreateExpenseInput): Promise<ExpenseView>;
   /** Withdraws a pending expense; nothing was posted. */
   cancelExpense(id: string, version: number, reason?: string): Promise<ExpenseView>;
-  /** Voids an approved expense; its journal is reversed. */
-  voidExpense(id: string, version: number, reason: string): Promise<ExpenseView>;
   approveExpense(input: ExpenseDecisionInput): Promise<ExpenseView>;
   rejectExpense(input: ExpenseDecisionInput): Promise<ExpenseView>;
 }

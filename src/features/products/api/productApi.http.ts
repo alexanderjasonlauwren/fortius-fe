@@ -114,7 +114,7 @@ function toView(row: ProductResponse): ProductView {
     stok: 0,
     stokMinimum: row.min_stock,
     aktif: row.status === "atv",
-    productKind: row.product_kind === "accessory" ? "accessory" : "commodity",
+    productKind: row.product_kind === "accessory" || row.product_kind === "container" ? row.product_kind : "commodity",
     unitId: row.unit_id,
     deskripsi: row.description,
     merek: row.brand,
@@ -253,7 +253,9 @@ async function createOrUpdateProduct(
   // threw again, since its own detail reads back "0 kg", not "" -- skipping
   // by product kind, not by string emptiness, is what actually closes this.
   const weightKg =
-    input.productKind === "accessory" ? undefined : input.ukuran ? parseWeightKg(input.ukuran) : undefined;
+    input.productKind === "accessory" || input.productKind === "container"
+      ? undefined
+      : input.ukuran ? parseWeightKg(input.ukuran) : undefined;
 
   if (!input.id) {
     const category = await resolveDefaultCategory();

@@ -33,6 +33,4 @@ export interface DepreciationRunApi {
   /** Period is "YYYY-MM". Posting computes the lines and writes the
    *  journal in the same call -- see this file's own header. */
   createRun(period: string): Promise<DepreciationRunView>;
-  /** Only the latest posted run may be voided. */
-  voidRun(id: string, version: number): Promise<DepreciationRunView>;
 }

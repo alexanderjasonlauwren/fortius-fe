@@ -14,7 +14,7 @@ import { AssetDialog } from "@/features/assets/components/AssetDialog";
 import { AssetScheduleDialog } from "@/features/assets/components/AssetScheduleDialog";
 import { listRuns, type DepreciationRunView } from "@/features/depreciationruns/api/depreciationRunApi";
 import { RunDepreciationDialog } from "@/features/depreciationruns/components/RunDepreciationDialog";
-import { VoidRunDialog } from "@/features/depreciationruns/components/VoidRunDialog";
+import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -213,9 +213,9 @@ export function AssetsPage() {
                     <div className="flex items-center gap-3">
                       <span className="data text-sm text-ink">{formatRupiah(run.totalAmount)}</span>
                       {run.status === "posted" && latestPosted?.id === run.id && (
-                        <CanAccess permission={PERMISSIONS.DEPRECIATION_RUNS_UPDATE}>
+                        <CanAccess permissions={[PERMISSIONS.DEPRECIATION_RUNS_UPDATE, PERMISSIONS.VOID_REQUESTS_CREATE]} requireAll>
                           <Button
-                            variant="ghost" size="icon-xs" aria-label={`Batalkan run ${run.period}`}
+                            variant="ghost" size="icon-xs" aria-label={`Ajukan pembatalan run ${run.period}`}
                             className="hover:bg-rust-soft hover:text-rust-ink"
                             onClick={() => setVoidTarget(run)}
                           >
@@ -328,10 +328,14 @@ export function AssetsPage() {
         onClose={() => setRunDialogOpen(false)}
         onPosted={() => { void runs.refetch(); void assets.refetch(); }}
       />
-      <VoidRunDialog
-        run={voidTarget}
+      <RequestVoidDialog
+        target={voidTarget ? {
+          documentType: "depreciation_run", documentId: voidTarget.id, version: voidTarget.version,
+          label: `penyusutan ${voidTarget.period}`,
+          effect: "Jurnal penyusutan bulan ini dibalik dan nilai buku asetnya kembali.",
+        } : null}
         onClose={() => setVoidTarget(null)}
-        onVoided={() => { void runs.refetch(); void assets.refetch(); }}
+        onRequested={() => { void runs.refetch(); void assets.refetch(); }}
       />
     </div>
   );

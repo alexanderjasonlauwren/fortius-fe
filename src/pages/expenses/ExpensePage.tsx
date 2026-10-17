@@ -17,7 +17,6 @@ import {
   EXPENSE_STATUS_LABEL,
   getExpenses,
   rejectExpense,
-  voidExpense,
   type ExpenseView,
 } from "@/features/expenses/api/expenseApi";
 import type { ExpenseStatus } from "@/features/expenses/api/contract";
@@ -36,6 +35,7 @@ import { DataTable, type Column } from "@/components/common/DataTable";
 import { Field, SearchInput, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ReasonDialog } from "@/components/common/ReasonDialog";
+import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { getStatusVariant, spineFor } from "@/lib/status";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -92,12 +92,6 @@ export function ExpensePage() {
     errorTitle: "Pengeluaran tidak dapat ditarik",
     success: (row) => ({ title: `${row.expenseNumber} ditarik` }),
     onDone: () => setWithdrawing(null),
-  });
-  const voidOne = useDeskMutation({
-    mutationFn: (why: string) => voidExpense(voiding!.id, voiding!.version, why),
-    errorTitle: "Pengeluaran tidak dapat dibatalkan",
-    success: (row) => ({ title: `${row.expenseNumber} dibatalkan`, description: "Jurnalnya sudah dibalik." }),
-    onDone: () => setVoiding(null),
   });
 
   const rows = list.data ?? [];
@@ -165,8 +159,8 @@ export function ExpensePage() {
             </>
           )}
           {row.approvalStatus === "approved" && (
-            <CanAccess permission={PERMISSIONS.EXPENSES_VOID}>
-              <Button variant="ghost" size="icon-xs" aria-label={`Batalkan ${row.expenseNumber}`} className="hover:bg-rust-soft hover:text-rust-ink" onClick={() => setVoiding(row)}><Ban className="h-3.5 w-3.5" /></Button>
+            <CanAccess permissions={[PERMISSIONS.EXPENSES_VOID, PERMISSIONS.VOID_REQUESTS_CREATE]} requireAll>
+              <Button variant="ghost" size="icon-xs" aria-label={`Ajukan pembatalan ${row.expenseNumber}`} className="hover:bg-rust-soft hover:text-rust-ink" onClick={() => setVoiding(row)}><Ban className="h-3.5 w-3.5" /></Button>
             </CanAccess>
           )}
         </div>
@@ -258,14 +252,11 @@ export function ExpensePage() {
         onConfirm={(why) => withdraw.mutate(why)}
         onClose={() => setWithdrawing(null)}
       />
-      <ReasonDialog
-        open={!!voiding}
-        title={`Batalkan ${voiding?.expenseNumber}?`}
-        description="Jurnal pengeluaran ini dibalik pada tanggal aslinya. Tidak dapat diurungkan."
-        confirmLabel="Batalkan pengeluaran"
-        placeholder="Contoh: nota dicatat dua kali."
-        pending={voidOne.isPending}
-        onConfirm={(why) => voidOne.mutate(why)}
+      <RequestVoidDialog
+        target={voiding ? {
+          documentType: "expense", documentId: voiding.id, version: voiding.version, label: voiding.expenseNumber,
+          effect: "Jurnal pengeluaran ini dibalik.",
+        } : null}
         onClose={() => setVoiding(null)}
       />
         </>

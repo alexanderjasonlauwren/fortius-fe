@@ -70,8 +70,12 @@ export function OpeningStockDialog({ open, stock, onClose }: { open: boolean; st
                         value={rows[p.productId]?.quantity ?? ""} onChange={(e) => set(p.productId, "quantity", e.target.value)} />
                     </td>
                     <td className="py-2 text-right">
-                      <TextInput aria-label={`Harga pokok ${p.name}`} type="number" min={0} mono className="ml-auto w-32 py-1 text-right"
-                        value={rows[p.productId]?.unitCost ?? ""} onChange={(e) => set(p.productId, "unitCost", e.target.value)} />
+                      {p.kind === "container" ? (
+                        <span className="text-2xs text-ink-muted">jumlah saja</span>
+                      ) : (
+                        <TextInput aria-label={`Harga pokok ${p.name}`} type="number" min={0} mono className="ml-auto w-32 py-1 text-right"
+                          value={rows[p.productId]?.unitCost ?? ""} onChange={(e) => set(p.productId, "unitCost", e.target.value)} />
+                      )}
                     </td>
                   </tr>
                 ))}

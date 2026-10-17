@@ -153,10 +153,6 @@ async function postCashVoucher(id: string, version: number): Promise<CashVoucher
   return toVoucher(await send<CashVoucherResponse>("post", `/cash-vouchers/${id}/post`, { version }));
 }
 
-async function voidCashVoucher(id: string, version: number, reason: string): Promise<CashVoucher> {
-  return toVoucher(await send<CashVoucherResponse>("post", `/cash-vouchers/${id}/void`, { version, reason }));
-}
-
 async function deleteCashVoucher(id: string): Promise<void> {
   await send("delete", `/cash-vouchers/${id}`);
 }
@@ -168,5 +164,4 @@ export const cashVoucherApiHttp: CashVoucherApi = {
   createCashVoucher,
   updateCashVoucher,
   postCashVoucher,
-  voidCashVoucher,
 };

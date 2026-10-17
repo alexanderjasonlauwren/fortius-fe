@@ -11,7 +11,7 @@ import { ArrowLeft, Ban, FileText, Printer, Wallet, StickyNote } from "lucide-re
 import { getInvoice } from "@/features/finance/api/financeApi";
 import { getActivity } from "@/features/finance/api/activityApi";
 import { CreditNoteDialog } from "@/features/finance/components/CreditNoteDialog";
-import { VoidInvoiceDialog } from "@/features/finance/components/VoidInvoiceDialog";
+import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { DocumentActivityPanel } from "@/features/finance/components/DocumentActivityPanel";
 import { printInvoice } from "@/features/finance/lib/printInvoice";
 import { AttachmentsPanel } from "@/features/attachments/components/AttachmentsPanel";
@@ -95,9 +95,9 @@ export function InvoiceDetailPage() {
               </CanAccess>
             )}
             {voidable && (
-              <CanAccess permission={PERMISSIONS.INVOICES_VOID}>
+              <CanAccess permissions={[PERMISSIONS.INVOICES_VOID, PERMISSIONS.VOID_REQUESTS_CREATE]} requireAll>
                 <Button size="sm" variant="ghost" className="text-rust-ink" onClick={() => setVoidOpen(true)}>
-                  <Ban className="h-3.5 w-3.5" /> Batalkan
+                  <Ban className="h-3.5 w-3.5" /> Ajukan pembatalan
                 </Button>
               </CanAccess>
             )}
@@ -171,7 +171,14 @@ export function InvoiceDetailPage() {
       </div>
 
       <CreditNoteDialog invoice={creditOpen ? inv : null} onClose={() => setCreditOpen(false)} onIssued={refresh} />
-      <VoidInvoiceDialog invoice={voidOpen ? inv : null} onClose={() => setVoidOpen(false)} onVoided={refresh} />
+      <RequestVoidDialog
+        target={voidOpen ? {
+          documentType: "invoice", documentId: inv.id, version: inv.version, label: inv.nomor,
+          effect: "Jurnal tagihan ini dibalik dan piutangnya hilang; tagihan tetap tercatat dengan status Batal.",
+        } : null}
+        onClose={() => setVoidOpen(false)}
+        onRequested={refresh}
+      />
     </div>
   );
 }

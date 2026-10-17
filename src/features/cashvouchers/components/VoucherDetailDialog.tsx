@@ -118,9 +118,9 @@ export function VoucherDetailDialog({ voucher: summary, onClose, onEdit, onPost,
               </>
             )}
             {v.status === "posted" && (
-              <CanAccess permission={PERMISSIONS.CASH_VOUCHERS_APPROVE}>
+              <CanAccess permissions={[PERMISSIONS.CASH_VOUCHERS_APPROVE, PERMISSIONS.VOID_REQUESTS_CREATE]} requireAll>
                 <Button type="button" variant="ghost" size="sm" className="text-rust-ink" onClick={() => onVoid(v)}>
-                  <X className="h-3.5 w-3.5" /> Batalkan
+                  <X className="h-3.5 w-3.5" /> Ajukan pembatalan
                 </Button>
               </CanAccess>
             )}

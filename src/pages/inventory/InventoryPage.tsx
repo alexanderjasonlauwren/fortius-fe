@@ -88,6 +88,7 @@ export function InventoryPage() {
                           <span className="data text-xs text-ink-muted">{r.code}</span> {r.name}
                         </Link>
                         {!r.opened && <span className="ml-2 text-2xs text-ink-muted">belum ada stok</span>}
+                        {r.kind === "container" && <span className="ml-2 text-2xs text-ink-muted">jumlah saja</span>}
                       </td>
                       <td className={cn("data px-4 py-2 text-right", r.quantity < 0 ? "text-rust-ink" : "text-ink")}>
                         {formatNumber(r.quantity)}

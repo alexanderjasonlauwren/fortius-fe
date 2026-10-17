@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { allowsManualIntake, type OrderIntakeMode } from "@/features/distribution/api/intakePolicy.contract";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import {
+  BadgeCheck,
   Network,
   Bell,
   BookOpen,
@@ -235,6 +236,13 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Keuangan · Akun & Laporan",
     items: [
+      {
+        name: "Persetujuan",
+        href: "/approvals",
+        icon: BadgeCheck,
+        hint: "Pembatalan dokumen dan pengembalian dana yang menunggu persetujuan",
+        permission: PERMISSIONS.VOID_REQUESTS_VIEW,
+      },
       {
         name: "Daftar Akun",
         href: "/accounts",

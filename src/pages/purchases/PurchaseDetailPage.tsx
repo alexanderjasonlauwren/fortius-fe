@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Ban, CircleDollarSign, FileText, Undo2 } from "lucide-react";
-import { getPurchase, voidPurchase, voidPurchasePayment } from "@/features/purchases/api/purchaseApi";
+import { getPurchase } from "@/features/purchases/api/purchaseApi";
 import type { PurchasePaymentView } from "@/features/purchases/api/contract";
 import { PayBillDialog } from "@/features/purchases/components/PayBillDialog";
 import { isOverdue, PURCHASE_STATUS_LABEL, purchaseStatusVariant } from "@/features/purchases/lib/status";
@@ -16,12 +16,11 @@ import { DocumentActivityPanel } from "@/features/finance/components/DocumentAct
 import { AttachmentsPanel } from "@/features/attachments/components/AttachmentsPanel";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
-import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { ReasonDialog } from "@/components/common/ReasonDialog";
+import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { Button } from "@/components/ui/button";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
@@ -40,19 +39,6 @@ export function PurchaseDetailPage() {
     void queryClient.invalidateQueries({ queryKey: [...scopeKey(), "activity", "purchase", id] });
     void queryClient.invalidateQueries({ queryKey: [...scopeKey(), "purchases"] });
   };
-
-  const voidBill = useDeskMutation({
-    mutationFn: (reason: string) => voidPurchase(id, bill.data!.version, reason),
-    success: (row) => ({ title: `${row.purchaseNumber} dibatalkan`, description: "Jurnalnya sudah dibalik." }),
-    errorTitle: "Tagihan tidak dapat dibatalkan",
-    onDone: () => { setVoidingBill(false); refresh(); },
-  });
-  const voidPayment = useDeskMutation({
-    mutationFn: (reason: string) => voidPurchasePayment(id, voidingPayment!.id, voidingPayment!.version, reason),
-    success: () => ({ title: `${voidingPayment?.number} dibatalkan`, description: "Tagihan kembali terhutang sebesar pembayaran itu." }),
-    errorTitle: "Pembayaran tidak dapat dibatalkan",
-    onDone: () => { setVoidingPayment(null); refresh(); },
-  });
 
   if (bill.isLoading) return <Skeleton className="h-96 w-full" />;
   const b = bill.data;
@@ -87,9 +73,9 @@ export function PurchaseDetailPage() {
               </CanAccess>
             )}
             {voidable && (
-              <CanAccess permission={PERMISSIONS.PURCHASES_VOID}>
+              <CanAccess permissions={[PERMISSIONS.PURCHASES_VOID, PERMISSIONS.VOID_REQUESTS_CREATE]} requireAll>
                 <Button size="sm" variant="ghost" className="text-rust-ink" onClick={() => setVoidingBill(true)}>
-                  <Ban className="h-3.5 w-3.5" /> Batalkan
+                  <Ban className="h-3.5 w-3.5" /> Ajukan pembatalan
                 </Button>
               </CanAccess>
             )}
@@ -174,8 +160,8 @@ export function PurchaseDetailPage() {
                       <span className="flex items-center gap-2">
                         <span className="data whitespace-nowrap text-ink">{formatRupiah(p.amount)}</span>
                         {p.status === "posted" && (
-                          <CanAccess permission={PERMISSIONS.PURCHASES_VOID}>
-                            <Button variant="ghost" size="icon-xs" aria-label={`Batalkan ${p.number}`}
+                          <CanAccess permissions={[PERMISSIONS.PURCHASES_VOID, PERMISSIONS.VOID_REQUESTS_CREATE]} requireAll>
+                            <Button variant="ghost" size="icon-xs" aria-label={`Ajukan pembatalan ${p.number}`}
                               className="hover:bg-rust-soft hover:text-rust-ink" onClick={() => setVoidingPayment(p)}>
                               <Undo2 className="h-3.5 w-3.5" />
                             </Button>
@@ -201,25 +187,22 @@ export function PurchaseDetailPage() {
       </div>
 
       <PayBillDialog bill={paying ? b : null} onClose={() => setPaying(false)} onPaid={refresh} />
-      <ReasonDialog
-        open={voidingBill}
-        title={`Batalkan ${b.purchaseNumber}?`}
-        description="Jurnal tagihan ini dibalik pada tanggal aslinya dan hutangnya hilang. Tidak dapat diurungkan."
-        confirmLabel="Batalkan tagihan"
-        placeholder="Contoh: tagihan ganda dari vendor."
-        pending={voidBill.isPending}
-        onConfirm={(reason) => voidBill.mutate(reason)}
+      <RequestVoidDialog
+        target={voidingBill ? {
+          documentType: "purchase", documentId: b.id, version: b.version, label: b.purchaseNumber,
+          effect: "Jurnal tagihan ini dibalik dan hutangnya hilang.",
+        } : null}
         onClose={() => setVoidingBill(false)}
+        onRequested={refresh}
       />
-      <ReasonDialog
-        open={!!voidingPayment}
-        title={`Batalkan ${voidingPayment?.number}?`}
-        description="Jurnal pembayaran ini dibalik dan tagihan kembali terhutang sebesar pembayaran itu."
-        confirmLabel="Batalkan pembayaran"
-        placeholder="Contoh: transfer gagal, dana kembali."
-        pending={voidPayment.isPending}
-        onConfirm={(reason) => voidPayment.mutate(reason)}
+      <RequestVoidDialog
+        target={voidingPayment ? {
+          documentType: "purchase_payment", documentId: voidingPayment.id, parentId: b.id,
+          version: voidingPayment.version, label: voidingPayment.number,
+          effect: "Jurnal pembayaran ini dibalik dan tagihan kembali terhutang sebesar pembayaran itu.",
+        } : null}
         onClose={() => setVoidingPayment(null)}
+        onRequested={refresh}
       />
     </div>
   );

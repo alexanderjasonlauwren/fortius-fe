@@ -143,7 +143,10 @@ export interface PaymentView {
   outlet: string;
   tanggal: string;
   jumlah: number;
+  /** What is left to allocate or refund: amount - allocated - refunded. */
   belumDialokasikan: number;
+  /** Pending and approved refunds of this receipt (client answer 5). */
+  dikembalikan: number;
   bank: string;
   noRekening: string;
   status: string;
@@ -151,6 +154,7 @@ export interface PaymentView {
   buktiTransfer?: string;
   keterangan?: string;
   diverifikasiOleh?: string;
+  version: number;
 }
 
 export interface RecordPaymentInput {
@@ -351,8 +355,6 @@ export interface FinanceApi {
   applyCreditNote(id: string, version: number, invoiceId?: string): Promise<CreditNoteView>;
   cancelCreditNote(id: string, version: number, reason: string): Promise<CreditNoteView>;
   getInvoice(id: string): Promise<InvoiceDetailView>;
-  /** Ends a manual invoice raised in error; its journals are reversed. */
-  voidInvoice(id: string, version: number, reason: string): Promise<InvoiceView>;
   getJournals(range?: DateRange, query?: JournalQuery): Promise<JournalView[]>;
   /** "Jurnal umum" (gap-closing plan, Phase E). Refused by the real
    *  backend's own finance.create.journals grant for anyone but

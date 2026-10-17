@@ -812,7 +812,9 @@ export type JournalSourceType =
   // A fixed asset's purchase ("dikreditkan dari") and its sale or write-off
   // (accounting parity P3).
   | "assetAcquisition"
-  | "assetDisposal";
+  | "assetDisposal"
+  // The refund of an overpaid receipt (client answer 5); links to the receipt.
+  | "paymentRefund";
 
 /**
  * A posted journal is immutable. Corrections are made by posting a reversal,
@@ -978,7 +980,9 @@ export interface ProductEntity {
    * mirrors the backend's own UpdateProductRequest carrying no ProductKind
    * field at all).
    */
-  productKind: "commodity" | "accessory";
+  /** "container" is an empty cylinder: counted by quantity only, never
+   *  bought or sold (client answer 2). */
+  productKind: "commodity" | "accessory" | "container";
   /** The measurement unit (core.units): tabung, kg, pcs... -- what `satuan`
    *  reads from. Accounting parity P3. */
   unitId?: string;

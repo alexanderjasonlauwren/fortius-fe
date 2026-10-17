@@ -52,7 +52,6 @@ export const getCreditNotes = api.getCreditNotes.bind(api);
 export const applyCreditNote = api.applyCreditNote.bind(api);
 export const cancelCreditNote = api.cancelCreditNote.bind(api);
 export const getInvoice = api.getInvoice.bind(api);
-export const voidInvoice = api.voidInvoice.bind(api);
 export { CREDIT_NOTE_REASONS } from "./contract";
 export const getJournals = api.getJournals.bind(api);
 export const createManualJournal = api.createManualJournal.bind(api);

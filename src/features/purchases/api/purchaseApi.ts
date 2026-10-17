@@ -21,5 +21,3 @@ export const recordGeneralPurchase = api.recordGeneralPurchase.bind(api);
 export const payPurchase = api.payPurchase.bind(api);
 export const getPurchase = api.getPurchase.bind(api);
 export const recordPurchasePayment = api.recordPurchasePayment.bind(api);
-export const voidPurchasePayment = api.voidPurchasePayment.bind(api);
-export const voidPurchase = api.voidPurchase.bind(api);

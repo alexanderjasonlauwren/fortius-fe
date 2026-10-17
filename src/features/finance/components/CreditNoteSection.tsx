@@ -4,6 +4,7 @@
  * the receivable) or cancel it. Accounting parity P3.
  */
 import { useState } from "react";
+import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, StickyNote, XCircle } from "lucide-react";
@@ -38,6 +39,9 @@ export function CreditNoteSection() {
   const [status, setStatus] = useState<StatusFilter>("Terbit");
   const [search, setSearch] = useState("");
   const [cancelling, setCancelling] = useState<CreditNoteView | null>(null);
+  // An applied credit note reversed its revenue in the ledger: undoing it
+  // is a void, asked for and approved (client answer 5).
+  const [voiding, setVoiding] = useState<CreditNoteView | null>(null);
   const [reason, setReason] = useState("");
 
   const notes = useQuery({
@@ -133,6 +137,13 @@ export function CreditNoteSection() {
               </Button>
             </CanAccess>
           )}
+          {row.status === "Terpakai" && (
+            <CanAccess permissions={[PERMISSIONS.CREDIT_NOTES_UPDATE, PERMISSIONS.VOID_REQUESTS_CREATE]} requireAll>
+              <Button size="xs" variant="ghost" onClick={() => setVoiding(row)}>
+                <XCircle className="h-3 w-3" /> Ajukan pembatalan
+              </Button>
+            </CanAccess>
+          )}
           <AttachmentsButton ownerType="credit_note" ownerId={row.id} label={row.nomor} />
         </div>
       ),
@@ -195,6 +206,13 @@ export function CreditNoteSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RequestVoidDialog
+        target={voiding ? {
+          documentType: "credit_note", documentId: voiding.id, version: voiding.version, label: voiding.nomor,
+          effect: "Jurnal nota kredit ini dibalik dan piutang tagihannya terbuka kembali.",
+        } : null}
+        onClose={() => setVoiding(null)}
+      />
     </>
   );
 }
