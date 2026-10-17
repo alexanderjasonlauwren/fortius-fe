@@ -407,3 +407,26 @@ describe("unit, brand, barcode, description (parity P3)", () => {
     expect(getOne).toHaveBeenCalledWith("/products/units");
   });
 });
+
+describe("transport-fee tariffs (client decision G5)", () => {
+  it("reads each rate with its basis", async () => {
+    getOne.mockResolvedValueOnce([
+      { id: "t2", rate_basis: "per_unit", rate: 1050, effective_from: "2026-10-01" },
+      { id: "t1", rate_basis: "per_kg", rate: 354.64, effective_from: "2026-01-01", effective_until: "2026-10-01", principal_reference: "SK 12" },
+    ]);
+    const rows = await productApiHttp.getTariffs("p1");
+    expect(getOne).toHaveBeenLastCalledWith("/products/p1/transport-fee-tariffs");
+    expect(rows).toEqual([
+      { id: "t2", rateBasis: "per_unit", rate: 1050, effectiveFrom: "2026-10-01", effectiveUntil: undefined, principalReference: undefined },
+      { id: "t1", rateBasis: "per_kg", rate: 354.64, effectiveFrom: "2026-01-01", effectiveUntil: "2026-10-01", principalReference: "SK 12" },
+    ]);
+  });
+
+  it("sets a new rate per tabung", async () => {
+    send.mockResolvedValueOnce({ id: "t3", rate_basis: "per_unit", rate: 1100, effective_from: "2026-11-01" });
+    await productApiHttp.createTariff("p1", { rateBasis: "per_unit", rate: 1100, effectiveFrom: "2026-11-01" });
+    expect(send).toHaveBeenLastCalledWith("post", "/products/p1/transport-fee-tariffs", {
+      rate_basis: "per_unit", rate: 1100, effective_from: "2026-11-01", principal_reference: undefined,
+    });
+  });
+});

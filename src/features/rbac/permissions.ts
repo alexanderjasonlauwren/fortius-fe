@@ -247,6 +247,9 @@ export const PERMISSIONS = {
   ACCOUNTING_PERIODS_VIEW: "finance.read.accounting_periods",
   ACCOUNTING_PERIODS_UPDATE: "finance.update.accounting_periods",
   /** Stock on hand at moving average, opening stock, stock counts (P7, §8.1). */
+  /** Transport-fee rates per product (masterdata), priced per tabung or per kg. */
+  TRANSPORT_TARIFFS_VIEW: "masterdata.read.transport_fee_tariffs",
+  TRANSPORT_TARIFFS_CREATE: "masterdata.create.transport_fee_tariffs",
   INVENTORY_VIEW: "finance.read.inventory",
   INVENTORY_CREATE: "finance.create.inventory",
 

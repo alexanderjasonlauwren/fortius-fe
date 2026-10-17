@@ -1,4 +1,7 @@
 import { scopeKey } from "@/lib/scope";
+import { TransportTariffPanel } from "@/features/products/components/TransportTariffPanel";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -365,6 +368,11 @@ export function ProductFormPage() {
           </Button>
         </div>
       </form>
+      {isEdit && id && (
+        <CanAccess permission={PERMISSIONS.TRANSPORT_TARIFFS_VIEW}>
+          <TransportTariffPanel productId={id} />
+        </CanAccess>
+      )}
     </div>
   );
 }

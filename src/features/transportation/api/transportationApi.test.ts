@@ -228,7 +228,7 @@ describe("getDocument", () => {
           outlet_count: 1,
           qty: 89_040,
           weight_kg: 267_120,
-          rate_per_kg: 354.64,
+          rate_basis: "per_kg", rate: 354.64,
           amount: 94_731_436.8,
         },
       ],
@@ -242,7 +242,7 @@ describe("getDocument", () => {
           product_code: "LPG-003",
           qty: 89_040,
           weight_kg: 267_120,
-          rate_per_kg: 354.64,
+          rate_basis: "per_kg", rate: 354.64,
           amount: 94_731_436.8,
           has_drift: false,
         },
@@ -252,7 +252,7 @@ describe("getDocument", () => {
         group_count: 1,
         total_qty: 89_040,
         total_weight_kg: 267_120,
-        rates: [{ rate_per_kg: 354.64, qty: 89_040, weight_kg: 267_120, amount: 94_731_436.8 }],
+        rates: [{ rate_basis: "per_kg", rate: 354.64, qty: 89_040, weight_kg: 267_120, amount: 94_731_436.8 }],
         amount: 94_731_436.8,
         sum_of_line_amounts: 94_731_436.8,
         rounding_difference: 0,
@@ -271,6 +271,20 @@ describe("getDocument", () => {
     expect(doc.lines[0].hasDrift).toBe(false);
     expect(doc.footer.amount).toBe(94_731_436.8);
     expect(doc.signatory.companyName).toBe("PT Nugroho Adhiraya");
+    // Each rate travels with its basis (client decision G5).
+    expect(doc.lines[0]).toMatchObject({ rateBasis: "per_kg", rate: 354.64 });
+    expect(doc.groups[0]).toMatchObject({ rateBasis: "per_kg", rate: 354.64 });
+    expect(doc.footer.rates[0]).toMatchObject({ rateBasis: "per_kg", rate: 354.64 });
+  });
+});
+
+describe("tariff display", () => {
+  it("names the unit the rate is priced in", async () => {
+    const { formatTariff } = await import("../lib/rate");
+    const { unitLabel } = await import("@/lib/lexicon");
+    // The tenant's own word for a unit: "tabung" for an LPG agent.
+    expect(formatTariff(1050, "per_unit")).toBe(`Rp 1.050/${unitLabel()}`);
+    expect(formatTariff(354.64, "per_kg")).toBe("Rp 355/kg");
   });
 });
 

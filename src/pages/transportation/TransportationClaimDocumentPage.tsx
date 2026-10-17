@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { printDocument } from "@/lib/export";
 import type { BeritaAcaraGroup, BeritaAcaraLine } from "@/features/transportation/api/contract";
+import { formatTariff } from "@/features/transportation/lib/rate";
 
 const groupColumns: Column<BeritaAcaraGroup>[] = [
   {
@@ -52,9 +53,9 @@ const groupColumns: Column<BeritaAcaraGroup>[] = [
   },
   {
     key: "rate",
-    header: "Tarif/Kg",
+    header: "Tarif",
     align: "right",
-    render: (row) => <span className="data text-xs text-ink-muted">{formatRupiah(row.ratePerKg)}</span>,
+    render: (row) => <span className="data text-xs text-ink-muted">{formatTariff(row.rate, row.rateBasis)}</span>,
   },
   {
     key: "amount",
@@ -131,7 +132,7 @@ function documentHtml(doc: BeritaAcaraDocument): string {
         <tr>
           <th>No.</th><th>Tanggal</th><th>No. DO/LO</th>
           <th style="text-align:right">Tabung</th><th style="text-align:right">Kg</th>
-          <th style="text-align:right">Tarif/Kg</th><th style="text-align:right">Total Rupiah</th>
+          <th style="text-align:right">Tarif</th><th style="text-align:right">Total Rupiah</th>
         </tr>
       </thead>
       <tbody>
@@ -140,7 +141,7 @@ function documentHtml(doc: BeritaAcaraDocument): string {
             (l) => `<tr>
               <td>${l.no}</td><td>${formatDateId(l.deliveryDate)}</td><td class="code">${l.deliveryNumber}</td>
               <td class="num">${l.qty.toLocaleString("id-ID")}</td><td class="num">${l.weightKg.toLocaleString("id-ID")}</td>
-              <td class="num">${formatRupiah(l.ratePerKg)}</td><td class="num">${formatRupiah(l.amount)}</td>
+              <td class="num">${formatTariff(l.rate, l.rateBasis)}</td><td class="num">${formatRupiah(l.amount)}</td>
             </tr>`,
           )
           .join("")}

@@ -25,7 +25,7 @@ import { exportCsv, timestampSuffix } from "@/lib/export";
 import { financeApiHttp } from "@/features/finance/api/financeApi.http";
 import { leafAccounts } from "@/features/finance/lib/accounts";
 import type { ProductEntity } from "@/types/domain";
-import type { ProductApi, ProductFilters, ProductView, StockSummary, UnitOption } from "./contract";
+import type { NewTransportTariff, ProductApi, ProductFilters, ProductView, StockSummary, TransportTariff, UnitOption } from "./contract";
 
 const PAGE_SIZE = 100;
 
@@ -354,6 +354,39 @@ async function exportProducts(): Promise<number> {
   return rows.length;
 }
 
+interface TariffResponse {
+  id: string;
+  rate_basis: "per_unit" | "per_kg";
+  rate: number;
+  principal_reference?: string;
+  effective_from: string;
+  effective_until?: string;
+}
+
+function toTariff(r: TariffResponse): TransportTariff {
+  return {
+    id: r.id,
+    rateBasis: r.rate_basis,
+    rate: r.rate,
+    principalReference: r.principal_reference,
+    effectiveFrom: r.effective_from,
+    effectiveUntil: r.effective_until,
+  };
+}
+
+async function getTariffs(productId: string): Promise<TransportTariff[]> {
+  return ((await getOne<TariffResponse[]>(`/products/${productId}/transport-fee-tariffs`)) ?? []).map(toTariff);
+}
+
+async function createTariff(productId: string, input: NewTransportTariff): Promise<TransportTariff> {
+  return toTariff(await send<TariffResponse>("post", `/products/${productId}/transport-fee-tariffs`, {
+    rate_basis: input.rateBasis,
+    rate: input.rate,
+    effective_from: input.effectiveFrom,
+    principal_reference: input.principalReference || undefined,
+  }));
+}
+
 export const productApiHttp: ProductApi = {
   getProducts,
   getProductDetail,
@@ -363,4 +396,6 @@ export const productApiHttp: ProductApi = {
   getStockSummary,
   exportProducts,
   getUnits,
+  getTariffs,
+  createTariff,
 };

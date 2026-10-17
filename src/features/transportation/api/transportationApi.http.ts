@@ -7,6 +7,7 @@
  * ClaimStatus union are the same set, unlike delivery_status/payment_status
  * elsewhere in this codebase), so no translation is needed either way.
  */
+import type { RateBasis } from "../lib/rate";
 import { getList, getOne, send } from "@/lib/api";
 import type { ClaimStatus, ID } from "@/types/domain";
 import type {
@@ -150,7 +151,8 @@ interface BeritaAcaraResponse {
     outlet_count: number;
     qty: number;
     weight_kg: number;
-    rate_per_kg: number;
+    rate_basis: RateBasis;
+    rate: number;
     amount: number;
   }>;
   lines: Array<{
@@ -162,7 +164,8 @@ interface BeritaAcaraResponse {
     product_code: string;
     qty: number;
     weight_kg: number;
-    rate_per_kg: number;
+    rate_basis: RateBasis;
+    rate: number;
     amount: number;
     has_drift: boolean;
     current_delivered_qty?: number;
@@ -172,7 +175,7 @@ interface BeritaAcaraResponse {
     group_count: number;
     total_qty: number;
     total_weight_kg: number;
-    rates: Array<{ rate_per_kg: number; qty: number; weight_kg: number; amount: number }>;
+    rates: Array<{ rate_basis: RateBasis; rate: number; qty: number; weight_kg: number; amount: number }>;
     amount: number;
     sum_of_line_amounts: number;
     rounding_difference: number;
@@ -204,7 +207,8 @@ async function getDocument(id: ID): Promise<BeritaAcaraDocument> {
       outletCount: g.outlet_count,
       qty: g.qty,
       weightKg: g.weight_kg,
-      ratePerKg: g.rate_per_kg,
+      rateBasis: g.rate_basis,
+      rate: g.rate,
       amount: g.amount,
     })),
     lines: row.lines.map((l) => ({
@@ -216,7 +220,8 @@ async function getDocument(id: ID): Promise<BeritaAcaraDocument> {
       productCode: l.product_code,
       qty: l.qty,
       weightKg: l.weight_kg,
-      ratePerKg: l.rate_per_kg,
+      rateBasis: l.rate_basis,
+      rate: l.rate,
       amount: l.amount,
       hasDrift: l.has_drift,
       currentDeliveredQty: l.current_delivered_qty,
@@ -227,7 +232,8 @@ async function getDocument(id: ID): Promise<BeritaAcaraDocument> {
       totalQty: row.footer.total_qty,
       totalWeightKg: row.footer.total_weight_kg,
       rates: row.footer.rates.map((r) => ({
-        ratePerKg: r.rate_per_kg,
+        rateBasis: r.rate_basis,
+        rate: r.rate,
         qty: r.qty,
         weightKg: r.weight_kg,
         amount: r.amount,

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TextInput } from "@/components/common/Field";
 import { Panel, PanelBody, PanelHeader } from "@/components/common/Panel";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { scopeKey } from "@/lib/scope";
@@ -49,9 +50,8 @@ export function LivePenyaluranPanel() {
         <div className="flex flex-wrap items-end gap-2">
           <label className="space-y-1 text-xs font-medium text-ink" htmlFor="sim3lon-live-period">
             <span>Periode</span>
-            <input id="sim3lon-live-period" type="month" value={period}
-              onChange={(event) => { setPeriod(event.target.value); setSelectedId(null); }}
-              className="block rounded-sm border border-line bg-panel px-3 py-2 text-sm text-ink" />
+            <TextInput id="sim3lon-live-period" type="month" value={period} className="w-44"
+              onChange={(event) => { setPeriod(event.target.value); setSelectedId(null); }} />
           </label>
           <Button size="sm" onClick={() => sync.mutate(period)} disabled={!/^\d{4}-(0[1-9]|1[0-2])$/.test(period) || pending}>
             {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}

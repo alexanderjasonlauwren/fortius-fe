@@ -9,6 +9,7 @@
  * this type says "BAST" -- see the plan's own decision 7 for why the words
  * split there.
  */
+import type { RateBasis } from "../lib/rate";
 import type { ClaimStatus, ID, TransportationClaimEntity } from "@/types/domain";
 
 export type ClaimView = TransportationClaimEntity;
@@ -98,7 +99,9 @@ export interface BeritaAcaraGroup {
   outletCount: number;
   qty: number;
   weightKg: number;
-  ratePerKg: number;
+  /** Per tabung (client decision G5) or per kg; rate is in that basis. */
+  rateBasis: RateBasis;
+  rate: number;
   amount: number;
 }
 
@@ -111,7 +114,9 @@ export interface BeritaAcaraLine {
   productCode: string;
   qty: number;
   weightKg: number;
-  ratePerKg: number;
+  /** Per tabung (client decision G5) or per kg; rate is in that basis. */
+  rateBasis: RateBasis;
+  rate: number;
   amount: number;
   /** True when the delivery's own delivered quantity has changed since this line was generated. */
   hasDrift: boolean;
@@ -119,7 +124,8 @@ export interface BeritaAcaraLine {
 }
 
 export interface FooterRate {
-  ratePerKg: number;
+  rateBasis: RateBasis;
+  rate: number;
   qty: number;
   weightKg: number;
   amount: number;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Upload } from "lucide-react";
 import {
@@ -23,6 +23,7 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors },
@@ -73,11 +74,14 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
           error={errors.periodeMulai?.message}
           required
         >
-          <TextInput
-            id="periodeMulai"
-            type="date"
-            invalid={!!errors.periodeMulai}
-            {...register("periodeMulai")}
+          {/* Controller, not register(): reset() writes the DOM directly, which
+              the themed date picker cannot observe. */}
+          <Controller
+            control={control}
+            name="periodeMulai"
+            render={({ field }) => (
+              <TextInput id="periodeMulai" type="date" invalid={!!errors.periodeMulai} {...field} />
+            )}
           />
         </Field>
         <Field
@@ -86,11 +90,14 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
           error={errors.periodeBerakhir?.message}
           required
         >
-          <TextInput
-            id="periodeBerakhir"
-            type="date"
-            invalid={!!errors.periodeBerakhir}
-            {...register("periodeBerakhir")}
+          {/* Controller, not register(): reset() writes the DOM directly, which
+              the themed date picker cannot observe. */}
+          <Controller
+            control={control}
+            name="periodeBerakhir"
+            render={({ field }) => (
+              <TextInput id="periodeBerakhir" type="date" invalid={!!errors.periodeBerakhir} {...field} />
+            )}
           />
         </Field>
       </div>
