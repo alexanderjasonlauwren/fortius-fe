@@ -1,7 +1,8 @@
 import { scopeKey } from "@/lib/scope";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, FileText, Printer } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ArrowLeft, FileDown, FileText, Printer } from "lucide-react";
 import { getDocument, type BeritaAcaraDocument } from "@/features/transportation/api/transportationApi";
 import { CLAIM_STATUS_LABEL } from "@/features/transportation/api/contract";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -15,6 +16,9 @@ import { formatDateId, formatRupiah } from "@/lib/format";
 import { printDocument } from "@/lib/export";
 import type { BeritaAcaraGroup, BeritaAcaraLine, LoadingOrderLine } from "@/features/transportation/api/contract";
 import { formatRate, formatTariff } from "@/features/transportation/lib/rate";
+import { downloadBeritaAcaraPdf, periodMonth } from "@/features/transportation/lib/beritaAcaraPdf";
+import { ActionTooltip } from "@/components/common/ActionTooltip";
+import { useToast } from "@/hooks/useToast";
 
 const groupColumns: Column<BeritaAcaraGroup>[] = [
   {
@@ -149,13 +153,6 @@ const loColumns: Column<LoadingOrderLine>[] = [
   },
 ];
 
-/** "MARET 2026" -- the BA LO names the month its LOs fall in. */
-function periodMonth(periodStart?: string): string {
-  if (!periodStart) return "";
-  const d = new Date(`${periodStart}T00:00:00`);
-  return d.toLocaleDateString("id-ID", { month: "long", year: "numeric" }).toUpperCase();
-}
-
 /**
  * The BA LO as the client uploads it to Pertamina for the BAST: one row per
  * LO with its tabung, kg, Rp/kg and total, the totals, and the director's
@@ -262,6 +259,20 @@ export function TransportationClaimDocumentPage() {
     queryKey: [...scopeKey(), "transportation-claim-document", id],
     queryFn: () => getDocument(id),
   });
+  const { toast } = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  const exportPdf = async () => {
+    if (!query.data) return;
+    setExporting(true);
+    try {
+      await downloadBeritaAcaraPdf(query.data);
+    } catch (error) {
+      toast({ title: "PDF tidak dapat dibuat", description: (error as Error).message, tone: "error" });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (query.isLoading) {
     return (
@@ -306,15 +317,28 @@ export function TransportationClaimDocumentPage() {
         description={`Periode ${formatDateId(header.periodStart)} – ${formatDateId(header.periodEnd)}. ${header.handoverReference ? `No. BAST ${header.handoverReference}.` : "Belum ada nomor BAST."}`}
         meta={<StatusBadge variant={getStatusVariant(CLAIM_STATUS_LABEL[header.claimStatus])} label={CLAIM_STATUS_LABEL[header.claimStatus]} />}
         actions={
-          <Button
-            variant="outline"
-            onClick={() =>
-              printDocument(`${doc.kind === "lo" ? "BA LO" : "Berita Acara"} ${header.claimNumber}`, documentHtml(doc))
-            }
-          >
-            <Printer className="h-3.5 w-3.5" />
-            Cetak
-          </Button>
+          <div className="flex gap-2">
+            <ActionTooltip label="Buka dialog cetak browser untuk mencetak ke printer">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  printDocument(`${doc.kind === "lo" ? "BA LO" : "Berita Acara"} ${header.claimNumber}`, documentHtml(doc))
+                }
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Cetak
+              </Button>
+            </ActionTooltip>
+            <ActionTooltip
+              label="Unduh berkas PDF untuk diunggah ke iVendor atau dikirim ke Pertamina"
+              disabled={exporting}
+            >
+              <Button onClick={exportPdf} disabled={exporting}>
+                <FileDown className="h-3.5 w-3.5" />
+                {exporting ? "Menyiapkan PDF…" : "Unduh PDF"}
+              </Button>
+            </ActionTooltip>
+          </div>
         }
       />
 

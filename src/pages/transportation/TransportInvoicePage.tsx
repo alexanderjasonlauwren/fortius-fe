@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ActionTooltip } from "@/components/common/ActionTooltip";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { printDocument } from "@/lib/export";
 import { invoiceHtml } from "@/features/transportation/lib/invoiceHtml";
@@ -186,16 +187,20 @@ export function TransportInvoicePage() {
       header: "",
       render: (row) => (
         <div className="flex justify-end gap-1">
-          <Button variant="ghost" size="icon-xs" asChild aria-label={`Lihat BA ${row.claimNumber}`}>
-            <Link to={`/transportation-claims/${row.id}`}>
-              <Eye className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-          <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
-            <Button size="xs" onClick={() => setCreatingFor(row)}>
-              <FilePlus2 className="h-3.5 w-3.5" />
-              Buat invoice
+          <ActionTooltip label="Lihat Berita Acara / BA LO klaim ini">
+            <Button variant="ghost" size="icon-xs" asChild aria-label={`Lihat BA ${row.claimNumber}`}>
+              <Link to={`/transportation-claims/${row.id}`}>
+                <Eye className="h-3.5 w-3.5" />
+              </Link>
             </Button>
+          </ActionTooltip>
+          <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
+            <ActionTooltip label="Buat invoice senilai BA LO, terisi dari invoice sebelumnya">
+              <Button size="xs" onClick={() => setCreatingFor(row)}>
+                <FilePlus2 className="h-3.5 w-3.5" />
+                Buat invoice
+              </Button>
+            </ActionTooltip>
           </CanAccess>
         </div>
       ),
@@ -242,19 +247,23 @@ export function TransportInvoicePage() {
       header: "",
       render: (row) => (
         <div className="flex justify-end gap-1">
-          <Button variant="ghost" size="icon-xs" asChild aria-label={`Lihat BA ${row.claimNumber}`}>
-            <Link to={`/transportation-claims/${row.claimId}`}>
-              <Eye className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={`Cetak invoice ${row.invoiceNumber}`}
-            onClick={() => printInvoice(row)}
-          >
-            <Printer className="h-3.5 w-3.5" />
-          </Button>
+          <ActionTooltip label="Lihat Berita Acara / BA LO yang ditagih invoice ini">
+            <Button variant="ghost" size="icon-xs" asChild aria-label={`Lihat BA ${row.claimNumber}`}>
+              <Link to={`/transportation-claims/${row.claimId}`}>
+                <Eye className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </ActionTooltip>
+          <ActionTooltip label="Cetak ulang invoice ini">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Cetak invoice ${row.invoiceNumber}`}
+              onClick={() => printInvoice(row)}
+            >
+              <Printer className="h-3.5 w-3.5" />
+            </Button>
+          </ActionTooltip>
         </div>
       ),
     },

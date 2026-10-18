@@ -21,6 +21,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { ActionTooltip } from "@/components/common/ActionTooltip";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getStatusVariant, spineFor } from "@/lib/status";
 import { Field, SearchInput, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
@@ -257,77 +258,87 @@ export function TransportationClaimListPage() {
       render: (row) => (
         <div className="flex justify-end gap-1">
           <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Lihat Berita Acara ${row.claimNumber}`}
-              onClick={() => navigate(`/transportation-claims/${row.id}`)}
-            >
-              <Eye className="h-3.5 w-3.5" />
-            </Button>
+            <ActionTooltip label="Lihat Berita Acara / BA LO -- cetak atau unduh PDF dari sana">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Lihat Berita Acara ${row.claimNumber}`}
+                onClick={() => navigate(`/transportation-claims/${row.id}`)}
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </Button>
+            </ActionTooltip>
           </CanAccess>
           {(row.claimStatus === "approved" || row.claimStatus === "paid") && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              asChild
-              aria-label={`Invoice ${row.claimNumber}`}
-              title="Invoice transport fee (Tahap 2)"
-            >
-              <Link to="/transport-invoices">
-                <ReceiptText className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
+            <ActionTooltip label="Invoice transport fee (Tahap 2) untuk BAST yang sudah disetujui">
+              <Button variant="ghost" size="icon-xs" asChild aria-label={`Invoice ${row.claimNumber}`}>
+                <Link to="/transport-invoices">
+                  <ReceiptText className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </ActionTooltip>
           )}
           {row.claimStatus === "draft" && (
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Buat lini ${row.claimNumber}`}
-                title="Buat/perbarui lini dari pengiriman pada periode ini"
+              <ActionTooltip
+                label="Hitung lini dari pengiriman (surat jalan) yang selesai pada periode ini"
                 disabled={generateMutation.isPending}
-                onClick={() => generateMutation.mutate(row.id)}
               >
-                <Calculator className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Ambil LO dari SIM3LON ${row.claimNumber}`}
-                title="Ambil LO dari SIM3LON (BA LO): setiap LO LPG 3 kg pada periode ini × tarif per kg"
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Buat lini ${row.claimNumber}`}
+                  disabled={generateMutation.isPending}
+                  onClick={() => generateMutation.mutate(row.id)}
+                >
+                  <Calculator className="h-3.5 w-3.5" />
+                </Button>
+              </ActionTooltip>
+              <ActionTooltip
+                label="Ambil LO dari SIM3LON (BA LO): setiap LO LPG 3 kg pada periode ini × tarif per kg"
                 disabled={loMutation.isPending}
-                onClick={() => loMutation.mutate(row.id)}
               >
-                <CloudDownload className="h-3.5 w-3.5" />
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Ambil LO dari SIM3LON ${row.claimNumber}`}
+                  disabled={loMutation.isPending}
+                  onClick={() => loMutation.mutate(row.id)}
+                >
+                  <CloudDownload className="h-3.5 w-3.5" />
+                </Button>
+              </ActionTooltip>
             </CanAccess>
           )}
           <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Ubah status ${row.claimNumber}`}
-              onClick={() => openStatusEditor(row)}
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Ubah ${row.claimNumber}`}
-              onClick={() =>
-                openEditor({
-                  id: row.id,
-                  version: row.version,
-                  period: row.periodStart?.slice(0, 7) ?? "",
-                  handoverReference: row.handoverReference ?? "",
-                  handoverDate: row.handoverDate,
-                })
-              }
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
+            <ActionTooltip label="Ubah status: ajukan, disetujui, ditolak, atau tandai lunas">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Ubah status ${row.claimNumber}`}
+                onClick={() => openStatusEditor(row)}
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+              </Button>
+            </ActionTooltip>
+            <ActionTooltip label="Ubah nomor dan tanggal serah terima BAST">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Ubah ${row.claimNumber}`}
+                onClick={() =>
+                  openEditor({
+                    id: row.id,
+                    version: row.version,
+                    period: row.periodStart?.slice(0, 7) ?? "",
+                    handoverReference: row.handoverReference ?? "",
+                    handoverDate: row.handoverDate,
+                  })
+                }
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            </ActionTooltip>
           </CanAccess>
           {/* Only a draft may be deleted -- mirrors the service's own rule
               (a submitted claim is a record of something already sent to
@@ -335,15 +346,17 @@ export function TransportationClaimListPage() {
               always fail past draft. */}
           {row.claimStatus === "draft" && (
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_DELETE}>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Hapus ${row.claimNumber}`}
-                onClick={() => setPendingDelete(row)}
-                className="hover:bg-rust-soft hover:text-rust-ink"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              <ActionTooltip label="Hapus klaim draft ini">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Hapus ${row.claimNumber}`}
+                  onClick={() => setPendingDelete(row)}
+                  className="hover:bg-rust-soft hover:text-rust-ink"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </ActionTooltip>
             </CanAccess>
           )}
         </div>
@@ -360,18 +373,22 @@ export function TransportationClaimListPage() {
         actions={
           <div className="flex gap-2">
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
-              <Button variant="outline" asChild>
-                <Link to="/transportation-claims/recap">
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  Rekap bulanan
-                </Link>
-              </Button>
+              <ActionTooltip label="Rekap per bulan: jumlah klaim, nilai, yang sudah dibayar dan sisa piutang">
+                <Button variant="outline" asChild>
+                  <Link to="/transportation-claims/recap">
+                    <BarChart3 className="h-3.5 w-3.5" />
+                    Rekap bulanan
+                  </Link>
+                </Button>
+              </ActionTooltip>
             </CanAccess>
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_CREATE}>
-              <Button onClick={() => openEditor(EMPTY)}>
-                <Plus className="h-3.5 w-3.5" />
-                Buka klaim baru
-              </Button>
+              <ActionTooltip label="Buka klaim draft untuk satu bulan, lalu isi lininya dari LO SIM3LON atau pengiriman">
+                <Button onClick={() => openEditor(EMPTY)}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Buka klaim baru
+                </Button>
+              </ActionTooltip>
             </CanAccess>
           </div>
         }
