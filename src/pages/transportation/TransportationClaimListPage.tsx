@@ -2,7 +2,7 @@ import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Calculator, CloudDownload, Eye, FileText, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { BarChart3, Calculator, CloudDownload, Eye, FileText, Pencil, Plus, ReceiptText, ShieldCheck, Trash2 } from "lucide-react";
 import {
   createClaim,
   deleteClaim,
@@ -266,6 +266,19 @@ export function TransportationClaimListPage() {
               <Eye className="h-3.5 w-3.5" />
             </Button>
           </CanAccess>
+          {(row.claimStatus === "approved" || row.claimStatus === "paid") && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              asChild
+              aria-label={`Invoice ${row.claimNumber}`}
+              title="Invoice transport fee (Tahap 2)"
+            >
+              <Link to="/transport-invoices">
+                <ReceiptText className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          )}
           {row.claimStatus === "draft" && (
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
               <Button

@@ -15,8 +15,10 @@ import type {
   ClaimFilters,
   ClaimView,
   CreateClaimInput,
+  CreateTransportInvoiceInput,
   RecapFilters,
   RecapReport,
+  TransportInvoice,
   TransportationClaimApi,
   UpdateClaimInput,
   UpdateClaimStatusInput,
@@ -338,6 +340,104 @@ async function getRecap(filters?: RecapFilters): Promise<RecapReport> {
   };
 }
 
+/** Mirrors the backend's transportationclaim.InvoiceResponse. */
+interface InvoiceResponse {
+  id?: string;
+  claim_id: string;
+  claim_number: string;
+  claim_status: ClaimStatus;
+  invoice_number: string;
+  invoice_date: string;
+  recipient_name: string;
+  recipient_address?: string;
+  order_reference?: string;
+  order_date?: string;
+  tax_invoice_number?: string;
+  tax_invoice_date?: string;
+  description: string;
+  amount: number;
+  vat_rate: number;
+  vat_amount: number;
+  total: number;
+  bank?: { id: string; bank_name: string; account_number: string; account_holder: string };
+  place?: string;
+  signatory: { company_name: string; name?: string; title?: string; city?: string };
+  created_at?: string;
+}
+
+function toInvoice(row: InvoiceResponse): TransportInvoice {
+  return {
+    id: row.id,
+    claimId: row.claim_id,
+    claimNumber: row.claim_number,
+    claimStatus: row.claim_status,
+    invoiceNumber: row.invoice_number,
+    invoiceDate: row.invoice_date,
+    recipientName: row.recipient_name,
+    recipientAddress: row.recipient_address,
+    orderReference: row.order_reference,
+    orderDate: row.order_date,
+    taxInvoiceNumber: row.tax_invoice_number,
+    taxInvoiceDate: row.tax_invoice_date,
+    description: row.description,
+    amount: row.amount,
+    vatRate: row.vat_rate,
+    vatAmount: row.vat_amount,
+    total: row.total,
+    bank: row.bank && {
+      id: row.bank.id,
+      bankName: row.bank.bank_name,
+      accountNumber: row.bank.account_number,
+      accountHolder: row.bank.account_holder,
+    },
+    place: row.place,
+    signatory: {
+      companyName: row.signatory.company_name,
+      name: row.signatory.name,
+      title: row.signatory.title,
+      city: row.signatory.city,
+    },
+    createdAt: row.created_at,
+  };
+}
+
+/** An empty optional field is left out: the server validates a sent date's format. */
+function optional(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+async function getInvoiceDraft(claimId: ID): Promise<TransportInvoice> {
+  return toInvoice(await getOne<InvoiceResponse>(`/transportation-claims/${claimId}/invoice/draft`));
+}
+
+async function createInvoice(input: CreateTransportInvoiceInput): Promise<TransportInvoice> {
+  return toInvoice(
+    await send<InvoiceResponse>("post", `/transportation-claims/${input.claimId}/invoice`, {
+      invoice_number: input.invoiceNumber.trim(),
+      invoice_date: input.invoiceDate,
+      recipient_name: input.recipientName.trim(),
+      recipient_address: optional(input.recipientAddress),
+      order_reference: optional(input.orderReference),
+      order_date: optional(input.orderDate),
+      tax_invoice_number: optional(input.taxInvoiceNumber),
+      tax_invoice_date: optional(input.taxInvoiceDate),
+      description: input.description.trim(),
+      vat_amount: input.vatAmount,
+      bank_account_id: input.bankAccountId,
+      place: optional(input.place),
+    }),
+  );
+}
+
+async function getInvoice(claimId: ID): Promise<TransportInvoice> {
+  return toInvoice(await getOne<InvoiceResponse>(`/transportation-claims/${claimId}/invoice`));
+}
+
+async function listInvoices(): Promise<TransportInvoice[]> {
+  return (await getOne<InvoiceResponse[]>("/transportation-claims/invoices")).map(toInvoice);
+}
+
 export const transportationApiHttp: TransportationClaimApi = {
   getClaims,
   createClaim,
@@ -348,4 +448,8 @@ export const transportationApiHttp: TransportationClaimApi = {
   generateFromSim3lon,
   getDocument,
   getRecap,
+  getInvoiceDraft,
+  createInvoice,
+  getInvoice,
+  listInvoices,
 };

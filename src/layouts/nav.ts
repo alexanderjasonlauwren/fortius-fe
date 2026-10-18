@@ -16,6 +16,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileSignature,
+  FileCheck,
   FileSpreadsheet,
   FileText,
   Fuel,
@@ -172,6 +173,15 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: ReceiptText,
         hint: "Tagihan penjualan, umur piutang, dan nota kredit",
         permission: PERMISSIONS.PAYMENTS_VIEW,
+      },
+      {
+        // Tahap 2 of the transport fee SOP: the invoice to Pertamina once
+        // the BAST is accepted.
+        name: "Invoice Transport Fee",
+        href: "/transport-invoices",
+        icon: FileCheck,
+        hint: "Invoice ke Pertamina untuk BAST yang sudah disetujui",
+        permission: PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW,
       },
       {
         name: "Penerimaan Kas",

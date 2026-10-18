@@ -15,6 +15,7 @@ import { SIM3LONIntegrationPage } from "./pages/integration/SIM3LONIntegrationPa
 import { TransportationClaimListPage } from "./pages/transportation/TransportationClaimListPage";
 import { TransportationClaimDocumentPage } from "./pages/transportation/TransportationClaimDocumentPage";
 import { TransportationRecapPage } from "./pages/transportation/TransportationRecapPage";
+import { TransportInvoicePage } from "./pages/transportation/TransportInvoicePage";
 import { ExpensePage } from "./pages/expenses/ExpensePage";
 import { SopirPage } from "./pages/sopir/SopirPage";
 import { OcrPage } from "./pages/ocr/OcrPage";
@@ -132,6 +133,11 @@ const router = createBrowserRouter([
       { path: "transportation-claims/recap", element: (
         <RequirePermission permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
           <TransportationRecapPage />
+        </RequirePermission>
+      ) },
+      { path: "transport-invoices", element: (
+        <RequirePermission permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
+          <TransportInvoicePage />
         </RequirePermission>
       ) },
       { path: "transportation-claims/:id", element: (

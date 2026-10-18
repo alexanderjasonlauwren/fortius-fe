@@ -393,3 +393,69 @@ describe("BA LO from SIM3LON", () => {
     expect(out.taxWithheld).toBe(258_745.34);
   });
 });
+
+describe("transport fee invoice", () => {
+  const invoiceWire = {
+    id: "33333333-3333-4333-8333-333333333333",
+    claim_id: "c-9",
+    claim_number: "BAST-SLT-202610-0003",
+    claim_status: "approved",
+    invoice_number: "01/PT.BDA/TF/12102026",
+    invoice_date: "2026-10-12",
+    recipient_name: "PT. PERTAMINA PATRA NIAGA",
+    order_reference: "SP - 001/PND700000/2025-S0",
+    order_date: "2025-01-03",
+    tax_invoice_number: "08002600419112271",
+    description: "Transport fee Agen LPG 3kg Periode September 2026",
+    amount: 12_298_915,
+    vat_rate: 12,
+    vat_amount: 0,
+    total: 12_298_915,
+    bank: { id: "b-1", bank_name: "BNI", account_number: "1792837164", account_holder: "PT. BHAKTA DHARMA ANINDITA" },
+    signatory: { company_name: "PT. Bhakta Dharma Anindita", name: "Bimbo Adhi Nugroho" },
+  };
+
+  it("reads an issued invoice onto the console's names", async () => {
+    getOne.mockResolvedValue(invoiceWire);
+    const out = await transportationApiHttp.getInvoice("c-9");
+    expect(getOne).toHaveBeenCalledWith("/transportation-claims/c-9/invoice");
+    expect(out).toMatchObject({
+      invoiceNumber: "01/PT.BDA/TF/12102026",
+      orderReference: "SP - 001/PND700000/2025-S0",
+      taxInvoiceNumber: "08002600419112271",
+      total: 12_298_915,
+      bank: { bankName: "BNI", accountNumber: "1792837164" },
+      signatory: { name: "Bimbo Adhi Nugroho" },
+    });
+  });
+
+  it("leaves blank optional fields out, so the server never sees an empty date", async () => {
+    send.mockResolvedValue(invoiceWire);
+    await transportationApiHttp.createInvoice({
+      claimId: "c-9",
+      invoiceNumber: " 01/PT.BDA/TF/12102026 ",
+      invoiceDate: "2026-10-12",
+      recipientName: "PT. PERTAMINA PATRA NIAGA",
+      orderReference: "SP - 001/PND700000/2025-S0",
+      orderDate: "",
+      taxInvoiceDate: "  ",
+      description: "Transport fee Agen LPG 3kg Periode September 2026",
+      vatAmount: 0,
+      bankAccountId: "b-1",
+    });
+    const [method, path, body] = send.mock.calls[0];
+    expect(method).toBe("post");
+    expect(path).toBe("/transportation-claims/c-9/invoice");
+    expect(body).toMatchObject({ invoice_number: "01/PT.BDA/TF/12102026", bank_account_id: "b-1", vat_amount: 0 });
+    expect(body.order_date).toBeUndefined();
+    expect(body.tax_invoice_date).toBeUndefined();
+    expect(body).not.toHaveProperty("amount");
+  });
+
+  it("lists every issued invoice", async () => {
+    getOne.mockResolvedValue([invoiceWire]);
+    const out = await transportationApiHttp.listInvoices();
+    expect(getOne).toHaveBeenCalledWith("/transportation-claims/invoices");
+    expect(out[0].claimNumber).toBe("BAST-SLT-202610-0003");
+  });
+});

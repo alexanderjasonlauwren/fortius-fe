@@ -215,6 +215,62 @@ export interface RecapReport {
   totals: RecapTotals;
 }
 
+/* ── the transport fee invoice (Tahap 2) ────────────────────────────────── */
+
+export interface TransportInvoiceBank {
+  id: ID;
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+}
+
+/**
+ * The invoice to Pertamina for an accepted BAST -- issued, or (from the
+ * draft) the values a new one starts from, in which case `id` is absent.
+ * The amount is always the claim's own: the BA LO total.
+ */
+export interface TransportInvoice {
+  id?: ID;
+  claimId: ID;
+  claimNumber: string;
+  claimStatus: ClaimStatus;
+  invoiceNumber: string;
+  invoiceDate: string;
+  recipientName: string;
+  recipientAddress?: string;
+  /** No. PO / No. SPB of Pertamina's order. */
+  orderReference?: string;
+  orderDate?: string;
+  /** The e-Faktur's serial number. */
+  taxInvoiceNumber?: string;
+  taxInvoiceDate?: string;
+  description: string;
+  amount: number;
+  vatRate: number;
+  vatAmount: number;
+  total: number;
+  bank?: TransportInvoiceBank;
+  place?: string;
+  signatory: Signatory;
+  createdAt?: string;
+}
+
+export interface CreateTransportInvoiceInput {
+  claimId: ID;
+  invoiceNumber: string;
+  invoiceDate: string;
+  recipientName: string;
+  recipientAddress?: string;
+  orderReference?: string;
+  orderDate?: string;
+  taxInvoiceNumber?: string;
+  taxInvoiceDate?: string;
+  description: string;
+  vatAmount?: number;
+  bankAccountId?: ID;
+  place?: string;
+}
+
 export interface TransportationClaimApi {
   getClaims(filters?: ClaimFilters): Promise<ClaimView[]>;
   createClaim(input: CreateClaimInput): Promise<ClaimView>;
@@ -227,4 +283,9 @@ export interface TransportationClaimApi {
   generateFromSim3lon(id: ID): Promise<ClaimView>;
   getDocument(id: ID): Promise<BeritaAcaraDocument>;
   getRecap(filters?: RecapFilters): Promise<RecapReport>;
+  /** What a new invoice for an accepted BAST starts from; 409 BAST_NOT_APPROVED / INVOICE_EXISTS. */
+  getInvoiceDraft(claimId: ID): Promise<TransportInvoice>;
+  createInvoice(input: CreateTransportInvoiceInput): Promise<TransportInvoice>;
+  getInvoice(claimId: ID): Promise<TransportInvoice>;
+  listInvoices(): Promise<TransportInvoice[]>;
 }
