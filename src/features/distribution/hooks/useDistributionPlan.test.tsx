@@ -3,8 +3,12 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-const state = vi.hoisted(() => ({ review: vi.fn(), create: vi.fn(), createSource: vi.fn(), save: vi.fn(), apply: vi.fn(), toast: vi.fn(), plans: [] as unknown[], scope: ["tenant", "branch"], intakeMode: "external_schedule" }));
+const state = vi.hoisted(() => ({ review: vi.fn(), create: vi.fn(), createSource: vi.fn(), save: vi.fn(), apply: vi.fn(), toast: vi.fn(), plans: [] as unknown[], scope: ["tenant", "branch"], intakeMode: "external_schedule", canAssign: true }));
 vi.mock("@/lib/scope", () => ({ scopeKey: () => state.scope }));
+vi.mock("@/features/auth/store/authStore", () => ({
+  useAuthStore: (selector: (s: { hasPermission: (p: string) => boolean }) => unknown) =>
+    selector({ hasPermission: (p) => p === "distribution.assign.distribution_orders" && state.canAssign }),
+}));
 vi.mock("@/hooks/useToast", () => ({ useToast: () => ({ toast: state.toast }) }));
 vi.mock("./useIntakePolicy", () => ({ useIntakePolicy: () => ({ data: state.intakeMode, allowsManualIntake: state.intakeMode === "manual" }) }));
 vi.mock("../api/sourcePlanReview", () => ({ getSourcePlanReview: state.review }));
@@ -20,6 +24,7 @@ import { toTripAssignments, useDistributionPlan } from "./useDistributionPlan";
 const plan = { id: "plan", kode: "RD-1", saId: "sa", branchId: "branch", tanggal: "2026-09-19", status: "Draft", version: 1 };
 beforeEach(() => {
   state.plans = [];
+  state.canAssign = true;
   state.scope = ["tenant", "branch"];
   state.intakeMode = "external_schedule";
   state.review.mockReset().mockResolvedValue({ status: "no_source", date: plan.tanggal, rows: [], unresolvedRegistrationCodes: [] }); state.create.mockReset(); state.createSource.mockReset(); state.save.mockReset().mockResolvedValue({ ...plan, version: 2 }); state.apply.mockReset().mockResolvedValue(undefined); state.toast.mockReset();
@@ -134,6 +139,33 @@ describe("source-backed plan creation", () => {
       [{ driverId: "driver-a", vehicleId: "vehicle-a", tripNo: 1, stops: [{ outletId: "outlet-a", sequenceNo: 1 }] }],
       2,
     );
+  });
+
+  // Without the assign permission the crew pickers are read-only, so the
+  // save sends only the stops: an assignment call would be refused after the
+  // stops had been written and report the whole save as failed.
+  it("saves only the stops for a user who may not assign the crew", async () => {
+    state.canAssign = false;
+    state.plans = [plan];
+    state.save.mockResolvedValue({ ...plan, version: 2 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(useDistributionPlan, { wrapper });
+    await waitFor(() => expect(result.current.selectedPlan?.id).toBe(plan.id));
+
+    const rows = [{
+      id: "row-a", outletId: "outlet-a", outlet: "A", alamat: "Alamat A",
+      lines: [{ productId: "product", jumlah: 10 }], jumlahUnit: 10,
+      driverId: "driver-a", driver: "Driver A", vehicleId: "vehicle-a", vehicle: "Truck A",
+      jamPengiriman: "08:00", tripNo: 1, statusBayar: "Belum Lunas" as const,
+      sisaKuotaOutlet: 0, piutang: 0, piutangJatuhTempo: 0,
+    }];
+    await act(async () => {
+      await result.current.saveDraftMutation.mutateAsync({ planId: plan.id, rows, version: 1 });
+    });
+
+    expect(state.save).toHaveBeenCalled();
+    expect(state.apply).not.toHaveBeenCalled();
   });
 });
 

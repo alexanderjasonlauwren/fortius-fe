@@ -315,10 +315,11 @@ export const PERMISSIONS = {
   DELIVERY_PROOFS_VIEW: "distribution.read.delivery_proofs",
   DELIVERY_PROOFS_CREATE: "distribution.create.delivery_proofs",
 
-  // Drivers. Assigning one to a run edits the plan, not the driver, which is
-  // why ASSIGN and MANAGE point at different resources.
+  // Drivers. Assigning one to a run is a decision about the plan, not the
+  // driver, which is why ASSIGN and MANAGE point at different resources --
+  // and its own action, separate from editing the plan's stops.
   DRIVERS_VIEW: "masterdata.read.drivers",
-  DRIVERS_ASSIGN: "distribution.update.distribution_orders",
+  DRIVERS_ASSIGN: "distribution.assign.distribution_orders",
   DRIVERS_MANAGE: "masterdata.update.drivers",
 
   // The fleet is its own resource, with its own permissions, because the

@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
+import { useAuthStore } from "@/features/auth/store/authStore";
 import { formatDateLong, formatNumber } from "@/lib/format";
 import type {
   AssignmentSuggestion,
@@ -216,6 +217,11 @@ export function PlanDetailPanel({
   const [dasar, setDasar] = useResettableState<string | null>([rows, plan?.id], () => null);
 
   const editable = plan?.status === "Draft";
+  // Choosing who drives and in which truck is its own permission
+  // (distribution.assign.distribution_orders): someone may shape the day's
+  // stops without deciding the crew. Without it the crew is shown, not edited.
+  const canAssign = useAuthStore((state) => state.hasPermission(PERMISSIONS.DRIVERS_ASSIGN));
+  const crewEditable = editable && canAssign;
 
   const total = draft.reduce((s, r) => s + r.jumlahUnit, 0);
   /**
@@ -526,7 +532,7 @@ export function PlanDetailPanel({
                   variant="ghost"
                   size="sm"
                   onClick={() => void suggest()}
-                  disabled={draft.length === 0 || dirty || isSuggesting}
+                  disabled={!canAssign || draft.length === 0 || dirty || isSuggesting}
                   title={
                     draft.length === 0
                       ? `Tambahkan ${outletLabel()} terlebih dahulu`
@@ -724,7 +730,7 @@ export function PlanDetailPanel({
         per-row controls stay underneath for the stop that needs its own
         answer.
       */}
-      {editable && selected.size > 0 && (
+      {crewEditable && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-line bg-signal-soft/40 px-5 py-2.5">
           <span className="text-xs font-semibold text-ink">
             {selected.size} titik dipilih
@@ -863,6 +869,7 @@ export function PlanDetailPanel({
                     trip={trip}
                     colSpan={editable ? 7 : 5}
                     editable={editable}
+                    editableCrew={crewEditable}
                     vehicleOptions={vehicleOptions}
                     vehicleUsage={vehicleUsage}
                     onVehicleChange={setTripVehicle}
@@ -876,6 +883,7 @@ export function PlanDetailPanel({
                       key={row.id}
                       row={row}
                       editable={editable}
+                      editableCrew={crewEditable}
                       editableDemand={editable && allowsManualDemand}
                       over={trip.muatan > trip.kapasitas}
                       driverOptions={driverOptions}
@@ -913,6 +921,7 @@ export function PlanDetailPanel({
                       key={row.id}
                       row={row}
                       editable={editable}
+                      editableCrew={crewEditable}
                       editableDemand={editable && allowsManualDemand}
                       over={false}
                       driverOptions={driverOptions}
@@ -1130,6 +1139,7 @@ function Blocker({ children }: { children: React.ReactNode }) {
 function StopRow({
   row,
   editable,
+  editableCrew = editable,
   editableDemand,
   over,
   driverOptions,
@@ -1146,6 +1156,8 @@ function StopRow({
 }: {
   row: PlanRow;
   editable: boolean;
+  /** Whether the driver may be changed: needs the assign permission too. */
+  editableCrew?: boolean;
   editableDemand: boolean;
   /** True when the trip this row sits on is over its truck's capacity. */
   over: boolean;
@@ -1242,7 +1254,7 @@ function StopRow({
         </td>
 
         <td className="px-3 py-2.5">
-          {editable ? (
+          {editableCrew ? (
             <>
               <SelectInput
                 aria-label={`Driver untuk ${row.outlet}`}
@@ -1349,6 +1361,7 @@ function TripHeader({
   trip,
   colSpan,
   editable,
+  editableCrew = editable,
   vehicleOptions,
   vehicleUsage,
   onVehicleChange,
@@ -1358,6 +1371,8 @@ function TripHeader({
   trip: TripGroup;
   colSpan: number;
   editable: boolean;
+  /** Whether the truck may be changed: needs the assign permission too. */
+  editableCrew?: boolean;
   vehicleOptions: VehicleOption[];
   /** Which trip already has each truck out — see the doc comment where this is built. */
   vehicleUsage: Map<string, TripGroup>;
@@ -1404,7 +1419,7 @@ function TripHeader({
             NULL, so a run without a truck cannot be committed at all — which is
             why an unchosen one is called out rather than left blank.
           */}
-          {editable ? (
+          {editableCrew ? (
             <SelectInput
               aria-label={`Armada trip ${trip.tripNo}`}
               className={cn(

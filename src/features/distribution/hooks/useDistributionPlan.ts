@@ -27,6 +27,8 @@ import { compareStops } from "../lib/stopOrder";
 import { outletLabel, unitLabel } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
 import { useIntakePolicy } from "./useIntakePolicy";
+import { useAuthStore } from "@/features/auth/store/authStore";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { getSourcePlanReview } from "../api/sourcePlanReview";
 import { sourcePlanMessage } from "../api/sourcePlanReview.contract";
 import { sourceRowsForEmptyDraft } from "../api/fillSourcePlan";
@@ -35,6 +37,7 @@ export function useDistributionPlan() {
   const queryClient = useQueryClient();
   const intakePolicy = useIntakePolicy();
   const actingScope = scopeKey();
+  const canAssign = useAuthStore((state) => state.hasPermission(PERMISSIONS.DRIVERS_ASSIGN));
 
   const planList = useQuery({ queryKey: [...scopeKey(), "plan-list"], queryFn: getPlanList });
 
@@ -170,7 +173,10 @@ export function useDistributionPlan() {
       // write returned, tied to this mutation's plan, rather than reading the
       // currently selected plan after an await and potentially assigning a
       // different plan's version.
-      if (trips.length > 0) await applyAssignment(planId, trips, savedPlan.version);
+      // Without the assign permission the crew was not editable, so there is
+      // nothing of the user's to send -- and sending would refuse the save
+      // after its stops had already been written.
+      if (trips.length > 0 && canAssign) await applyAssignment(planId, trips, savedPlan.version);
       return { trips: trips.length };
     },
     errorTitle: "Draf tidak tersimpan",
