@@ -34,6 +34,15 @@ export function TenantDetailPage() {
 
   const [confirming, setConfirming] = useState(false);
 
+  // The switch is a token exchange the server may refuse (a tenant visible from
+  // above is not necessarily one this user may act as), so navigation waits
+  // for it rather than racing it.
+  const enter = useDeskMutation({
+    mutationFn: setTenant,
+    errorTitle: "Gagal beralih tenant",
+    onDone: (_result, tenantId) => navigate(`/settings?tenant=${tenantId}`),
+  });
+
   const deactivate = useDeskMutation({
     mutationFn: () => deactivateTenant(id),
     errorTitle: "Tenant tidak dinonaktifkan",
@@ -85,16 +94,10 @@ export function TenantDetailPage() {
                 </Button>
               )}
               <Button
-                onClick={() => {
-                  // The tenant travels in the URL, so the destination has to
-                  // carry it. setTenant writes it to the current location and
-                  // clears the query cache; navigating to a bare "/settings"
-                  // immediately afterwards replaces that location and strips the
-                  // parameter, and useScope then falls back to the root — the
-                  // switch appears to do nothing.
-                  setTenant(t.id);
-                  navigate(`/settings?tenant=${t.id}`);
-                }}
+                // The destination carries the tenant so the link stays honest;
+                // a bare "/settings" would read as naming no tenant at all.
+                onClick={() => enter.mutate(t.id)}
+                disabled={enter.isPending}
               >
                 <LogIn className="mr-1.5 h-4 w-4" />
                 Beralih ke tenant ini

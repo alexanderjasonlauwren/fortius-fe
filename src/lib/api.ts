@@ -90,6 +90,63 @@ async function refreshSession(): Promise<string> {
   return tokens.token;
 }
 
+/**
+ * Exchanges the refresh token at `path` for a new session and stores it.
+ * Returns the new access token.
+ *
+ * For exchanges other than a plain refresh, such as POST /auth/switch-tenant.
+ * It runs under the same single-flight slot as the silent refresh, for the
+ * same reason: both spend the refresh token, and two exchanges presenting one
+ * token look to the server like a stolen token being replayed. A refresh
+ * already running is waited out first so this presents the token it produced;
+ * requests that 401 meanwhile wait on this exchange instead of starting one.
+ *
+ * A bare axios call, like `refreshSession`: through apiClient, a 401 would
+ * re-enter the interceptor, which would wait on this very exchange.
+ */
+export async function exchangeSession<T extends SessionTokens>(
+  path: string,
+  body: (refreshToken: string) => Record<string, unknown>,
+): Promise<string> {
+  if (refreshInFlight) await refreshInFlight.catch(() => undefined);
+
+  const post = (accessToken: string | null) => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) throw new Error("no refresh token");
+    return axios.post<Envelope<T>>(`${apiClient.defaults.baseURL}${path}`, body(refreshToken), {
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+    });
+  };
+
+  const run = (async () => {
+    let response;
+    try {
+      response = await post(getAccessToken());
+    } catch (error) {
+      // The exchange route itself needs a live access token. An expired one
+      // is renewed once here, inside the slot, and the exchange retried with
+      // the rotated refresh token.
+      if (!(error instanceof AxiosError) || error.response?.status !== 401) throw error;
+      response = await post(await refreshSession());
+    }
+    const tokens = response.data.data;
+    setSessionTokens(tokens);
+    return tokens.token;
+  })();
+
+  refreshInFlight = run;
+  try {
+    return await run;
+  } catch (error) {
+    throw toApiError(error);
+  } finally {
+    if (refreshInFlight === run) refreshInFlight = null;
+  }
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {

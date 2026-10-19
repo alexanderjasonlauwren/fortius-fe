@@ -30,16 +30,20 @@ const scope = vi.hoisted(() => ({
   canSeeAll: false,
   setBranch: vi.fn(),
   tenant: { id: "t1", kode: "pt-salatiga", nama: "PT Bimbo Salatiga", level: 1, jenis: "operasional" as const, jenisUsaha: "lpg_distribution" },
-  // The two rows the real driver account's GET /tenants returns: its own
-  // tenant and the group it sits under.
+  // Two switchable tenants: its own and the group it sits under.
   tenants: [
-    { id: "t1", kode: "pt-salatiga", nama: "PT Bimbo Salatiga", level: 1, jenis: "operasional" as const, jenisUsaha: "lpg_distribution" },
-    { id: "t0", kode: "bimbo-holdings", nama: "Bimbo Holdings", level: 0, jenis: "grup" as const, jenisUsaha: "" },
+    { id: "t1", code: "pt-salatiga", name: "PT Bimbo Salatiga", level: 1, viaMembership: true, jenis: "operasional" as const, jenisUsaha: "lpg_distribution" },
+    { id: "t0", code: "bimbo-holdings", name: "Bimbo Holdings", level: 0, viaMembership: false, jenis: "grup" as const, jenisUsaha: "" },
   ],
   canSwitchTenant: true,
   setTenant: vi.fn(),
 }));
 vi.mock("./useScope", () => ({ useScope: () => scope }));
+// Switching goes through the shared mutation hook; its toast and cache
+// plumbing are not what this file tests.
+vi.mock("@/hooks/useDeskMutation", () => ({
+  useDeskMutation: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
+}));
 
 import { ScopeSwitcher } from "./ScopeSwitcher";
 

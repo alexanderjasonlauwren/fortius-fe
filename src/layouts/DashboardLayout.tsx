@@ -5,6 +5,7 @@ import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { useSidebarShortcut, useSidebarStore } from "@/hooks/useSidebar";
 import { useScope } from "@/features/tenancy/useScope";
+import { LinkTenantBanner } from "@/features/tenancy/LinkTenantBanner";
 import { getBranches, getTenants } from "@/features/tenancy/api/tenancyApi";
 import { setBranchRegistry, setTenantRegistry } from "@/features/tenancy/tenantRegistry";
 import { getSettings } from "@/features/settings/api/settingsApi";
@@ -105,14 +106,16 @@ export function DashboardLayout() {
 
       <div className="flex min-h-screen min-w-0 flex-col">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        {/* Keyed on the branch: pages do not read the URL themselves, so without
+        {/* Keyed on the scope: pages do not read the URL themselves, so without
             a remount their query keys would keep the scope they were last
-            rendered with and quietly show the previous branch's data. */}
+            rendered with and quietly show the previous tenant's or branch's
+            data. */}
         <main
           id="konten"
-          key={branchId ?? "semua"}
+          key={`${scope.tenant?.id ?? ""}:${branchId ?? "semua"}`}
           className="flex-1 px-4 pb-14 pt-6 sm:px-6 lg:px-7"
         >
+          <LinkTenantBanner />
           <Outlet />
         </main>
       </div>

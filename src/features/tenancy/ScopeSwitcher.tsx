@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Building2, Check, ChevronDown, Layers, Network } from "lucide-react";
+import { Building2, Check, ChevronDown, Layers, Loader2, Network } from "lucide-react";
 import { useScope } from "./useScope";
+import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { businessTypeLabel } from "./businessType";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/features/auth/store/authStore";
@@ -26,6 +27,10 @@ export function ScopeSwitcher() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const permissions = useAuthStore((s) => s.user?.permissions);
+  const switching = useDeskMutation({
+    mutationFn: setTenant,
+    errorTitle: "Gagal berpindah tenant",
+  });
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -104,14 +109,16 @@ export function ScopeSwitcher() {
               <ul className="max-h-56 overflow-y-auto border-b border-line">
                 {orderedTenants.map((t) => {
                   const active = t.id === tenant?.id;
+                  const pending = switching.isPending && switching.variables === t.id;
                   const displayLevel = t.level + 1;
                   return (
                     <li key={t.id}>
                       <button
                         onClick={() => {
-                          setTenant(t.id);
                           setOpen(false);
+                          if (!active) switching.mutate(t.id);
                         }}
+                        disabled={switching.isPending}
                         className={cn(
                           "flex w-full items-center gap-3 border-l-2 border-transparent px-3 py-2.5 text-left transition-colors hover:bg-panel-sunk",
                           active && "border-signal bg-panel-sunk",
@@ -138,13 +145,22 @@ export function ScopeSwitcher() {
                           )}
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium text-ink">
-                              {t.nama}
+                              {t.name}
                             </span>
                             <span className="block truncate text-2xs text-ink-muted">
-                              Tingkat {displayLevel} · {t.jenis === "grup" ? "Grup induk" : businessTypeLabel(t.jenisUsaha)}
+                              Tingkat {displayLevel}
+                              {t.jenis === "grup"
+                                ? " · Grup induk"
+                                : t.jenisUsaha
+                                  ? ` · ${businessTypeLabel(t.jenisUsaha)}`
+                                  : ""}
+                              {/* Reached only by a grant from a group above:
+                                  acting here borrows the group's authority. */}
+                              {!t.viaMembership && " · lewat grup"}
                             </span>
                           </span>
                         </span>
+                        {pending && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ink-muted" />}
                         {active && <Check className="h-3.5 w-3.5 shrink-0 text-ink" />}
                       </button>
                     </li>

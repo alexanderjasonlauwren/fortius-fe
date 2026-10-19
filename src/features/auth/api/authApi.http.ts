@@ -12,10 +12,10 @@
  * them per request; this reads the same tables at the same moment, so what the
  * console draws and what the server will allow come from one source.
  */
-import { getOne, send } from "@/lib/api";
+import { exchangeSession, getOne, send } from "@/lib/api";
 import { getRefreshToken, setSessionTokens, type SessionTokens } from "@/lib/tokens";
 import type { User } from "@/types/auth";
-import type { AuthApi, SessionResult, SessionTenant } from "./contract";
+import type { AuthApi, SessionResult, SessionTenant, SwitchableTenant } from "./contract";
 
 /** Mirrors the backend's user.LoginResponse. */
 interface LoginResponse extends SessionTokens {
@@ -36,9 +36,18 @@ interface SessionResponse {
     avatar_url?: string;
     status: string;
   };
-  tenant: { tenant_id: number; code: string; name: string };
+  tenant: { tenant_id: string; code: string; name: string };
   roles: string[];
   permissions: { code: string; tenant_wide: boolean }[];
+}
+
+/** Mirrors the backend's user.SwitchableTenant. */
+interface SwitchableTenantRow {
+  tenant_id: string;
+  code: string;
+  name: string;
+  depth: number;
+  via_membership: boolean;
 }
 
 function toDomain(row: SessionResponse): SessionResult {
@@ -107,5 +116,26 @@ export const authApiHttp: AuthApi = {
       // already gone has succeeded at the only thing the user wanted. The
       // caller clears local tokens either way.
     }
+  },
+
+  async listSwitchableTenants(): Promise<SwitchableTenant[]> {
+    const rows = await getOne<SwitchableTenantRow[]>("/auth/switchable-tenants");
+    return rows.map((row) => ({
+      id: row.tenant_id,
+      code: row.code,
+      name: row.name,
+      level: row.depth,
+      viaMembership: row.via_membership,
+    }));
+  },
+
+  async switchTenant(tenantId: string): Promise<SessionResult> {
+    const token = await exchangeSession<LoginResponse>("/auth/switch-tenant", (refreshToken) => ({
+      refresh_token: refreshToken,
+      tenant_id: tenantId,
+    }));
+    // The permission set is per tenant, so it is re-read rather than carried
+    // over: a role held at home may not exist in the subsidiary at all.
+    return readSession(token);
   },
 };
