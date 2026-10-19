@@ -1,19 +1,22 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TextInput } from "@/components/common/Field";
 import { Panel, PanelBody, PanelHeader } from "@/components/common/Panel";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { scopeKey } from "@/lib/scope";
 import { formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { applySIM3LON, getLivePenyaluranCandidates, getSIM3LONReconciliation, syncLivePenyaluran } from "../api/saApi";
 import { buildSIM3LONApplyReview } from "../hooks/useSIM3LONImport";
 import { currentJakartaMonth } from "../lib/period";
+import type { SIM3LONLiveCandidate } from "../types";
 
 export function LivePenyaluranPanel() {
   const [period, setPeriod] = useState(currentJakartaMonth);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const candidates = useQuery({
     queryKey: [...scopeKey(), "sim3lon-live-sa-candidates", period],
     queryFn: () => getLivePenyaluranCandidates(period),
@@ -35,6 +38,9 @@ export function LivePenyaluranPanel() {
     onDone: () => setSelectedId(null),
   });
   const selected = candidates.data?.find((candidate) => candidate.id === selectedId);
+  // Newest first regardless of the server's order: the latest fetch is the one
+  // that says what the SA holds now, and older ones are history.
+  const [latest, ...older] = [...(candidates.data ?? [])].sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
   const pending = sync.isPending || apply.isPending;
 
   return (
@@ -45,7 +51,7 @@ export function LivePenyaluranPanel() {
           <label className="space-y-1 text-xs font-medium text-ink" htmlFor="sim3lon-live-period">
             <span>Periode</span>
             <TextInput id="sim3lon-live-period" type="month" value={period} className="w-44"
-              onChange={(event) => { setPeriod(event.target.value); setSelectedId(null); }} />
+              onChange={(event) => { setPeriod(event.target.value); setSelectedId(null); setHistoryOpen(false); }} />
           </label>
           <Button size="sm" onClick={() => sync.mutate(period)} disabled={!/^\d{4}-(0[1-9]|1[0-2])$/.test(period) || pending}>
             {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -58,22 +64,31 @@ export function LivePenyaluranPanel() {
         {candidates.isPending && <p className="text-xs text-ink-muted">Memuat kandidat…</p>}
         {candidates.isError && <p className="text-xs text-rust-ink">{(candidates.error as Error).message}</p>}
         {candidates.data?.length === 0 && <p className="text-xs text-ink-muted">Belum ada kandidat untuk periode ini.</p>}
-        {candidates.data && candidates.data.length > 0 && (
-          <div className="max-h-64 space-y-2 overflow-y-auto">
-            {candidates.data.map((candidate) => (
-              <div key={candidate.id} className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-line px-3 py-2">
-                <div>
-                  <p className="text-xs font-semibold text-ink">{new Date(candidate.fetchedAt).toLocaleString("id-ID")} · {formatNumber(candidate.outletCount)} pangkalan</p>
-                  <p className="text-2xs text-ink-muted">{candidate.appliedToSA ? "Diterapkan ke SA" : candidate.status === "applied" ? "Diganti oleh sumber lebih baru" : "Tersimpan, belum diterapkan"} · sha256 {candidate.checksum.slice(0, 12)}…</p>
-                  {candidate.reviewReason && <p className="text-2xs text-signal-ink">{candidate.reviewReason}</p>}
-                </div>
-                {candidate.status === "parsed" && (
-                  <Button size="sm" variant="outline" onClick={() => setSelectedId(candidate.id)}>
-                    Tinjau
-                  </Button>
-                )}
+        {latest && (
+          <div className="rounded-sm border border-line">
+            <CandidateRow candidate={latest} onReview={setSelectedId}>
+              {older.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen((open) => !open)}
+                  aria-expanded={historyOpen}
+                  aria-controls="sim3lon-live-history"
+                  className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-2xs text-ink-muted transition-colors hover:bg-panel-raised hover:text-ink"
+                >
+                  {formatNumber(older.length)} sebelumnya
+                  <ChevronDown
+                    className={cn("h-3.5 w-3.5 transition-transform duration-200", historyOpen ? "rotate-0" : "-rotate-90")}
+                  />
+                </button>
+              )}
+            </CandidateRow>
+            {historyOpen && older.length > 0 && (
+              <div id="sim3lon-live-history" className="max-h-64 divide-y divide-line overflow-y-auto border-t border-line bg-panel-sunk">
+                {older.map((candidate) => (
+                  <CandidateRow key={candidate.id} candidate={candidate} onReview={setSelectedId} />
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
         {selectedId && (
@@ -103,5 +118,29 @@ export function LivePenyaluranPanel() {
         )}
       </PanelBody>
     </Panel>
+  );
+}
+
+function CandidateRow({ candidate, onReview, children }: {
+  candidate: SIM3LONLiveCandidate;
+  onReview: (id: string) => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+      <div>
+        <p className="text-xs font-semibold text-ink">{new Date(candidate.fetchedAt).toLocaleString("id-ID")} · {formatNumber(candidate.outletCount)} pangkalan</p>
+        <p className="text-2xs text-ink-muted">{candidate.appliedToSA ? "Diterapkan ke SA" : candidate.status === "applied" ? "Diganti oleh sumber lebih baru" : "Tersimpan, belum diterapkan"} · sha256 {candidate.checksum.slice(0, 12)}…</p>
+        {candidate.reviewReason && <p className="text-2xs text-signal-ink">{candidate.reviewReason}</p>}
+      </div>
+      <div className="flex items-center gap-2">
+        {candidate.status === "parsed" && (
+          <Button size="sm" variant="outline" onClick={() => onReview(candidate.id)}>
+            Tinjau
+          </Button>
+        )}
+        {children}
+      </div>
+    </div>
   );
 }
