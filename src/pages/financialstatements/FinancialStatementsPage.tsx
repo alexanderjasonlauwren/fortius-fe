@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileDown, TriangleAlert, Upload } from "lucide-react";
+import { FileDown, Printer, TriangleAlert, Upload } from "lucide-react";
 import {
   downloadPackage,
   getBalanceSheet,
@@ -18,6 +18,7 @@ import {
 import { StatementTable } from "@/features/financialstatements/components/StatementTable";
 import { KomparasiPanel } from "@/features/financialstatements/components/KomparasiPanel";
 import { GeneralKeterangan } from "@/features/financialstatements/components/GeneralKeterangan";
+import { statementPrintHtml } from "@/features/financialstatements/lib/print";
 import {
   notesToRows,
   scopeKeyBS,
@@ -33,6 +34,7 @@ import { Panel, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { Field, SegmentedControl, SelectInput } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
+import { printDocument } from "@/lib/export";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
 
@@ -167,6 +169,15 @@ export function FinancialStatementsPage() {
 
   const warnings = tab === "neraca" ? bs.data?.warnings : tab === "laba-rugi" ? pl.data?.warnings : undefined;
 
+  // The statement on screen, as a document: Cetak opens the browser's print
+  // dialog, whose "Save as PDF" is the PDF.
+  const printable =
+    tab === "laba-rugi" && pl.data
+      ? { title: "Laporan Laba Rugi", statement: pl.data, period: `Periode ${formatDateId(period.from)} – ${formatDateId(period.to)}` }
+      : tab === "neraca" && bs.data
+        ? { title: "Neraca", statement: bs.data, period: `Per ${formatDateId(period.asOf)}` }
+        : null;
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -187,14 +198,29 @@ export function FinancialStatementsPage() {
           />
         }
         actions={
-          <Button
-            variant="outline"
-            onClick={() => exportMutation.mutate(undefined as never)}
-            disabled={exportMutation.isPending}
-          >
-            <FileDown className="h-4 w-4" />
-            Unduh Excel
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {(tab === "laba-rugi" || tab === "neraca") && (
+              <Button
+                variant="outline"
+                disabled={!printable}
+                onClick={() =>
+                  printable &&
+                  printDocument(printable.title, statementPrintHtml(printable.title, printable.statement, printable.period))
+                }
+              >
+                <Printer className="h-4 w-4" />
+                Cetak / PDF
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => exportMutation.mutate(undefined as never)}
+              disabled={exportMutation.isPending}
+            >
+              <FileDown className="h-4 w-4" />
+              Unduh Excel
+            </Button>
+          </div>
         }
       />
 
