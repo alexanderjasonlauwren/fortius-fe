@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Camera,
   MapPin,
   Navigation,
   PackageCheck,
@@ -14,6 +15,8 @@ import {
 } from "lucide-react";
 import { scopeKey } from "@/lib/scope";
 import { useAuthStore } from "@/features/auth/store/authStore";
+import { DELIVERY_PHOTO_ACCEPT } from "@/features/attachments/api/attachmentApi";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import {
   arriveStop,
   completeStop,
@@ -68,7 +71,9 @@ export function SopirPage() {
     lines: { productId: string; realisasi: number; kembali: number }[];
     diterimaOleh: string;
     catatan: string;
-  }>({ lines: [], diterimaOleh: "", catatan: "" });
+    foto: File | null;
+  }>({ lines: [], diterimaOleh: "", catatan: "", foto: null });
+  const canAttachPhoto = useAuthStore((s) => s.hasPermission(PERMISSIONS.DELIVERY_PROOFS_CREATE));
   const [alasan, setAlasan] = useState("");
 
   const run = useQuery({
@@ -111,10 +116,17 @@ export function SopirPage() {
   const completeMutation = useDeskMutation({
     mutationFn: completeStop,
     errorTitle: "Gagal menutup surat jalan",
-    success: (d) => ({
-      title: `${d.kode} selesai`,
-      description: `${formatNumber(d.realisasi)} ${unitLabel()} tercatat diterima. Tagihan terbit otomatis.`,
-    }),
+    success: (d) =>
+      d.fotoGagal
+        ? {
+            tone: "warning",
+            title: `${d.kode} selesai, foto belum terkirim`,
+            description: `${formatNumber(d.realisasi)} ${unitLabel()} tercatat diterima. Foto: ${d.fotoGagal}`,
+          }
+        : {
+            title: `${d.kode} selesai`,
+            description: `${formatNumber(d.realisasi)} ${unitLabel()} tercatat diterima. Tagihan terbit otomatis.`,
+          },
     onDone: () => setCompleting(null),
   });
 
@@ -144,6 +156,7 @@ export function SopirPage() {
       })),
       diterimaOleh: stop.penanggungJawab,
       catatan: "",
+      foto: null,
     });
     setCompleting(stop);
   };
@@ -347,6 +360,34 @@ export function SopirPage() {
                 onChange={(e) => setForm({ ...form, catatan: e.target.value })}
               />
             </Field>
+
+            {canAttachPhoto && (
+              <Field
+                label="Foto bukti"
+                htmlFor="s-foto"
+                hint="Opsional. Tabung yang diturunkan, atau surat jalan yang sudah ditandatangani."
+              >
+                {/* capture opens the rear camera on a phone; on a desktop it
+                    falls back to choosing a file. */}
+                <label
+                  htmlFor="s-foto"
+                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-dashed border-line-strong px-3 py-2 text-sm text-ink transition-colors hover:bg-panel-sunk focus-within:ring-2 focus-within:ring-signal"
+                >
+                  <Camera className="h-4 w-4 shrink-0 text-ink-muted" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {form.foto ? form.foto.name : "Ambil foto"}
+                  </span>
+                  <input
+                    id="s-foto"
+                    type="file"
+                    accept={DELIVERY_PHOTO_ACCEPT}
+                    capture="environment"
+                    className="sr-only"
+                    onChange={(e) => setForm({ ...form, foto: e.target.files?.[0] ?? null })}
+                  />
+                </label>
+              </Field>
+            )}
           </div>
 
           <DialogFooter>
@@ -371,6 +412,7 @@ export function SopirPage() {
                   lines: form.lines,
                   diterimaOleh: form.diterimaOleh,
                   catatan: form.catatan,
+                  foto: form.foto ?? undefined,
                 })
               }
             >

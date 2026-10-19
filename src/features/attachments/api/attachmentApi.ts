@@ -19,7 +19,8 @@ export type AttachmentOwnerType =
   | "journal"
   | "asset"
   | "void_request"
-  | "payment_refund";
+  | "payment_refund"
+  | "delivery";
 
 /** Who may see and who may add or remove the files on each kind of
  *  document -- the owner's own read and create permissions, mirroring the
@@ -35,11 +36,15 @@ export const ATTACHMENT_PERMISSIONS: Record<AttachmentOwnerType, { view: Permiss
   asset: { view: PERMISSIONS.ASSETS_VIEW, manage: PERMISSIONS.ASSETS_CREATE },
   void_request: { view: PERMISSIONS.VOID_REQUESTS_VIEW, manage: PERMISSIONS.VOID_REQUESTS_CREATE },
   payment_refund: { view: PERMISSIONS.PAYMENT_REFUNDS_VIEW, manage: PERMISSIONS.PAYMENT_REFUNDS_CREATE },
+  // A photo taken at the drop: the delivery module's own proof permissions.
+  delivery: { view: PERMISSIONS.DELIVERY_PROOFS_VIEW, manage: PERMISSIONS.DELIVERY_PROOFS_CREATE },
 };
 
 /** What the backend accepts (core/storage contenttype.go, finance_attachment). */
 export const ATTACHMENT_ACCEPT = "application/pdf,image/jpeg,image/png,image/webp,.xlsx,.xls";
 export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+/** A delivery's file is a photo (core/storage contenttype.go, delivery_proof). */
+export const DELIVERY_PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 
 export interface Attachment {
   id: string;

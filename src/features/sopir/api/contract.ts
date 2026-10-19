@@ -18,6 +18,12 @@ import type { DriverOption, DriverRun } from "../types";
 export interface StopReceipt {
   kode: string;
   realisasi: number;
+  /**
+   * Why the proof photo did not upload, when one was given and failed. The
+   * stop is closed either way: a lost photo must not undo a delivery that
+   * happened.
+   */
+  fotoGagal?: string;
 }
 
 export interface CompleteStopInput {
@@ -26,6 +32,8 @@ export interface CompleteStopInput {
   lines: { productId: string; realisasi: number; kembali?: number }[];
   diterimaOleh: string;
   catatan?: string;
+  /** A photo of the drop, attached to the stop's first surat jalan. */
+  foto?: File;
 }
 
 /**

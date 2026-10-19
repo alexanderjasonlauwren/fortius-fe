@@ -216,6 +216,7 @@ function toRow(stop: BoardStopWire, driverName: string, radiusM: number): Monito
     // Every document the outlet signs for, because a stop may cover more
     // than one and the driver hands over all of them.
     kode: stop.deliveries.map((d) => d.delivery_number).join(", "),
+    suratJalan: stop.deliveries.map((d) => ({ id: d.id, kode: d.delivery_number })),
     outletId: stop.outlet_id,
     outlet: stop.outlet_name,
     alamat: stop.outlet_district ? `Kec. ${stop.outlet_district}` : "—",
