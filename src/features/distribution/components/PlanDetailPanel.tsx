@@ -36,6 +36,7 @@ import type {
   UnroutableStop,
   VehicleOption,
 } from "../types";
+import { PlanHistory } from "./PlanHistory";
 import { suggestAssignment } from "../api/distributionApi";
 import { applySuggestion, compareStops, moveStop } from "../lib/stopOrder";
 import { outletLabel, outletLabelTitle, unitLabel } from "@/lib/lexicon";
@@ -951,6 +952,7 @@ export function PlanDetailPanel({
             Ada perubahan yang belum disimpan.
           </p>
         )}
+        <PlanHistory planId={plan.id} />
       </div>
     </div>
   );

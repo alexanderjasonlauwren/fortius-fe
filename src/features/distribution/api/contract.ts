@@ -69,8 +69,23 @@ export interface DispatchResult {
   issued: number;
 }
 
+/** One change recorded against a plan or one of its runs (GET .../history). */
+export interface PlanHistoryEvent {
+  at: string;
+  /** Username, or "" when no one was signed in. */
+  user: string;
+  event: "plan_updated" | "plan_confirmed" | "plan_cancelled" | "crew_assigned" | "trip_closed";
+  /** False when the server refused the request -- an attempt is history too. */
+  succeeded: boolean;
+  statusCode: number;
+  /** Set when the change was to one of the plan's runs. */
+  tripId?: string;
+}
+
 export interface DistributionApi {
   getPlanList(): Promise<DistributionPlan[]>;
+  /** Who changed this plan and its runs, newest first, from the audit trail. */
+  getPlanHistory(planId: string): Promise<PlanHistoryEvent[]>;
   getPlan(planId: string): Promise<DistributionPlan>;
   getPlanDetail(planId: string): Promise<PlanRow[]>;
   getMonthlyGrid(month: string): Promise<DistributionMonthGrid>;

@@ -5,10 +5,13 @@ import {
 } from "./distributionApi.http";
 import type { DistributionApi } from "./contract";
 
+export type { PlanHistoryEvent } from "./contract";
+
 const api: DistributionApi = distributionApiHttp;
 
 export const getPlanList = api.getPlanList.bind(api);
 export const getPlan = api.getPlan.bind(api);
+export const getPlanHistory = api.getPlanHistory.bind(api);
 export const getPlanDetail = api.getPlanDetail.bind(api);
 export const getMonthlyGrid = api.getMonthlyGrid.bind(api);
 export const getPaymentBoard = api.getPaymentBoard.bind(api);

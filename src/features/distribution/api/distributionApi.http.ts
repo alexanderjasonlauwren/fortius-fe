@@ -59,6 +59,7 @@ import type {
   DistributionApi,
   ProductOption,
   TripAssignment,
+  PlanHistoryEvent,
 } from "./contract";
 
 /* ── wire shapes, mirroring the backend exactly ────────────────────────── */
@@ -471,6 +472,28 @@ async function getPlanList(): Promise<DistributionPlan[]> {
     sort: [{ field: "planned_delivery_date", direction: "desc" }],
   });
   return page.items.map(toPlanView);
+}
+
+/** Mirrors the backend's distributionorder.HistoryEvent. */
+interface HistoryEventResponse {
+  at: string;
+  user: string;
+  event: PlanHistoryEvent["event"];
+  succeeded: boolean;
+  status_code: number;
+  trip_id?: string;
+}
+
+async function getPlanHistory(planId: string): Promise<PlanHistoryEvent[]> {
+  const rows = await getOne<HistoryEventResponse[]>(`/distribution/orders/${planId}/history`);
+  return (rows ?? []).map((row) => ({
+    at: row.at,
+    user: row.user,
+    event: row.event,
+    succeeded: row.succeeded,
+    statusCode: row.status_code,
+    tripId: row.trip_id,
+  }));
 }
 
 async function getPlan(planId: string): Promise<DistributionPlan> {
@@ -1011,6 +1034,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
 export const distributionApiHttp: DistributionApi = {
   getPlanList,
   getPlan,
+  getPlanHistory,
   getPlanDetail,
   getMonthlyGrid,
   getPaymentBoard,
