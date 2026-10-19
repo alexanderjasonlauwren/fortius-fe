@@ -180,7 +180,7 @@ export function DashboardPage() {
             kpi ? (
               <>
                 <span className="data">{formatNumber(quotaUsed)}</span> dari{" "}
-                <span className="data">{formatNumber(kpi.monthlyQuotaTotal)}</span> sudah ditarik
+                <span className="data">{formatNumber(kpi.monthlyQuotaTotal)}</span> tersalurkan
               </>
             ) : undefined
           }

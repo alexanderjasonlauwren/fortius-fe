@@ -36,9 +36,9 @@ vi.mock("@/features/orders/api/orderApi", () => ({
   getOrderTotals: (...args: unknown[]) => getOrderTotals(...args),
 }));
 
-const getSAList = vi.fn();
+const getQuotaSummary = vi.fn();
 vi.mock("@/features/sa/api/saApi", () => ({
-  getSAList: (...args: unknown[]) => getSAList(...args),
+  getQuotaSummary: (...args: unknown[]) => getQuotaSummary(...args),
 }));
 
 const { dashboardApiHttp } = await import("./dashboardApi.http");
@@ -68,14 +68,12 @@ function delivery(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function agreement(overrides: Record<string, unknown> = {}) {
+function quotaSummary(overrides: Record<string, unknown> = {}) {
   return {
-    id: "sa-1",
-    status: "Aktif",
-    periodeMulai: "2020-01-01",
-    periodeBerakhir: "2099-12-31",
-    totalKuota: 10000,
-    sisaKuota: 4000,
+    periodMonth: "2026-10",
+    allocationQty: 10000,
+    deliveredQty: 6000,
+    remainingQty: 4000,
     ...overrides,
   };
 }
@@ -98,7 +96,7 @@ beforeEach(() => {
   getAgingReport.mockReset().mockResolvedValue({ grandTotal: 500_000, jatuhTempoTotal: 200_000 });
   getPayments.mockReset().mockResolvedValue([{ jumlah: 300_000 }, { jumlah: 100_000 }]);
   getOrderTotals.mockReset().mockResolvedValue({ baru: 3 });
-  getSAList.mockReset().mockResolvedValue([agreement()]);
+  getQuotaSummary.mockReset().mockResolvedValue(quotaSummary());
 });
 
 describe("getKpiSummary", () => {
@@ -132,18 +130,19 @@ describe("getKpiSummary", () => {
     expect(getPayments).toHaveBeenCalledWith("Menunggu Verifikasi");
   });
 
-  it("excludes a draft agreement and one outside today's period from the quota total", async () => {
+  // The Beranda tile and the SA page's Kuota cabang card must not disagree:
+  // both read what SIM3LON Penyaluran says was distributed this month. The
+  // tile used to sum agreement counters that only plans move, and read "0 of
+  // 20,450 drawn" while 6,800 had gone out.
+  it("reads this month's quota from the same summary as the Kuota cabang card", async () => {
     mockDeliveries({ [TODAY]: [], [YESTERDAY]: [] });
-    getSAList.mockResolvedValue([
-      agreement({ id: "live", totalKuota: 1000, sisaKuota: 500 }),
-      agreement({ id: "draft", status: "Draft", totalKuota: 9999, sisaKuota: 9999 }),
-      agreement({ id: "expired", periodeBerakhir: "2020-01-01", totalKuota: 9999, sisaKuota: 9999 }),
-    ]);
+    getQuotaSummary.mockResolvedValue(quotaSummary({ allocationQty: 20450, deliveredQty: 6800, remainingQty: 13650 }));
 
     const kpi = await dashboardApiHttp.getKpiSummary(true);
 
-    expect(kpi.monthlyQuotaTotal).toBe(1000);
-    expect(kpi.monthlyQuotaRemaining).toBe(500);
+    expect(getQuotaSummary).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}$/));
+    expect(kpi.monthlyQuotaTotal).toBe(20450);
+    expect(kpi.monthlyQuotaRemaining).toBe(13650);
   });
 });
 
