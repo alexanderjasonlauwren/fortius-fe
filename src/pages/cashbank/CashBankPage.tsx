@@ -181,7 +181,7 @@ export function CashBankPage() {
             hint={`${vouchers.data?.length ?? 0} voucher`}
             actions={
               <div className="flex flex-wrap items-center gap-2">
-                <SearchInput value={voucherSearch} onChange={setVoucherSearch} placeholder="Nomor, referensi, kontak" className="w-48" />
+                <SearchInput value={voucherSearch} onChange={setVoucherSearch} placeholder="Nomor, referensi, kontak" className="w-56" />
                 <TextInput type="date" aria-label="Dari tanggal" value={voucherFrom} max={voucherTo || undefined}
                   onChange={(e) => setVoucherFrom(e.target.value)} className="w-36 py-1.5 text-xs" />
                 <TextInput type="date" aria-label="Sampai tanggal" value={voucherTo} min={voucherFrom || undefined}

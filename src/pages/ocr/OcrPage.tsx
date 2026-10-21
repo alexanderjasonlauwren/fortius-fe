@@ -109,7 +109,7 @@ export function OcrPage() {
           hint={`${waiting} menunggu keputusan`}
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              <SearchInput value={search} onChange={setSearch} placeholder="Merchant atau nama berkas" className="w-52" />
+              <SearchInput value={search} onChange={setSearch} placeholder="Merchant atau nama berkas" className="w-64" />
               <SelectInput aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as ReceiptStatus | "Semua")}>
                 <option value="Semua">Semua status</option>
                 {Object.entries(RECEIPT_STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}

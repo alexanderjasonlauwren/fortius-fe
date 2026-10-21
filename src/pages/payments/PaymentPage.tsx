@@ -300,7 +300,7 @@ export function PaymentPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder={`Nomor, ${outletLabel()}, rekening`}
-                className="w-52"
+                className="w-64"
               />
               <SegmentedControl
                 value={tab}

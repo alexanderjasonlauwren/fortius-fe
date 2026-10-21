@@ -326,7 +326,10 @@ export function SearchInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className={cn(CONTROL, "pr-8")}
+        // A hint wider than its box is cut mid-word and reads as a typo
+        // ("penerir"); an ellipsis says there is more, and the title shows it.
+        title={placeholder}
+        className={cn(CONTROL, "pr-8 text-ellipsis")}
       />
       {value && (
         <button

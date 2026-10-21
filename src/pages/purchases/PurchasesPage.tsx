@@ -183,7 +183,7 @@ export function PurchasesPage() {
           hint={`${rows.length} baris`}
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              <SearchInput value={search} onChange={setSearch} placeholder="Nomor, no. tagihan vendor, vendor" className="w-56" />
+              <SearchInput value={search} onChange={setSearch} placeholder="Nomor, no. tagihan vendor, vendor" className="w-72" />
               <SelectInput aria-label="Vendor" value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="w-44">
                 <option value="">Semua vendor</option>
                 {(vendors.data ?? []).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}

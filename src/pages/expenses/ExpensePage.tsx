@@ -196,7 +196,7 @@ export function ExpensePage() {
           hint={`${rows.length} baris`}
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              <SearchInput value={search} onChange={setSearch} placeholder="Nomor, no. nota, penerima" className="w-52" />
+              <SearchInput value={search} onChange={setSearch} placeholder="Nomor, no. nota, penerima" className="w-60" />
               <TextInput type="date" aria-label="Dari tanggal" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className="w-36 py-1.5 text-xs" />
               <TextInput type="date" aria-label="Sampai tanggal" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className="w-36 py-1.5 text-xs" />
               <SelectInput aria-label="Status" value={status} onChange={(event) => setStatus(event.target.value as ExpenseStatus | "Semua")}>

@@ -294,7 +294,7 @@ export function DriverPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Nama, kode, atau nomor SIM"
-                className="w-56"
+                className="w-64"
               />
               <SegmentedControl
                 value={status}

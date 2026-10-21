@@ -409,7 +409,7 @@ export function TransportationClaimListPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Nomor BAST, klaim, atau invoice"
-                className="w-64"
+                className="w-72"
               />
               <SelectInput value={status} onChange={(e) => setStatus(e.target.value as ClaimStatus | "Semua")}>
                 <option value="Semua">Semua status</option>

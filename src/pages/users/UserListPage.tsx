@@ -234,7 +234,7 @@ export function UserListPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Nama, email, atau cabang"
-                className="w-52"
+                className="w-60"
               />
               <SegmentedControl
                 value={role}

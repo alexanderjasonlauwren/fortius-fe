@@ -425,7 +425,7 @@ function InvoiceSection() {
                 value={search}
                 onChange={setSearch}
                 placeholder={`Nomor tagihan, ${outletLabel()}, surat jalan`}
-                className="w-56"
+                className="w-80"
               />
               <SegmentedControl
                 value={status}
