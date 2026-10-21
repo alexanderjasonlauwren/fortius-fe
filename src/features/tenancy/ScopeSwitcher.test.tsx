@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 
@@ -81,5 +81,27 @@ describe("the scope switcher for a full-console account", () => {
     state.permissions = [PERMISSIONS.DISTRIBUTION_VIEW, PERMISSIONS.DELIVERIES_EXECUTE];
     render(<ScopeSwitcher />);
     expect(screen.getByRole("button")).toBeTruthy();
+  });
+});
+
+describe("the scope switcher for an account in one company", () => {
+  const twoTenants = { tenants: scope.tenants, canSwitchTenant: scope.canSwitchTenant };
+  beforeEach(() => {
+    scope.tenants = [scope.tenants[0]];
+    scope.canSwitchTenant = false;
+    scope.canSeeAll = true;
+  });
+  afterEach(() => {
+    Object.assign(scope, twoTenants, { canSeeAll: false });
+  });
+
+  it("names the company beside the branch, with nothing to switch to", () => {
+    state.permissions = [PERMISSIONS.DISTRIBUTION_VIEW];
+    render(<ScopeSwitcher />);
+    expect(screen.getByRole("button").textContent).toContain("PT Bimbo Salatiga · Depot Salatiga");
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText("Perusahaan")).toBeTruthy();
+    expect(screen.queryByText("Struktur tenant")).toBeNull();
   });
 });

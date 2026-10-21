@@ -57,9 +57,15 @@ export function ScopeSwitcher() {
   // job is a single run, not a switch to Bimbo Holdings' own books.
   if ((branches.length <= 1 && !canSeeAll && !canSwitchTenant) || usesDriverConsole(permissions)) {
     return (
-      <span className="hidden items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-ink-muted sm:flex">
-        <Building2 className="h-3.5 w-3.5" />
-        {branch?.nama ?? "—"}
+      <span className="hidden max-w-[22rem] items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-ink-muted sm:flex">
+        <Building2 className="h-3.5 w-3.5 shrink-0" />
+        {tenant && (
+          <>
+            <span className="truncate text-ink">{tenant.nama}</span>
+            <span aria-hidden>·</span>
+          </>
+        )}
+        <span className="shrink-0">{branch?.nama ?? "—"}</span>
       </span>
     );
   }
@@ -88,11 +94,11 @@ export function ScopeSwitcher() {
         <span className="sm:hidden">
           {isConsolidated ? "Semua" : (branch?.kode ?? "—")}
         </span>
-        <span className="hidden max-w-[12rem] truncate sm:inline">
-          {/* Tenant first, because it is the coarser mistake. Only shown when
-              there is more than one — a single-tenant install should not carry
-              a permanent reminder of a hierarchy it does not have. */}
-          {canSwitchTenant && tenant ? `${tenant.nama} · ` : ""}
+        <span className="hidden max-w-[22rem] truncate sm:inline">
+          {/* Tenant first, because it is the coarser mistake -- and named even
+              when it is the only one: the company is whose books every page
+              shows, and a user with one membership still needs to see which. */}
+          {tenant ? `${tenant.nama} · ` : ""}
           {isConsolidated ? "Semua cabang" : (branch?.nama ?? "Pilih cabang")}
         </span>
         <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
@@ -168,6 +174,16 @@ export function ScopeSwitcher() {
                 })}
               </ul>
             </>
+          )}
+
+          {!canSwitchTenant && tenant && (
+            <div className="flex items-center gap-2.5 border-b border-line px-4 py-2.5">
+              <Building2 className="h-4 w-4 shrink-0 text-ink-muted" />
+              <span className="min-w-0 flex-1">
+                <span className="label block text-2xs text-ink-muted">Perusahaan</span>
+                <span className="block truncate text-sm font-medium text-ink">{tenant.nama}</span>
+              </span>
+            </div>
           )}
 
           <p className="label border-b border-line px-4 py-2 text-2xs text-ink-muted">
