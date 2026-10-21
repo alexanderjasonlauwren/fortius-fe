@@ -137,7 +137,7 @@ export function OutletDetailPage() {
     },
     {
       key: "driver",
-      header: "Driver",
+      header: "Sopir",
       render: (row) => <span className="text-ink-muted">{row.driver}</span>,
       sortValue: (row) => row.driver,
     },
@@ -250,8 +250,7 @@ export function OutletDetailPage() {
                 </span>
               </p>
               <p className="text-xs text-ink-muted">
-                Realisasi bulan ini belum tersedia dari layanan — surat jalan
-                dicatat oleh dispatch dan belum terbaca di sini.
+                Realisasi bulan ini belum bisa ditampilkan. Coba muat ulang halaman.
               </p>
             </PanelBody>
           ) : (
@@ -415,7 +414,7 @@ export function OutletDetailPage() {
         <Panel className="lg:col-span-2">
           <PanelHeader
             title="Riwayat Surat Peringatan"
-            hint="Dicatat manual -- lihat catatan performa pangkalan"
+            hint="Dicatat manual. Lihat catatan performa pangkalan"
             actions={
               <CanAccess permission={PERMISSIONS.OUTLET_WARNINGS_CREATE}>
                 <Button size="sm" variant="outline" onClick={() => setRecordingWarning(true)}>
@@ -443,8 +442,7 @@ export function OutletDetailPage() {
           <DialogHeader>
             <DialogTitle>Catat SP baru</DialogTitle>
             <DialogDescription>
-              Surat Peringatan untuk {p.nama}. Ini adalah catatan, bukan alur
-              persetujuan -- tidak dapat diubah setelah disimpan.
+              Surat Peringatan untuk {p.nama}. Catatan ini tidak bisa diubah setelah disimpan.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

@@ -15,5 +15,5 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   finance: "Keuangan",
   staff: "Staf Operasional",
   viewer: "Peninjau",
-  driver: "Driver",
+  driver: "Sopir",
 };

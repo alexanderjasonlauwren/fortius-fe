@@ -344,7 +344,7 @@ export function UserListPage() {
                       <option value="">Pilih armada</option>
                       {(fleet.data ?? []).map((d) => (
                         <option key={d.id} value={d.id}>
-                          {d.nama} — {d.nomorSim}
+                          {d.nama} · {d.nomorSim}
                         </option>
                       ))}
                     </SelectInput>

@@ -23,7 +23,7 @@ export function invoiceDocumentHtml(inv: InvoiceDetailView, ctx: InvoicePrintCon
   const settled = inv.terbayar + inv.kredit;
   return `
     <div class="eyebrow">${e(ctx.perusahaan)}</div>
-    <h1>Faktur ${e(inv.nomor)}${inv.status === "Batal" ? " — DIBATALKAN" : ""}</h1>
+    <h1>Faktur ${e(inv.nomor)}${inv.status === "Batal" ? " (DIBATALKAN)" : ""}</h1>
     <hr class="rule" />
     <div class="meta">
       <div>Kepada<strong>${e(ctx.pelanggan)}</strong>${ctx.alamat ? e(ctx.alamat) : ""}</div>

@@ -7,7 +7,7 @@ export const VOUCHER_TYPE_LABEL: Record<CashVoucherType, string> = {
 };
 
 export const VOUCHER_STATUS_LABEL: Record<CashVoucherStatus, string> = {
-  draft: "Draft",
+  draft: "Draf",
   posted: "Diposting",
   void: "Dibatalkan",
 };

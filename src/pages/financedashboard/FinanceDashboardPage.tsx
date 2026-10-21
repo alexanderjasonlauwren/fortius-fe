@@ -75,7 +75,7 @@ export function FinanceDashboardPage() {
       <PageHeader
         eyebrow="Menu utama"
         title="Dasbor Keuangan"
-        description={`Posisi per ${formatDateId(today)}, seluruh cabang. Setiap angka diambil dari laporan yang ditautkan -- klik untuk rinciannya.`}
+        description={`Posisi per ${formatDateId(today)}, seluruh cabang. Setiap angka diambil dari laporan yang ditautkan. Klik untuk melihat rinciannya.`}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

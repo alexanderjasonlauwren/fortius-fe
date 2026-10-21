@@ -120,7 +120,7 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
         />
       </Field>
 
-      <Field label="Dokumen SA" hint="Disimpan sebagai lampiran pada arsip agreement.">
+      <Field label="Dokumen SA" hint="Disimpan sebagai lampiran di arsip SA.">
         <FileDrop
           file={file}
           onFile={setFile}
@@ -144,10 +144,10 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
         ) : (
           <Upload className="h-4 w-4" />
         )}
-        {isPending ? "Mengunggah…" : "Unggah agreement"}
+        {isPending ? "Mengunggah…" : "Unggah SA"}
       </Button>
       <p className="text-xs leading-relaxed text-ink-muted">
-        Agreement masuk sebagai draf. Kuota baru dapat ditarik rencana distribusi
+        SA masuk sebagai draf. Kuota baru dapat ditarik rencana distribusi
         setelah diaktifkan.
       </p>
     </form>

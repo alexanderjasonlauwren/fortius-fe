@@ -282,7 +282,7 @@ const OPTION_PAGE_SIZE = 100;
  * screen that tracks the journey is Monitoring Distribusi.
  */
 const STATUS_TO_DOMAIN: Record<string, PlanStatus> = {
-  draft: "Draft",
+  draft: "Draf",
   confirmed: "Terkonfirmasi",
   in_progress: "Terkonfirmasi",
   completed: "Selesai",
@@ -290,7 +290,7 @@ const STATUS_TO_DOMAIN: Record<string, PlanStatus> = {
 };
 
 function toPlanStatus(wire: string): PlanStatus {
-  return STATUS_TO_DOMAIN[wire] ?? "Draft";
+  return STATUS_TO_DOMAIN[wire] ?? "Draf";
 }
 
 /**
@@ -615,12 +615,12 @@ async function saveDraft(planId: string, rows: PlanRow[], version: number): Prom
   const originScope = scopeKey().join("|");
   const plan = await getPlan(planId);
   if (scopeKey().join("|") !== originScope) {
-    throw new Error("Tenant berubah saat memuat rencana. Buka rencana pada tenant yang sesuai sebelum menyimpan.");
+    throw new Error("Perusahaan yang aktif berganti saat rencana dimuat. Buka lagi rencananya dari perusahaan yang benar, lalu simpan.");
   }
   const agreementId = plan.saId;
   if (!agreementId) {
     throw new Error(
-      "Rencana ini belum terikat ke Schedule Agreement. Buka kembali rencana dan pilih SA " +
+      "Rencana ini belum terikat ke SA. Buka kembali rencananya dan pilih SA " +
         "sebelum menambahkan titik singgah.",
     );
   }
@@ -947,7 +947,7 @@ async function suggestAssignment(planId: string): Promise<AssignmentSuggestion> 
   const km = (board.summary.distance_m / 1000).toLocaleString("id-ID", {
     maximumFractionDigits: 1,
   });
-  const selesai = board.summary.finish_eta ? ` — selesai ± ${board.summary.finish_eta}` : "";
+  const selesai = board.summary.finish_eta ? `, selesai ± ${board.summary.finish_eta}` : "";
   // Silent when straight-line, which has been the only source this ever had
   // until an on-prem router existed — flagging the ordinary case would just be
   // noise. Road distance is the exception worth telling a dispatcher about,
@@ -959,7 +959,7 @@ async function suggestAssignment(planId: string): Promise<AssignmentSuggestion> 
     unroutable,
     dasar:
       `Dikelompokkan per kapasitas armada dan diurutkan menurut jarak antar ` +
-      `${"titik singgah"} — total ± ${km} km${jarak} untuk ${board.summary.trips} trip${selesai}.`,
+      `${"titik singgah"}: total ± ${km} km${jarak} untuk ${board.summary.trips} rit${selesai}.`,
   };
 }
 
@@ -988,7 +988,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
   const ordered = [...rows].sort(compareStops);
 
   printDocument(
-    `${plan.kode} — Lembar Rute`,
+    `${plan.kode} · Lembar Rute`,
     `
     <p class="eyebrow">${settings.namaPerusahaan} · Agen ${settings.nomorAgen}</p>
     <h1>Lembar Rute Distribusi</h1>

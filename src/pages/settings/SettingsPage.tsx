@@ -333,7 +333,7 @@ export function SettingsPage() {
         <Panel>
           <PanelHeader
             title="Identitas hukum"
-            hint="Tidak diwarisi — setiap badan hukum punya miliknya sendiri"
+            hint="Tidak diwarisi. Setiap badan hukum punya datanya sendiri"
           />
           <PanelBody className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
@@ -375,9 +375,9 @@ export function SettingsPage() {
               >
                 {/* Asia/Jakarta is the IANA identifier for WIB, which covers
                     Central Java. It names a timezone, not a city. */}
-                <option value="Asia/Jakarta">WIB — Asia/Jakarta</option>
-                <option value="Asia/Makassar">WITA — Asia/Makassar</option>
-                <option value="Asia/Jayapura">WIT — Asia/Jayapura</option>
+                <option value="Asia/Jakarta">WIB (Asia/Jakarta)</option>
+                <option value="Asia/Makassar">WITA (Asia/Makassar)</option>
+                <option value="Asia/Jayapura">WIT (Asia/Jayapura)</option>
               </SelectInput>
             </Field>
             <div className="sm:col-span-2">
@@ -415,13 +415,12 @@ export function SettingsPage() {
         <Panel className="xl:col-span-2">
           <PanelHeader
             title="Kantor terdaftar"
-            hint="Alamat resmi badan hukum — bukan titik awal distribusi"
+            hint="Alamat resmi badan hukum, bukan titik awal distribusi"
           />
           <PanelBody className="space-y-3">
             <p className="text-xs leading-relaxed text-ink-muted">
               Armada memuat dari <span className="font-medium text-ink">cabang</span>,
-              dan satu PT bisa punya beberapa. Koordinat di sini dipakai untuk
-              menampilkan tenant di peta dan sebagai titik awal cabang pertama
+              dan satu PT bisa punya beberapa. Koordinat di sini dipakai untuk menampilkan perusahaan di peta dan sebagai titik awal cabang pertama
               yang dibuat tanpa koordinat sendiri.
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -528,21 +527,17 @@ export function SettingsPage() {
         <Panel className="lg:col-span-2">
           <PanelHeader
             title="Istilah"
-            hint="Sebutan yang dipakai di seluruh konsol — ubah untuk bidang usaha lain"
+            hint="Sebutan yang dipakai di seluruh konsol. Ubah bila bidang usahanya lain"
           />
           <PanelBody className="space-y-4">
             <p className="text-xs leading-relaxed text-ink-muted">
-              Konsol ini menangani distribusi apa pun. Yang membedakan satu bidang
-              usaha dari yang lain hanyalah sebutannya, jadi tiga kata di bawah ini
-              adalah data, bukan bagian dari aplikasi. Mengubahnya mengganti label
-              di seluruh halaman, kolom tabel, surat jalan, dan berkas ekspor —
-              tanpa menyentuh satu pun angka atau riwayat.
+              Tiga sebutan ini dipakai di seluruh konsol: halaman, kolom tabel, surat jalan, dan berkas ekspor. Mengubahnya hanya mengganti label; angka dan riwayat tidak berubah.
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field
                 label="Satuan"
                 htmlFor="istilah-satuan"
-                hint="Satu unit yang Anda antar — tabung, galon, dus, sak. Dipakai pada angka gabungan lintas produk."
+                hint="Satu unit yang Anda antar, misalnya tabung, galon, dus, sak. Dipakai pada angka gabungan lintas produk."
               >
                 <TextInput
                   id="istilah-satuan"
@@ -556,7 +551,7 @@ export function SettingsPage() {
               <Field
                 label="Titik antar"
                 htmlFor="istilah-outlet"
-                hint="Tempat tujuan pengiriman — pangkalan, depot, toko, gerai."
+                hint="Tempat tujuan pengiriman, misalnya pangkalan, depot, toko, gerai."
               >
                 <TextInput
                   id="istilah-outlet"
@@ -570,7 +565,7 @@ export function SettingsPage() {
               <Field
                 label="Pemasok"
                 htmlFor="istilah-pemasok"
-                hint="Sumber pasokan yang kuotanya Anda tarik — SPBE, pabrik, distributor pusat."
+                hint="Sumber pasokan yang kuotanya Anda tarik, misalnya SPBE, pabrik, distributor pusat."
               >
                 <TextInput
                   id="istilah-pemasok"

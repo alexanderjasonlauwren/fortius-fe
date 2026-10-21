@@ -109,7 +109,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
         <DialogHeader>
           <DialogTitle>Tagihan vendor baru</DialogTitle>
           <DialogDescription>
-            Pembelian di luar Schedule Agreement: barang (masuk persediaan) atau jasa dan biaya (ke akunnya
+            Pembelian di luar SA: barang (masuk persediaan) atau jasa dan biaya (ke akunnya
             sendiri). Dibayar sekaligus atau bertahap dari daftar.
           </DialogDescription>
         </DialogHeader>
@@ -125,7 +125,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
               }}>
                 <option value="">— Pilih —</option>
                 {(vendors.data ?? []).filter((v) => v.status === "atv").map((v) => (
-                  <option key={v.id} value={v.id}>{v.code} — {v.name}</option>
+                  <option key={v.id} value={v.id}>{v.code} · {v.name}</option>
                 ))}
               </SelectInput>
             </Field>
@@ -183,7 +183,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
                       onChange={(e) => update(line.key, { productId: e.target.value })}>
                       <option value="">— Pilih —</option>
                       {(products.data ?? []).filter((p) => p.productKind !== "container").map((p) => (
-                        <option key={p.id} value={p.id}>{p.kode} — {p.nama}</option>
+                        <option key={p.id} value={p.id}>{p.kode} · {p.nama}</option>
                       ))}
                     </SelectInput>
                   </Field>
@@ -194,7 +194,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
                         onChange={(e) => update(line.key, { accountId: e.target.value })}>
                         <option value="">— Pilih —</option>
                         {billable.map((a) => (
-                          <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                          <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                         ))}
                       </SelectInput>
                     </Field>

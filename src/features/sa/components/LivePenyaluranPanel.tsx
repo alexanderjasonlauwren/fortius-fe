@@ -28,13 +28,13 @@ export function LivePenyaluranPanel() {
   });
   const sync = useDeskMutation({
     mutationFn: syncLivePenyaluran,
-    errorTitle: "Penyaluran langsung gagal ditarik",
+    errorTitle: "Penyaluran gagal ditarik dari SIM3LON",
     onDone: (candidate) => setSelectedId(candidate.status === "parsed" ? candidate.id : null),
   });
   const apply = useDeskMutation({
     mutationFn: ({ id }: { id: string }) => applySIM3LON(id, buildSIM3LONApplyReview(review.data!)),
-    success: "Penyaluran diterapkan ke SA",
-    errorTitle: "Kandidat Penyaluran belum dapat diterapkan",
+    success: "Penyaluran sudah dipakai di SA",
+    errorTitle: "Data Penyaluran belum bisa dipakai di SA",
     onDone: () => setSelectedId(null),
   });
   const selected = candidates.data?.find((candidate) => candidate.id === selectedId);
@@ -45,7 +45,7 @@ export function LivePenyaluranPanel() {
 
   return (
     <Panel>
-      <PanelHeader title="Penyaluran langsung ke SA" hint="XLSX tetap tersedia sebagai fallback penuh" />
+      <PanelHeader title="Tarik Penyaluran dari SIM3LON" hint="Bisa juga lewat tombol Impor SIM3LON (berkas Excel)" />
       <PanelBody className="space-y-4">
         <div className="flex flex-wrap items-end gap-2">
           <label className="space-y-1 text-xs font-medium text-ink" htmlFor="sim3lon-live-period">
@@ -59,11 +59,17 @@ export function LivePenyaluranPanel() {
           </Button>
         </div>
         <p className="text-xs text-ink-muted">
-          Penyaluran SIM3LON adalah sumber kebenaran SA. Setiap sinkronisasi menyimpan bukti sumber, lalu memperbarui alokasi pangkalan, kuota Base dan Fakultatif, serta target harian sebulan penuh. Bila penerapan otomatis dimatikan di server, tinjau dan terapkan kandidat di bawah.
+          Data Penyaluran di SIM3LON menjadi acuan SA. Setiap kali disinkronkan, sistem menyimpan salinan datanya, lalu memperbarui alokasi pangkalan, kuota Base dan Fakultatif, serta target harian untuk sebulan penuh.
         </p>
-        {candidates.isPending && <p className="text-xs text-ink-muted">Memuat kandidat…</p>}
+        {/* Only when the newest pull is waiting: whether the server applies
+            pulls by itself is visible here as appliedToSA, so the panel speaks
+            up exactly when someone has to act. */}
+        {latest && !latest.appliedToSA && latest.status === "parsed" && (
+          <p className="text-xs text-signal-ink">Data ini belum dipakai di SA. Klik Periksa, lalu Terapkan ke SA.</p>
+        )}
+        {candidates.isPending && <p className="text-xs text-ink-muted">Memuat data Penyaluran…</p>}
         {candidates.isError && <p className="text-xs text-rust-ink">{(candidates.error as Error).message}</p>}
-        {candidates.data?.length === 0 && <p className="text-xs text-ink-muted">Belum ada kandidat untuk periode ini.</p>}
+        {candidates.data?.length === 0 && <p className="text-xs text-ink-muted">Belum ada data yang ditarik untuk bulan ini. Klik Sinkronkan sekarang.</p>}
         {latest && (
           <div className="rounded-sm border border-line">
             <CandidateRow candidate={latest} onReview={setSelectedId}>
@@ -93,12 +99,12 @@ export function LivePenyaluranPanel() {
         )}
         {selectedId && (
           <div className="space-y-3 rounded-sm border border-line bg-panel-sunk p-3">
-            <p className="text-xs font-semibold text-ink">Tinjauan kandidat {selectedId.slice(0, 8)}</p>
+            <p className="text-xs font-semibold text-ink">Pemeriksaan data Penyaluran</p>
             {review.isPending && <p className="text-xs text-ink-muted">Memeriksa dampak terhadap rencana…</p>}
             {review.isError && <p className="text-xs text-rust-ink">{(review.error as Error).message}</p>}
             {review.data && (
               <>
-                <p className="text-xs text-ink-muted">{formatNumber(review.data.changes.filter((change) => change.classification !== "unchanged").length)} perubahan harian · {formatNumber(review.data.blockers.length)} penghambat</p>
+                <p className="text-xs text-ink-muted">{formatNumber(review.data.changes.filter((change) => change.classification !== "unchanged").length)} perubahan harian · {formatNumber(review.data.blockers.length)} masalah</p>
                 {review.data.blockers.length > 0 && (
                   <ul className="space-y-1 text-xs text-rust-ink">
                     {review.data.blockers.map((blocker, index) => (
@@ -130,13 +136,17 @@ function CandidateRow({ candidate, onReview, children }: {
     <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
       <div>
         <p className="text-xs font-semibold text-ink">{new Date(candidate.fetchedAt).toLocaleString("id-ID")} · {formatNumber(candidate.outletCount)} pangkalan</p>
-        <p className="text-2xs text-ink-muted">{candidate.appliedToSA ? "Diterapkan ke SA" : candidate.status === "applied" ? "Diganti oleh sumber lebih baru" : "Tersimpan, belum diterapkan"} · sha256 {candidate.checksum.slice(0, 12)}…</p>
+        {/* The checksum identifies the stored copy for an audit; it stays on
+            hover rather than in the line an operator reads. */}
+        <p className="text-2xs text-ink-muted" title={`sha256 ${candidate.checksum}`}>
+          {candidate.appliedToSA ? "Sudah dipakai di SA" : candidate.status === "applied" ? "Sudah diganti tarikan yang lebih baru" : "Tersimpan, belum dipakai di SA"}
+        </p>
         {candidate.reviewReason && <p className="text-2xs text-signal-ink">{candidate.reviewReason}</p>}
       </div>
       <div className="flex items-center gap-2">
         {candidate.status === "parsed" && (
           <Button size="sm" variant="outline" onClick={() => onReview(candidate.id)}>
-            Tinjau
+            Periksa
           </Button>
         )}
         {children}

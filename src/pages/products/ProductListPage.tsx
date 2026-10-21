@@ -161,7 +161,7 @@ export function ProductListPage() {
           </div>
         ) : (
           <span className="text-2xs text-ink-muted">
-            Belum tersedia dari API — min {formatNumber(row.stokMinimum)}
+            Stok belum tersedia · minimum {formatNumber(row.stokMinimum)}
           </span>
         ),
       sortValue: (row) => row.stok,

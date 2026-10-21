@@ -132,7 +132,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
             <SelectInput aria-label="Akun" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-56">
               <option value="">Semua akun</option>
               {leafAccounts(accounts.data ?? []).map((a) => (
-                <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
               ))}
             </SelectInput>
             <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>

@@ -184,7 +184,7 @@ export function BankSection() {
               </DialogTitle>
               <DialogDescription>
                 {editing?.kind === "cash"
-                  ? "Kas kecil tidak muncul pada tagihan -- hanya dipakai sebagai sumber/tujuan voucher kas."
+                  ? "Kas kecil tidak muncul di tagihan. Hanya dipakai untuk voucher kas masuk dan keluar."
                   : "Rekening ini muncul pada tagihan dan dipakai keuangan untuk mencocokkan mutasi masuk."}
               </DialogDescription>
             </DialogHeader>

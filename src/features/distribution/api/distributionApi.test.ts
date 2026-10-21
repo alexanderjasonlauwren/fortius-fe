@@ -555,7 +555,7 @@ describe("saving", () => {
   it("refuses a save if tenant switches during its internal plan read", async () => {
     scopeState.key = ["tenant", "branch"];
     getOne.mockImplementation(async () => { scopeState.key = ["other", "branch"]; return order(); });
-    await expect(distributionApiHttp.saveDraft(PLAN_ID, [], 4)).rejects.toThrow("Tenant berubah");
+    await expect(distributionApiHttp.saveDraft(PLAN_ID, [], 4)).rejects.toThrow("Perusahaan yang aktif");
     expect(send).not.toHaveBeenCalled();
     scopeState.key = ["tenant", "branch"];
   });
@@ -605,7 +605,7 @@ describe("saving", () => {
     getOne.mockResolvedValue(order({ items: [] }));
 
     await expect(distributionApiHttp.saveDraft(PLAN_ID, [], 1)).rejects.toThrow(
-      /Schedule Agreement/,
+      /belum terikat ke SA/,
     );
     expect(send).not.toHaveBeenCalled();
   });

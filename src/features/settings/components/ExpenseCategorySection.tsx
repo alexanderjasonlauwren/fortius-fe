@@ -107,7 +107,7 @@ export function ExpenseCategorySection() {
       sortValue: (row) => row.sortOrder,
     },
     { key: "group", header: "Kelompok", render: (row) => <span className="text-xs text-ink-muted">{row.groupLabel}</span> },
-    { key: "account", header: "Akun", render: (row) => <span className="data text-xs text-ink-muted">{row.accountCode} — {row.accountName}</span> },
+    { key: "account", header: "Akun", render: (row) => <span className="data text-xs text-ink-muted">{row.accountCode} · {row.accountName}</span> },
     {
       key: "status",
       header: "Status",
@@ -221,7 +221,7 @@ export function ExpenseCategorySection() {
                   >
                     <option value="">— Pilih —</option>
                     {postableAccounts.map((a) => (
-                      <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                      <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                     ))}
                   </SelectInput>
                 </Field>

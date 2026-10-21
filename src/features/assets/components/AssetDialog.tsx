@@ -119,8 +119,8 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
           <DialogTitle>{editing ? `Ubah ${asset.assetCode}` : "Daftarkan aset"}</DialogTitle>
           <DialogDescription>
             {editing
-              ? "Kelas, kode, dan akun tidak dapat diubah -- daftarkan ulang bila itu yang salah."
-              : "Kelas aset menentukan akun aset/akumulasi/beban default -- isi akun di bawah hanya untuk mengganti default itu."}
+              ? "Kelas, kode, dan akun tidak dapat diubah. Bila salah, daftarkan ulang asetnya."
+              : "Kelas aset menentukan akun aset, akumulasi, dan beban yang dipakai. Isi akun di bawah hanya bila ingin memakai akun lain."}
           </DialogDescription>
         </DialogHeader>
 
@@ -166,7 +166,7 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
           {!editing && (
             <>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Akumulasi awal" htmlFor="ast-opening" hint="Opsional -- penyusutan sebelum register ini ada.">
+                <Field label="Akumulasi awal" htmlFor="ast-opening" hint="Opsional: penyusutan yang sudah terjadi sebelum aset dicatat di sini.">
                   <TextInput id="ast-opening" type="number" min={0} mono value={openingAccumulated} onChange={(e) => setOpeningAccumulated(Number(e.target.value))} />
                 </Field>
                 <Field label="Per tanggal" htmlFor="ast-opening-asof" required={openingAccumulated > 0}>
@@ -179,7 +179,7 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
                 <SelectInput id="ast-credit" value={creditAccountId} onChange={(e) => setCreditAccountId(e.target.value)}>
                   <option value="">— Tidak dijurnal —</option>
                   {creditAccounts.map((a) => (
-                    <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                    <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                   ))}
                 </SelectInput>
               </Field>
@@ -189,20 +189,20 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
                   <SelectInput id="ast-vehicle" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
                     <option value="">— Tidak ditautkan —</option>
                     {(vehicles.data ?? []).map((v) => (
-                      <option key={v.id} value={v.id}>{v.plat} — {v.armada}</option>
+                      <option key={v.id} value={v.id}>{v.plat} · {v.armada}</option>
                     ))}
                   </SelectInput>
                 </Field>
               )}
 
               <div className="space-y-2 rounded-md border border-line p-3">
-                <p className="text-xs font-semibold text-ink-muted">Akun (opsional -- kosongkan untuk default kelas)</p>
+                <p className="text-xs font-semibold text-ink-muted">Akun (opsional, kosongkan untuk memakai akun kelas aset)</p>
                 <div className="grid grid-cols-3 gap-3">
                   <Field label="Akun aset" htmlFor="ast-acc-asset">
                     <SelectInput id="ast-acc-asset" value={assetAccountId} onChange={(e) => setAssetAccountId(e.target.value)}>
                       <option value="">— Default —</option>
                       {assetAccounts.map((a) => (
-                        <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                        <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                       ))}
                     </SelectInput>
                   </Field>
@@ -210,7 +210,7 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
                     <SelectInput id="ast-acc-accum" value={accumulatedAccountId} onChange={(e) => setAccumulatedAccountId(e.target.value)}>
                       <option value="">— Default —</option>
                       {assetAccounts.map((a) => (
-                        <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                        <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                       ))}
                     </SelectInput>
                   </Field>
@@ -218,7 +218,7 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
                     <SelectInput id="ast-acc-expense" value={expenseAccountId} onChange={(e) => setExpenseAccountId(e.target.value)}>
                       <option value="">— Default —</option>
                       {expenseAccounts.map((a) => (
-                        <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                        <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                       ))}
                     </SelectInput>
                   </Field>

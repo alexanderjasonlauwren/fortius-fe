@@ -59,7 +59,7 @@ const STATUS_MAP: Record<string, StatusVariant> = {
   Limit: "warning",
   Menunggu: "warning",
   "Menunggu Verifikasi": "warning",
-  "Menunggu Review": "warning",
+  "Menunggu Diperiksa": "warning",
   // Expenses awaiting sign-off (and bills/receipts the same way).
   "Menunggu persetujuan": "warning",
   Pending: "warning",
@@ -84,7 +84,7 @@ const STATUS_MAP: Record<string, StatusVariant> = {
   Terlambat: "danger",
 
   // uncommitted
-  Draft: "draft",
+  Draf: "draft",
   Batal: "draft",
   Dibatalkan: "draft",
   // An expense withdrawn by whoever filed it, before any decision.

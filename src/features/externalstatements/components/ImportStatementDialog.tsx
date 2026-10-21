@@ -78,8 +78,7 @@ export function ImportStatementDialog({
         <DialogHeader>
           <DialogTitle>Impor laporan pembanding</DialogTitle>
           <DialogDescription>
-            Angka akuntan atau pihak lain, dibandingkan dengan sistem. Subtotal pada berkas selalu
-            dihitung ulang dari rumus layout -- tidak pernah dipercaya dari apa yang tertulis di berkas.
+            Angka dari akuntan atau pihak lain, untuk dibandingkan dengan sistem. Subtotal dihitung ulang dari baris-barisnya, bukan diambil dari angka di berkas.
           </DialogDescription>
         </DialogHeader>
 

@@ -82,7 +82,7 @@ export function RunDepreciationDialog({ open, latestPostedPeriod, onClose, onPos
         </Field>
         {outOfSequence && (
           <p className="text-xs text-rust-ink">
-            Run terbaru sudah pada periode {latestPostedPeriod} -- pilih periode setelahnya.
+            Penyusutan terakhir sudah untuk periode {latestPostedPeriod}. Pilih periode setelahnya.
           </p>
         )}
 
@@ -103,7 +103,7 @@ export function RunDepreciationDialog({ open, latestPostedPeriod, onClose, onPos
                 {preview.rows.map(({ asset, amount, isLast }) => (
                   <tr key={asset.id} className="border-t border-line">
                     <td className="px-3 py-1.5 text-ink">
-                      {asset.assetCode} — {asset.name}
+                      {asset.assetCode} · {asset.name}
                       {isLast && <span className="ml-1.5 text-2xs text-ink-muted">(periode terakhir)</span>}
                     </td>
                     <td className="data px-3 py-1.5 text-right text-ink">{formatRupiah(amount)}</td>

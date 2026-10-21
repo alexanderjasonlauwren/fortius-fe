@@ -301,10 +301,10 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: PERMISSIONS.OUTLETS_VIEW,
       },
       {
-        name: "Driver",
+        name: "Sopir",
         href: "/drivers",
         icon: IdCard,
-        hint: "Pengemudi, SIM, dan kinerja 30 hari",
+        hint: "Sopir, SIM, dan kinerja 30 hari",
         permission: PERMISSIONS.DRIVERS_VIEW,
       },
       // Two entries, because the service serves two lists. A driver swaps

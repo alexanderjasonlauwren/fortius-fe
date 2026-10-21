@@ -14,7 +14,7 @@ export function FiscalYearsPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Tutup Buku"
-        description="Kunci bulanan untuk review dan penutupan periode, dan tutup tahun buku yang memindahkan laba rugi tahun itu ke Laba Ditahan."
+        description="Kunci bulanan untuk peninjauan dan penutupan periode, dan tutup tahun buku yang memindahkan laba rugi tahun itu ke Laba Ditahan."
       />
       <CanAccess permission={PERMISSIONS.ACCOUNTING_PERIODS_VIEW}>
         <MonthlyPeriodsPanel />

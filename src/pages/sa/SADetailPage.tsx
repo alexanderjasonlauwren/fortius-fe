@@ -197,7 +197,7 @@ export function SADetailPage() {
       <Panel>
         <EmptyState
           icon={FileText}
-          title="Schedule Agreement tidak ditemukan"
+          title="SA tidak ditemukan"
           description="Data mungkin sudah dihapus. Kembali ke daftar untuk memilih yang lain."
           action={
             <Button asChild size="sm">
@@ -249,7 +249,7 @@ export function SADetailPage() {
           rowKey={(row) => row.productId}
           emptyIcon={Package}
           emptyMessage="Belum ada kuota produk"
-          emptyDescription="Agreement ini dicatat manual dan belum punya kuota per produk, atau belum diterapkan dari sebuah impor."
+          emptyDescription="SA ini dicatat manual dan belum punya kuota per produk, atau belum diterapkan dari impor."
           dense
         />
       </Panel>
@@ -260,7 +260,7 @@ export function SADetailPage() {
           hint={
             summary
               ? "Cek data impor terhadap dokumen aslinya"
-              : "Agreement ini dicatat manual, tidak berasal dari impor"
+              : "SA ini dicatat manual, tidak berasal dari impor"
           }
         />
         <PanelBody className="space-y-4">
@@ -284,7 +284,7 @@ export function SADetailPage() {
             </>
           ) : (
             <p className="text-sm text-ink-muted">
-              Tidak ada berkas impor di balik agreement ini.
+              SA ini tidak berasal dari berkas impor.
             </p>
           )}
         </PanelBody>

@@ -100,7 +100,7 @@ export function CashBankPage() {
   const deleteMutation = useDeskMutation({
     mutationFn: (row: CashVoucher) => deleteCashVoucher(row.id),
     success: (_, row) => ({ title: `${row.voucherNumber} dihapus` }),
-    errorTitle: "Draft tidak dapat dihapus",
+    errorTitle: "Draf tidak dapat dihapus",
     onDone: () => { setDeleting(null); setViewing(null); void vouchers.refetch(); },
   });
 
@@ -351,8 +351,8 @@ export function CashBankPage() {
       <ConfirmDialog
         isOpen={!!deleting}
         title={`Hapus ${deleting?.voucherNumber ?? ""}?`}
-        message="Draft ini belum diposting, jadi tidak ada jurnal yang perlu dibalik. Nomornya tidak dipakai ulang."
-        confirmLabel="Hapus draft"
+        message="Draf ini belum diposting, jadi tidak ada jurnal yang perlu dibalik. Nomornya tidak dipakai ulang."
+        confirmLabel="Hapus draf"
         isPending={deleteMutation.isPending}
         onConfirm={() => deleting && deleteMutation.mutate(deleting)}
         onCancel={() => setDeleting(null)}

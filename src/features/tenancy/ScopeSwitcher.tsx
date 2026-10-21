@@ -29,7 +29,7 @@ export function ScopeSwitcher() {
   const permissions = useAuthStore((s) => s.user?.permissions);
   const switching = useDeskMutation({
     mutationFn: setTenant,
-    errorTitle: "Gagal berpindah tenant",
+    errorTitle: "Gagal berpindah perusahaan",
   });
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export function ScopeSwitcher() {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-label={canSwitchTenant ? "Ganti tenant atau cabang" : "Ganti cabang"}
+        aria-label={canSwitchTenant ? "Ganti perusahaan atau cabang" : "Ganti cabang"}
         className={cn(
           "flex shrink-0 items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
           isConsolidated
@@ -109,7 +109,7 @@ export function ScopeSwitcher() {
           {canSwitchTenant && (
             <>
               <div className="flex items-end justify-between border-b border-line px-4 py-2.5">
-                <p className="label text-2xs text-ink-muted">Struktur tenant</p>
+                <p className="label text-2xs text-ink-muted">Struktur perusahaan</p>
                 <p className="data text-[0.625rem] text-ink-muted">01 = tertinggi</p>
               </div>
               <ul className="max-h-56 overflow-y-auto border-b border-line">

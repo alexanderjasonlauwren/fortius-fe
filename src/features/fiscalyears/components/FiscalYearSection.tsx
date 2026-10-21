@@ -37,7 +37,7 @@ export function FiscalYearSection() {
       <Panel>
         <PanelHeader
           title="Tahun buku"
-          hint="Hanya tahun yang pernah ditutup tercantum di sini -- tahun lain masih terbuka."
+          hint="Hanya tahun yang pernah ditutup yang tercantum di sini. Tahun lain masih terbuka."
           actions={
             <div className="flex gap-2">
               <CanAccess permission={PERMISSIONS.FISCAL_YEARS_VIEW}>

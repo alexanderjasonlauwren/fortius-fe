@@ -48,7 +48,7 @@ export function SIM3LONIntegrationPage() {
       <PageHeader
         eyebrow="Integrasi"
         title="SIM3LON"
-        description="Bukti integrasi: data ini ditarik langsung dari platform SIM3LON Pertamina dan ditampilkan apa adanya di sistem kita."
+        description="Data ini ditarik langsung dari SIM3LON Pertamina dan ditampilkan apa adanya."
       />
 
       {snapshot.isLoading && (
@@ -66,7 +66,7 @@ export function SIM3LONIntegrationPage() {
               <p className="font-semibold text-ink">Tidak dapat memuat data SIM3LON</p>
               <p className="mt-1 text-sm text-ink-muted">
                 {(snapshot.error as Error)?.message ??
-                  "Integrasi mungkin belum dikonfigurasi, atau tenant ini bukan tipe SPBE."}
+                  "Koneksi ke SIM3LON belum diatur, atau perusahaan ini bukan agen LPG. Hubungi admin."}
               </p>
             </div>
           </PanelBody>

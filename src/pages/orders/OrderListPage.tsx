@@ -66,7 +66,7 @@ export function OrderListPage() {
   const policy = useIntakePolicy();
   const manualIntake = policy.allowsManualIntake;
   const assertManualIntake = () => {
-    if (!manualIntake) throw new Error("Intake manual tidak tersedia. Gunakan alokasi SIM3LON pada Perencanaan Distribusi.");
+    if (!manualIntake) throw new Error("Pesanan tidak dicatat manual. Alokasi harian diambil dari SIM3LON di Perencanaan Distribusi.");
   };
   const [tab, setTab] = useState<Tab>("Baru");
   const [search, setSearch] = useState("");
@@ -136,7 +136,7 @@ export function OrderListPage() {
     errorTitle: "Penjadwalan gagal",
     success: (count) => ({
       title: `${count} pesanan masuk rencana`,
-      description: "Tetapkan driver di Perencanaan Distribusi sebelum konfirmasi.",
+      description: "Tetapkan sopir di Perencanaan Distribusi sebelum konfirmasi.",
     }),
     onDone: () => {
       setScheduling(false);
@@ -337,7 +337,7 @@ export function OrderListPage() {
       />
 
       {!manualIntake ? <div className="rounded-lg border border-line bg-panel px-5 py-3 text-sm text-ink-muted" role="status">
-        {policy.isError ? <>Kebijakan sumber pesanan belum tersedia. Intake manual dinonaktifkan. <Button size="sm" variant="outline" onClick={() => void policy.refetch()}>Coba lagi</Button></> : policy.isPending ? "Memuat kebijakan sumber pesanan; intake manual belum tersedia." : <>Pesanan mengikuti SIM3LON. <Link className="text-ink underline" to="/distribution">Buka Perencanaan Distribusi</Link>.</>}
+        {policy.isError ? <>Pengaturan sumber pesanan belum termuat, jadi pencatatan pesanan manual ditutup sementara. Muat ulang halaman. <Button size="sm" variant="outline" onClick={() => void policy.refetch()}>Coba lagi</Button></> : policy.isPending ? "Memuat kebijakan sumber pesanan; intake manual belum tersedia." : <>Pesanan mengikuti SIM3LON. <Link className="text-ink underline" to="/distribution">Buka Perencanaan Distribusi</Link>.</>}
       </div> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -553,7 +553,7 @@ export function OrderListPage() {
             >
               {(plans.data ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.kode} — {formatDateId(p.tanggal)}
+                  {p.kode} · {formatDateId(p.tanggal)}
                 </option>
               ))}
             </SelectInput>

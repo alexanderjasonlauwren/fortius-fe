@@ -196,7 +196,7 @@ export function VehiclePage() {
       <PageHeader
         eyebrow="Data induk"
         title="Armada"
-        description="Kendaraan yang dapat dimuati, kapasitas angkutnya, dan masa berlaku dokumennya. Driver ditetapkan per rit di papan berangkat."
+        description="Kendaraan yang dapat dimuati, kapasitas angkutnya, dan masa berlaku dokumennya. Sopir ditetapkan per rit di papan berangkat."
         actions={
           <Button onClick={() => openEditor(EMPTY)}>
             <Plus className="h-3.5 w-3.5" />
@@ -328,9 +328,9 @@ export function VehiclePage() {
                       })
                     }
                   >
-                    <option value="Aktif">Aktif — siap dimuati</option>
-                    <option value="Perawatan">Perawatan — sedang di bengkel</option>
-                    <option value="Nonaktif">Nonaktif — tidak dipakai</option>
+                    <option value="Aktif">Aktif (siap dimuati)</option>
+                    <option value="Perawatan">Perawatan (sedang di bengkel)</option>
+                    <option value="Nonaktif">Nonaktif (tidak dipakai)</option>
                   </SelectInput>
                 </Field>
               </div>

@@ -96,7 +96,7 @@ function opsToWire(ops: SettingsEntity["operasi"]): Partial<SettingsPayload> {
 
 function tenantPath(): string {
   const id = getActingTenant();
-  if (!id) throw new Error("Tidak ada tenant aktif.");
+  if (!id) throw new Error("Belum ada perusahaan yang aktif.");
   return `/tenants/${id}/settings`;
 }
 

@@ -417,8 +417,7 @@ export function NotificationPage() {
                             </div>
                             {rule.penerima.length === 0 && (
                               <p className="mt-1.5 text-2xs font-medium text-rust-ink">
-                                Tidak ada penerima — peringatan ini tidak akan sampai
-                                ke siapa pun.
+                                Belum ada penerima, jadi peringatan ini tidak akan terkirim ke siapa pun.
                               </p>
                             )}
                           </div>

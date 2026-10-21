@@ -129,7 +129,7 @@ export function CashVoucherDialog({ open, onClose, voucher, template, onSaved }:
         // consolidated leaves it to the backend's default branch.
         : createCashVoucher({ ...payload, branchId: branchId ?? undefined });
     },
-    success: (row) => ({ title: `${row.voucherNumber} disimpan sebagai draft` }),
+    success: (row) => ({ title: `${row.voucherNumber} disimpan sebagai draf` }),
     errorTitle: "Voucher tidak tersimpan",
     onDone: () => { onSaved(); onClose(); },
   });
@@ -158,7 +158,7 @@ export function CashVoucherDialog({ open, onClose, voucher, template, onSaved }:
             {editing ? `Ubah ${voucher?.voucherNumber}` : template ? `Duplikat ${template.voucherNumber}` : "Voucher kas/bank baru"}
           </DialogTitle>
           <DialogDescription>
-            Tersimpan sebagai draft -- posting menulis jurnal dan tidak dapat diedit lagi.
+            Disimpan sebagai draf. Setelah diposting, jurnalnya tercatat dan voucher tidak bisa diubah lagi.
           </DialogDescription>
         </DialogHeader>
 
@@ -240,7 +240,7 @@ export function CashVoucherDialog({ open, onClose, voucher, template, onSaved }:
                     >
                       <option value="">— Pilih —</option>
                       {postableAccounts.map((a) => (
-                        <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                        <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                       ))}
                     </SelectInput>
                   </Field>
@@ -310,7 +310,7 @@ export function CashVoucherDialog({ open, onClose, voucher, template, onSaved }:
           <Button type="button" variant="outline" onClick={onClose} disabled={save.isPending}>Batal</Button>
           <Button type="button" disabled={!canSubmit || save.isPending} onClick={() => save.mutate(undefined as never)}>
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Simpan draft
+            Simpan draf
           </Button>
         </DialogFooter>
       </DialogContent>

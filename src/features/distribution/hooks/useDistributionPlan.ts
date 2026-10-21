@@ -55,7 +55,7 @@ export function useDistributionPlan() {
     () => {
       const plans = planList.data;
       if (!plans?.length) return null;
-      return (plans.find((p) => p.status === "Draft") ?? plans[0]).id;
+      return (plans.find((p) => p.status === "Draf") ?? plans[0]).id;
     },
   );
 
@@ -87,7 +87,7 @@ export function useDistributionPlan() {
   const fillSourceMutation = useDeskMutation({
     mutationFn: async (plan: DistributionPlan) => {
       const assertScope = () => {
-        if (scopeKey().join("|") !== actingScope.join("|")) throw new Error("Tenant berubah. Buka rencana pada tenant yang sesuai untuk mencoba kembali.");
+        if (scopeKey().join("|") !== actingScope.join("|")) throw new Error("Perusahaan yang aktif sudah berganti. Buka rencananya dari perusahaan yang benar, lalu coba lagi.");
       };
       assertScope();
       const [review, currentPlan, currentRows] = await Promise.all([
@@ -213,7 +213,7 @@ export function useDistributionPlan() {
       dispatchTrip(tripId, overrides),
     errorTitle: "Keberangkatan gagal",
     success: (result) => ({
-      title: "Trip diberangkatkan",
+      title: "Rit diberangkatkan",
       description: `${result.issued} surat jalan diterbitkan.`,
     }),
   });
@@ -227,7 +227,7 @@ export function useDistributionPlan() {
       const originScope = scopeKey();
       const assertOriginScope = () => {
         if (scopeKey().join("|") !== originScope.join("|")) {
-          throw new Error("Tenant berubah. Buat rencana kembali pada tenant yang sesuai.");
+          throw new Error("Perusahaan yang aktif sudah berganti. Buat rencananya dari perusahaan yang benar.");
         }
       };
       if (intakePolicy.data === "manual") {
@@ -235,7 +235,7 @@ export function useDistributionPlan() {
         return { plan, originScope, sourceBacked: false };
       }
       if (intakePolicy.data !== "external_schedule") {
-        throw new Error("Kebijakan sumber rencana belum tersedia. Muat ulang sebelum membuat rencana.");
+        throw new Error("Pengaturan sumber rencana belum termuat. Muat ulang halaman sebelum membuat rencana.");
       }
       const review = await queryClient.fetchQuery({
         queryKey: [...originScope, "source-plan-review", input.saId, input.tanggal],
@@ -255,7 +255,7 @@ export function useDistributionPlan() {
     success: ({ plan, sourceBacked }) => ({
       title: `Rencana ${plan.kode} dibuat`,
       description: sourceBacked
-        ? "Rencana, alokasi pangkalan, reservasi kuota, dan sumber SIM3LON dibuat sebagai satu transaksi."
+        ? "Rencana dibuat lengkap dengan alokasi pangkalan dan kuota yang dipesan dari SA."
         : "Rencana dibuat. Alokasi dapat ditambahkan pada draf.",
     }),
     onDone: ({ plan, originScope, sourceBacked }) => {
@@ -269,11 +269,11 @@ export function useDistributionPlan() {
     mutationFn: (planId: string) => cancelDistributionPlan(planId, version()),
     errorTitle: "Pembatalan gagal",
     success: () =>
-      selectedPlanQuery.data?.status === "Draft"
+      selectedPlanQuery.data?.status === "Draf"
         ? { title: "Draf dibatalkan", description: "Reservasi kuota titik singgah yang belum berjalan dikembalikan ke SA." }
         : {
             title: "Rencana dibatalkan",
-            description: "Kuota dikembalikan ke Schedule Agreement.",
+            description: "Kuota dikembalikan ke SA.",
           },
   });
 

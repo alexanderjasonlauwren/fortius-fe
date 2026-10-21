@@ -183,7 +183,7 @@ export function FinancialStatementsPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Laporan Keuangan"
-        description="Laba Rugi, Neraca, dan Penjelasan Akun, dihasilkan langsung dari buku besar -- bukan angka terpisah yang bisa berbeda dari jurnal."
+        description="Laba Rugi, Neraca, dan Penjelasan Akun, langsung dari buku besar."
         meta={
           <SegmentedControl
             value={tab}

@@ -90,7 +90,7 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
         <DialogHeader>
           <DialogTitle>Impor Penyaluran Harian SIM3LON</DialogTitle>
           <DialogDescription>
-            Unggah ekspor XLSX bulanan, periksa perubahan dan pangkalan yang belum di-seed,
+            Unggah berkas Excel bulanan dari SIM3LON. Periksa perubahan dan pangkalan yang belum terdaftar,
             lalu terapkan sebagai sumber kebenaran bulan tersebut.
           </DialogDescription>
         </DialogHeader>
@@ -145,8 +145,7 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
                 hint="XLSX SIM3LON, maksimal 4 MB" disabled={previewMutation.isPending} />
             </Field>
             <p className="text-xs leading-relaxed text-ink-muted">
-              Id Registrasi dicocokkan ke kode pangkalan. Sistem tidak membuat pangkalan dari nama
-              atau mengarang nomor telepon, lokasi, maupun cabang yang tidak ada di berkas.
+              Pangkalan dicocokkan lewat Id Registrasi. Pangkalan yang belum terdaftar ditandai di pratinjau dan tidak dibuat otomatis.
             </p>
             <Button className="w-full" disabled={!file || !supplierName.trim() || !productId || previewMutation.isPending}
               onClick={() => file && previewMutation.mutate({ file, supplierName, productId })}>
@@ -210,10 +209,10 @@ function Review({
           </p>
           <ul className="mt-2 space-y-1 text-2xs text-ink">
             {preview.missingOutlets.map((outlet) => (
-              <li key={outlet.registrationCode}><span className="data">{outlet.registrationCode}</span> · {outlet.name} — {outlet.reason}</li>
+              <li key={outlet.registrationCode}><span className="data">{outlet.registrationCode}</span> · {outlet.name} · {outlet.reason}</li>
             ))}
             {preview.issues.map((issue, index) => (
-              <li key={`${issue.line}-${index}`}>Baris {issue.line}{issue.column ? ` · ${issue.column}` : ""} — {issue.reason}</li>
+              <li key={`${issue.line}-${index}`}>Baris {issue.line}{issue.column ? ` · ${issue.column}` : ""} · {issue.reason}</li>
             ))}
           </ul>
         </div>
@@ -325,7 +324,7 @@ function ReconciliationLedger({ review }: { review: SIM3LONReconciliationPreview
 
       {rows.length === 0 ? (
         <div className="rounded-sm border border-line bg-panel-sunk px-3 py-4 text-center text-xs text-ink-muted">
-          Impor pertama tidak memiliki rencana lama untuk direkonsiliasi.
+          Ini impor pertama, jadi belum ada rencana lama untuk dibandingkan.
         </div>
       ) : (
         <div className="max-h-72 space-y-2 overflow-y-auto pr-1">

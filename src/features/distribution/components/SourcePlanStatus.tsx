@@ -16,7 +16,7 @@ export function SourcePlanStatus({ review, isLoading, error, fillError, isFillin
     <p className="mt-2 text-xs">Upload baru belum otomatis memperbarui draf lama. Tinjau kuantitas sebelum konfirmasi; rekonsiliasi sumber belum tersedia.</p>
     <div className="mt-3 flex flex-wrap items-center gap-3">
       {(error || fillError || (canFill && review?.status === "ready")) ? <Button size="sm" variant="outline" disabled={isFilling} onClick={onRetry}>{canFill && !error && !fillError ? "Isi alokasi pada draf ini" : "Coba lagi pada rencana ini"}</Button> : null}
-      <Link to="/sa" className="text-xs text-ink underline">Tinjau upload Schedule Agreement</Link>
+      <Link to="/sa" className="text-xs text-ink underline">Periksa unggahan SA</Link>
     </div>
   </section>;
 }

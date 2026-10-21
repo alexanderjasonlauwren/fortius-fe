@@ -162,7 +162,7 @@ export function PaymentControlBoard() {
                             </Badge>
                             {row.lastPaymentAt && (
                               <span className={cn("mt-1 block text-2xs text-ink-muted", row.late && "text-rust-ink")}>
-                                {row.late ? "Terlambat — " : ""}dibayar {new Date(row.lastPaymentAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                {row.late ? "Terlambat · " : ""}dibayar {new Date(row.lastPaymentAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                               </span>
                             )}
                             {row.hasUnpricedLine && (
@@ -179,7 +179,7 @@ export function PaymentControlBoard() {
                                 size="xs"
                                 variant="outline"
                                 disabled
-                                title="Pangkalan ini ada pada lebih dari satu rencana untuk tanggal ini — pilih rencana yang benar secara manual."
+                                title="Pangkalan ini ada di lebih dari satu rencana untuk tanggal ini. Pilih rencana yang benar."
                               >
                                 Alokasikan
                               </Button>
@@ -258,8 +258,7 @@ function FundStopDialog({ target, onClose }: { target: StopTarget | null; onClos
         <DialogHeader>
           <DialogTitle>Alokasikan penerimaan untuk {target?.outletName}</DialogTitle>
           <DialogDescription>
-            Pilih penerimaan yang menutup seluruh titik ini pada rencana hari ini. Satu
-            penerimaan mengalokasikan satu titik secara penuh — tidak ada alokasi sebagian.
+            Pilih penerimaan yang menutup seluruh titik ini pada rencana hari ini. Satu penerimaan menutup satu titik secara penuh, tidak bisa sebagian.
           </DialogDescription>
         </DialogHeader>
 
@@ -283,7 +282,7 @@ function FundStopDialog({ target, onClose }: { target: StopTarget | null; onClos
               <option value="">Pilih penerimaan…</option>
               {(receipts.data ?? []).map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.nomor} — {formatRupiah(r.jumlah)} ({r.status})
+                  {r.nomor} · {formatRupiah(r.jumlah)} ({r.status})
                 </option>
               ))}
             </SelectInput>

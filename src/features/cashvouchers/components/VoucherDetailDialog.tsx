@@ -104,7 +104,7 @@ export function VoucherDetailDialog({ voucher: summary, onClose, onEdit, onPost,
               <>
                 <CanAccess permission={PERMISSIONS.CASH_VOUCHERS_UPDATE}>
                   <Button type="button" variant="ghost" size="sm" className="text-rust-ink" onClick={() => onDelete(v)}>
-                    <Trash2 className="h-3.5 w-3.5" /> Hapus draft
+                    <Trash2 className="h-3.5 w-3.5" /> Hapus draf
                   </Button>
                   <Button type="button" variant="outline" size="sm" disabled={!loaded} onClick={() => onEdit(v)}>
                     <Pencil className="h-3.5 w-3.5" /> Ubah

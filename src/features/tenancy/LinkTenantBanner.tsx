@@ -15,7 +15,7 @@ export function LinkTenantBanner() {
   const { tenant, linkTenant, linkNamesOtherTenant, setTenant, dismissLinkTenant } = useScope();
   const switching = useDeskMutation({
     mutationFn: setTenant,
-    errorTitle: "Gagal berpindah tenant",
+    errorTitle: "Gagal berpindah perusahaan",
   });
 
   if (!linkNamesOtherTenant) return null;
@@ -29,12 +29,12 @@ export function LinkTenantBanner() {
         {linkTenant ? (
           <>
             Tautan ini untuk <strong>{linkTenant.name}</strong>. Data yang tampil masih milik{" "}
-            <strong>{tenant?.nama ?? "tenant aktif"}</strong>.
+            <strong>{tenant?.nama ?? "perusahaan yang aktif"}</strong>.
           </>
         ) : (
           <>
-            Tautan ini menyebut tenant yang tidak dapat Anda akses. Data yang tampil milik{" "}
-            <strong>{tenant?.nama ?? "tenant aktif"}</strong>.
+            Tautan ini untuk perusahaan yang tidak bisa Anda akses. Data yang tampil milik{" "}
+            <strong>{tenant?.nama ?? "perusahaan yang aktif"}</strong>.
           </>
         )}
       </p>

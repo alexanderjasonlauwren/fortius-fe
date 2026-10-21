@@ -75,7 +75,7 @@ export function DisposeAssetDialog({ asset, onClose, onDisposed }: Props) {
               <Field label="Diterima di" htmlFor="dsp-proceeds-acct" required hint="Kas/bank, atau piutang bila belum dibayar.">
                 <SelectInput id="dsp-proceeds-acct" value={proceedsAccountId} onChange={(e) => setProceedsAccountId(e.target.value)}>
                   <option value="">— Pilih —</option>
-                  {proceedsAccounts.map((a) => <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>)}
+                  {proceedsAccounts.map((a) => <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>)}
                 </SelectInput>
               </Field>
             )}
@@ -90,7 +90,7 @@ export function DisposeAssetDialog({ asset, onClose, onDisposed }: Props) {
             <Field label="Akun laba/rugi" htmlFor="dsp-gl" hint="Default: Pendapatan Lain-lain (rugi dicatat di debitnya).">
               <SelectInput id="dsp-gl" value={gainLossAccountId} onChange={(e) => setGainLossAccountId(e.target.value)}>
                 <option value="">— Default —</option>
-                {gainLossAccounts.map((a) => <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>)}
+                {gainLossAccounts.map((a) => <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>)}
               </SelectInput>
             </Field>
             <Field label="Catatan" htmlFor="dsp-note">

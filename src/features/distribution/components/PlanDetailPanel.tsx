@@ -216,7 +216,7 @@ export function PlanDetailPanel({
   );
   const [dasar, setDasar] = useResettableState<string | null>([rows, plan?.id], () => null);
 
-  const editable = plan?.status === "Draft";
+  const editable = plan?.status === "Draf";
   // Choosing who drives and in which truck is its own permission
   // (distribution.assign.distribution_orders): someone may shape the day's
   // stops without deciding the crew. Without it the crew is shown, not edited.
@@ -537,7 +537,7 @@ export function PlanDetailPanel({
                     draft.length === 0
                       ? `Tambahkan ${outletLabel()} terlebih dahulu`
                       : dirty
-                        ? "Simpan draf dulu — usulan disusun dari titik singgah yang tersimpan"
+                        ? "Simpan draf dulu. Usulan disusun dari titik singgah yang sudah tersimpan"
                         : "Susun usulan trip; belum tersimpan sampai Anda menekan Simpan."
                   }
                 >
@@ -620,7 +620,7 @@ export function PlanDetailPanel({
           unit={unitLabel()}
           tone={overQuota ? "rust" : undefined}
         />
-        <Figure label="Trip" value={formatNumber(trips.length)} unit="rit" />
+        <Figure label="Rit" value={formatNumber(trips.length)} unit="rit" />
       </div>
 
       {/* What the last proposal could not place, and what it was based on.
@@ -678,7 +678,7 @@ export function PlanDetailPanel({
               <span className="data">
                 {formatNumber(belumTersimpan - plan.sisaKuotaSA)}
               </span>{" "}
-              {unitLabel()}. Kurangi jumlah, atau aktifkan agreement lain di{" "}
+              {unitLabel()}. Kurangi jumlah, atau aktifkan SA lain di{" "}
               <Link to="/sa" className="font-semibold text-ink underline decoration-signal decoration-2 underline-offset-2">
                 Schedule Agreement
               </Link>
@@ -687,12 +687,11 @@ export function PlanDetailPanel({
           )}
           {overloaded.map((t) => (
             <Blocker key={t.key}>
-              {t.driver?.label ?? "Driver"} pada trip{" "}
+              {t.driver?.label ?? "Sopir"} pada rit{" "}
               <span className="data">{t.tripNo}</span> membawa{" "}
               <span className="data">{formatNumber(t.muatan)}</span> {unitLabel()},
               melebihi kapasitas{" "}
-              <span className="data">{formatNumber(t.kapasitas)}</span>. Pindahkan
-              sebagian titik ke armada lain, atau ke trip berikutnya.
+              <span className="data">{formatNumber(t.kapasitas)}</span>. Pindahkan sebagian titik ke armada lain, atau ke rit berikutnya.
             </Blocker>
           ))}
           {tanpaProduk.length > 0 && (
@@ -703,8 +702,7 @@ export function PlanDetailPanel({
           )}
           {unassigned.length > 0 && (
             <Blocker>
-              {unassigned.length} titik belum punya driver. Tetapkan armada sebelum
-              konfirmasi.
+              {unassigned.length} titik belum punya sopir. Tetapkan armada sebelum konfirmasi.
             </Blocker>
           )}
           {kreditDiblokir.map((r) => (
@@ -739,28 +737,28 @@ export function PlanDetailPanel({
           <span className="mx-1 h-4 w-px bg-line" aria-hidden />
 
           <SelectInput
-            aria-label="Driver untuk titik terpilih"
+            aria-label="Sopir untuk titik terpilih"
             className="h-8 w-44 py-1.5 text-xs"
             value={bulkDriverId}
             onChange={(e) => setBulkDriverId(e.target.value)}
           >
-            <option value="">Pilih driver</option>
+            <option value="">Pilih sopir</option>
             {driverOptions.map((d) => (
               <option key={d.id} value={d.id} disabled={d.disabled}>
-                {d.label} — {d.sublabel}
+                {d.label} · {d.sublabel}
                 {d.disabled ? " (cuti)" : ""}
               </option>
             ))}
           </SelectInput>
           <SelectInput
-            aria-label="Trip untuk titik terpilih"
+            aria-label="Rit untuk titik terpilih"
             className="h-8 w-24 py-1.5 text-xs"
             value={bulkTripNo}
             onChange={(e) => setBulkTripNo(e.target.value)}
           >
             {Array.from({ length: MAX_TRIP }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
-                Trip {n}
+                Rit {n}
               </option>
             ))}
           </SelectInput>
@@ -818,7 +816,7 @@ export function PlanDetailPanel({
           <EmptyState
             icon={Truck}
             title="Rencana ini belum punya titik singgah"
-            description={allowsManualDemand ? `Tambahkan ${outletLabel()} satu per satu, atau tarik pesanan yang sudah disetujui dari halaman Pesanan ${outletLabelTitle()}.` : "Tinjau alokasi SIM3LON untuk tanggal ini. Sumber gagal atau belum lengkap tidak boleh diganti dengan demand manual."}
+            description={allowsManualDemand ? `Tambahkan ${outletLabel()} satu per satu, atau tarik pesanan yang sudah disetujui dari halaman Pesanan ${outletLabelTitle()}.` : "Periksa alokasi SIM3LON untuk tanggal ini. Bila datanya gagal dimuat atau belum lengkap, perbaiki dulu; titik tidak bisa diisi manual."}
             action={
               editable && allowsManualDemand && (
                 <div className="flex gap-2">
@@ -854,7 +852,7 @@ export function PlanDetailPanel({
                   Muatan
                 </th>
                 <th className="label px-3 py-2.5 text-2xs text-ink-muted" style={{ width: "14rem" }}>
-                  Driver / armada
+                  Sopir / armada
                 </th>
                 <th className="label px-3 py-2.5 text-2xs text-ink-muted" style={{ width: "8rem" }}>
                   Kredit
@@ -952,7 +950,7 @@ export function PlanDetailPanel({
             {editable
               ? "Alokasi mengikuti SIM3LON; kuantitas tidak diedit manual. Atur armada dan rute sebelum konfirmasi."
               : plan.status === "Batal"
-              ? "Rencana dibatalkan. Kuota sudah dikembalikan ke agreement."
+              ? "Rencana dibatalkan. Kuota sudah dikembalikan ke SA."
               : `Dikonfirmasi oleh ${plan.dikonfirmasiOleh ?? "—"}. Titik singgah tidak dapat diubah di sini; surat jalan diterbitkan saat trip diberangkatkan.`}
           </p>
         )}
@@ -1257,7 +1255,7 @@ function StopRow({
           {editableCrew ? (
             <>
               <SelectInput
-                aria-label={`Driver untuk ${row.outlet}`}
+                aria-label={`Sopir untuk ${row.outlet}`}
                 value={row.driverId ?? ""}
                 invalid={!row.driverId || over}
                 onChange={(e) =>
@@ -1272,7 +1270,7 @@ function StopRow({
                 <option value="">Belum ditetapkan</option>
                 {driverOptions.map((d) => (
                   <option key={d.id} value={d.id} disabled={d.disabled}>
-                    {d.label} — {d.sublabel}
+                    {d.label} · {d.sublabel}
                     {d.disabled ? " (cuti)" : ""}
                   </option>
                 ))}
@@ -1282,7 +1280,7 @@ function StopRow({
                   is not an assignment, and the grouping has nowhere to put it. */}
               {driver && (
                 <SelectInput
-                  aria-label={`Trip untuk ${row.outlet}`}
+                  aria-label={`Rit untuk ${row.outlet}`}
                   className="mt-1 py-1.5 text-xs"
                   value={String(tripOf(row))}
                   invalid={over}
@@ -1290,7 +1288,7 @@ function StopRow({
                 >
                   {Array.from({ length: MAX_TRIP }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>
-                      Trip {n}
+                      Rit {n}
                     </option>
                   ))}
                 </SelectInput>
@@ -1392,9 +1390,9 @@ function TripHeader({
     <tr className="border-b border-line bg-panel-sunk">
       <td colSpan={colSpan} className="px-5 py-2">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <span className="label text-2xs text-ink-muted">Trip {trip.tripNo}</span>
+          <span className="label text-2xs text-ink-muted">Rit {trip.tripNo}</span>
           <span className="text-sm font-medium text-ink">
-            {trip.driver?.label ?? "Driver tidak dikenal"}
+            {trip.driver?.label ?? "Sopir tidak dikenal"}
           </span>
           {trip.driver?.sublabel && (
             <span className="data text-2xs text-ink-muted">{trip.driver.sublabel}</span>
@@ -1421,7 +1419,7 @@ function TripHeader({
           */}
           {editableCrew ? (
             <SelectInput
-              aria-label={`Armada trip ${trip.tripNo}`}
+              aria-label={`Armada rit ${trip.tripNo}`}
               className={cn(
                 "data h-8 w-64 text-xs font-semibold",
                 !trip.vehicleId && "border-rust",
@@ -1437,9 +1435,9 @@ function TripHeader({
                 // picker already states it against this trip's own muatan.
                 return (
                   <option key={v.id} value={v.id} disabled={usedByOther}>
-                    {v.label} — {v.sublabel}
+                    {v.label} · {v.sublabel}
                     {usedByOther
-                      ? ` (dipakai ${usedByTrip.driver?.label ?? "trip lain"})`
+                      ? ` (dipakai ${usedByTrip.driver?.label ?? "rit lain"})`
                       : ""}
                   </option>
                 );
@@ -1487,7 +1485,7 @@ function TripHeader({
             value={trip.muatan}
             max={Math.max(trip.kapasitas, trip.muatan)}
             tone={over ? "rust" : "pine"}
-            label={`Muatan trip ${trip.tripNo}`}
+            label={`Muatan rit ${trip.tripNo}`}
           />
         </div>
       </td>

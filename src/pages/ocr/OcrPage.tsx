@@ -85,7 +85,7 @@ export function OcrPage() {
       key: "action", header: "",
       render: (row) => isReviewable(row.status) ? (
         <CanAccess permission={PERMISSIONS.OCR_VERIFY}>
-          <Button size="sm" variant="outline" onClick={() => setReviewing(row)}><ScanLine className="h-3.5 w-3.5" />Review</Button>
+          <Button size="sm" variant="outline" onClick={() => setReviewing(row)}><ScanLine className="h-3.5 w-3.5" />Periksa</Button>
         </CanAccess>
       ) : null,
     },
@@ -96,7 +96,7 @@ export function OcrPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Bukti Pengeluaran"
-        description="Unggah foto struk atau PDF nota, review isinya, lalu arsipkan di kategori biaya dan catat sebagai pengeluaran."
+        description="Unggah foto struk atau PDF nota, periksa isinya, lalu arsipkan di kategori biaya dan catat sebagai pengeluaran."
         actions={
           <CanAccess permission={PERMISSIONS.OCR_CREATE}>
             <Button onClick={() => setUploading(true)}><Upload className="h-3.5 w-3.5" />Unggah bukti</Button>

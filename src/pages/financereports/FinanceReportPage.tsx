@@ -226,7 +226,7 @@ export function FinanceReportPage() {
               <div key={c.label} className="flex items-start gap-2 rounded-md border border-rust bg-rust/5 p-2.5 text-xs text-rust-ink">
                 <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  <strong>{c.label}: tidak sesuai.</strong> Buku besar {formatRupiah(c.expected)}, laporan {formatRupiah(c.actual)} — selisih{" "}
+                  <strong>{c.label}: tidak sesuai.</strong> Buku besar {formatRupiah(c.expected)}, laporan {formatRupiah(c.actual)}, selisih{" "}
                   {formatRupiah(c.expected - c.actual)}. Ada dokumen yang jurnalnya tidak cocok; telusuri dari baris laporan.
                 </span>
               </div>

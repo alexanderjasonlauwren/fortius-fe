@@ -47,7 +47,7 @@ export function useScheduleAgreement() {
   const deleteMutation = useDeskMutation({
     mutationFn: (saId: string) => deleteSA(saId),
     errorTitle: "Hapus SA gagal",
-    success: "Schedule Agreement dihapus",
+    success: "SA dihapus",
   });
 
   const printMutation = useDeskMutation({

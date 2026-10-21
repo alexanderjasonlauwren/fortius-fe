@@ -45,10 +45,10 @@ export function describeAccess(permissions: readonly string[] = []): string {
   );
 
   if (held.has(PERMISSIONS.USERS_EDIT) && held.has(PERMISSIONS.SETTINGS_EDIT)) {
-    return "Akses penuh, termasuk pengaturan tenant dan manajemen pengguna.";
+    return "Akses penuh, termasuk pengaturan perusahaan dan manajemen pengguna.";
   }
   if (!canWrite) {
     return `Hanya membaca, pada ${permissions.length} izin. Tidak dapat mengubah data apa pun.`;
   }
-  return `${permissions.length} izin di tenant ini, termasuk hak ubah.`;
+  return `${permissions.length} izin di perusahaan ini, termasuk hak ubah.`;
 }

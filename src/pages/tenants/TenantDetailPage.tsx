@@ -112,7 +112,7 @@ export function TenantDetailPage() {
         <PanelBody>
           {t.leluhur.length === 0 ? (
             <p className="text-xs text-ink-muted">
-              Tenant puncak — tidak mewarisi dari siapa pun.
+              Tenant puncak, tidak mewarisi dari mana pun.
             </p>
           ) : (
             <nav className="flex flex-wrap items-center gap-1.5 text-sm">
@@ -135,12 +135,12 @@ export function TenantDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Panel>
-          <PanelHeader title="Identitas" hint="Tidak diwarisi — setiap badan hukum punya miliknya sendiri" />
+          <PanelHeader title="Identitas" hint="Tidak diwarisi. Setiap badan hukum punya datanya sendiri" />
           <PanelBody className="space-y-3 text-sm">
             <Row label="Kode" value={t.kode} mono />
             <Row label="Jenis" value={t.jenis === "grup" ? "Grup" : "Operasional"} />
             <Row label="Jenis usaha" value={t.jenisUsaha ? businessTypeLabel(t.jenisUsaha) : "—"} />
-            <Row label="Level" value={`${t.level} — dihitung dari puncak`} />
+            <Row label="Level" value={`${t.level} (dihitung dari puncak)`} />
             {t.profil && (
               <>
                 <Row label="Nama legal" value={t.profil.namaLegal} />
@@ -181,8 +181,8 @@ export function TenantDetailPage() {
       <ConfirmDialog
         isOpen={confirming}
         title={`Nonaktifkan ${t.nama}?`}
-        message="Tenant tidak dihapus — datanya tetap ada dan dapat dibaca."
-        details="Ditolak bila masih ada sub-tenant yang aktif: menonaktifkan induk tidak boleh diam-diam menonaktifkan anak-anaknya."
+        message="Tenant tidak dihapus. Datanya tetap ada dan bisa dibaca."
+        details="Nonaktifkan dulu semua sub-tenant yang masih aktif di bawahnya."
         confirmLabel="Nonaktifkan"
         isPending={deactivate.isPending}
         onCancel={() => setConfirming(false)}

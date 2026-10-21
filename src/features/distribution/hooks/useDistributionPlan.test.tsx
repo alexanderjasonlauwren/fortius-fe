@@ -21,7 +21,7 @@ vi.mock("../api/distributionApi", () => ({
   confirmPlan: vi.fn(), dispatchTrip: vi.fn(), addApprovedOrders: vi.fn(), printRouteSheet: vi.fn(),
 }));
 import { toTripAssignments, useDistributionPlan } from "./useDistributionPlan";
-const plan = { id: "plan", kode: "RD-1", saId: "sa", branchId: "branch", tanggal: "2026-09-19", status: "Draft", version: 1 };
+const plan = { id: "plan", kode: "RD-1", saId: "sa", branchId: "branch", tanggal: "2026-09-19", status: "Draf", version: 1 };
 beforeEach(() => {
   state.plans = [];
   state.canAssign = true;
@@ -66,7 +66,7 @@ describe("source-backed plan creation", () => {
       return { status: "ready", branchId: "branch", date: plan.tanggal, rows: [], unresolvedRegistrationCodes: [] };
     });
     await act(async () => {
-      await expect(result.current.fillSourceMutation.mutateAsync(result.current.selectedPlan!)).rejects.toThrow("Tenant berubah");
+      await expect(result.current.fillSourceMutation.mutateAsync(result.current.selectedPlan!)).rejects.toThrow("Perusahaan yang aktif");
     });
     expect(state.save).not.toHaveBeenCalled();
     expect(state.create).not.toHaveBeenCalled();
@@ -93,7 +93,7 @@ describe("source-backed plan creation", () => {
     rerender();
     await act(async () => {
       resolveCreate(plan);
-      await expect(createPromise).rejects.toThrow("Tenant berubah");
+      await expect(createPromise).rejects.toThrow("Perusahaan yang aktif");
     });
 
     expect(result.current.selectedPlanId).toBeNull();

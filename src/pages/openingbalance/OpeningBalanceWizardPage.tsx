@@ -55,7 +55,7 @@ export function OpeningBalanceWizardPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Saldo Awal"
-        description="Impor neraca saldo, piutang, hutang, dan register aset dari sebelum sistem ini dipakai -- satu kali saja, dan tidak dapat diulang."
+        description="Impor neraca saldo, piutang, hutang, dan daftar aset dari sebelum sistem ini dipakai. Hanya bisa dilakukan satu kali."
         actions={
           <Button variant="outline" size="sm" onClick={() => navigate("/ledger")}>
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -65,7 +65,7 @@ export function OpeningBalanceWizardPage() {
       />
 
       <Panel>
-        <PanelHeader title="1. Unduh template" hint="Setiap akun daun, terisi otomatis, plus sheet Piutang/Hutang/Aset kosong." />
+        <PanelHeader title="1. Unduh template" hint="Berisi semua akun yang bisa diisi saldo (sudah terisi otomatis), ditambah lembar Piutang, Hutang, dan Aset yang masih kosong." />
         <PanelBody className="space-y-3">
           <Field label="Per tanggal" htmlFor="ob-asof" required>
             <TextInput id="ob-asof" type="date" value={asOf} onChange={(e) => { setAsOf(e.target.value); setPreview(null); }} />
@@ -107,8 +107,8 @@ export function OpeningBalanceWizardPage() {
               )}
               <p className="text-sm text-ink">
                 {preview.balanced && preview.errors.length === 0
-                  ? "Berkas valid dan seimbang. Siap untuk commit."
-                  : "Berkas memiliki masalah yang harus diperbaiki sebelum commit."}
+                  ? "Berkas lengkap dan seimbang. Siap disimpan."
+                  : "Ada yang perlu diperbaiki di berkas sebelum disimpan."}
               </p>
             </div>
 
@@ -126,7 +126,7 @@ export function OpeningBalanceWizardPage() {
                 <ul className="space-y-1">
                   {preview.errors.map((e, i) => (
                     <li key={i}>
-                      <span className="data">{e.sheet} baris {e.row}</span> — {e.message}
+                      <span className="data">{e.sheet} baris {e.row}</span>: {e.message}
                     </li>
                   ))}
                 </ul>

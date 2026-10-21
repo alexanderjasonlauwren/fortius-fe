@@ -139,11 +139,11 @@ describe("mapping the wire shape onto the domain", () => {
     });
 
     const [sa] = await saApiHttp.getSAList();
-    expect(sa.status).toBe("Draft");
+    expect(sa.status).toBe("Draf");
   });
 
   it.each([
-    ["draft", "Draft"],
+    ["draft", "Draf"],
     ["active", "Aktif"],
     ["completed", "Selesai"],
     // A superseded agreement is finished from the agent's point of view: the
@@ -169,7 +169,7 @@ describe("mapping the wire shape onto the domain", () => {
     });
 
     const [sa] = await saApiHttp.getSAList();
-    expect(sa.status).toBe("Draft");
+    expect(sa.status).toBe("Draf");
   });
 
   // The backend publishes HOW a figure arrived, not who typed it. That is the

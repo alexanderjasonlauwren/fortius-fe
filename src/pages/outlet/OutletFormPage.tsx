@@ -168,7 +168,7 @@ export function OutletFormPage() {
       return;
     }
     if (!isWithinIndonesia(parsed.lat, parsed.lng)) {
-      setCoordPasteError("Koordinat ini berada di luar Indonesia -- periksa urutan lintang/bujur.");
+      setCoordPasteError("Koordinat ini berada di luar Indonesia. Periksa urutan lintang dan bujur.");
       return;
     }
     set("lat", parsed.lat);
@@ -271,9 +271,9 @@ export function OutletFormPage() {
                   value={form.status}
                   onChange={(e) => set("status", e.target.value as OutletStatus)}
                 >
-                  <option value="Aktif">Aktif — dapat menerima pengiriman</option>
-                  <option value="Nonaktif">Nonaktif — tidak dilayani sementara</option>
-                  <option value="Ditangguhkan">Ditangguhkan — bermasalah</option>
+                  <option value="Aktif">Aktif (dapat menerima pengiriman)</option>
+                  <option value="Nonaktif">Nonaktif (tidak dilayani sementara)</option>
+                  <option value="Ditangguhkan">Ditangguhkan (bermasalah)</option>
                 </SelectInput>
               </Field>
 
@@ -477,7 +477,7 @@ export function OutletFormPage() {
               <Field
                 label="Lintang"
                 htmlFor="lat"
-                hint={form.lat === 0 && form.lng === 0 ? "Belum dipetakan — pangkalan ini tidak bisa masuk rute otomatis." : undefined}
+                hint={form.lat === 0 && form.lng === 0 ? "Belum dipetakan, jadi pangkalan ini tidak bisa masuk rute otomatis." : undefined}
               >
                 <TextInput
                   id="lat"

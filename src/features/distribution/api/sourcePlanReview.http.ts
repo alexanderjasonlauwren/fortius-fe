@@ -18,7 +18,7 @@ export const sourcePlanReviewHttp: SourcePlanReviewApi = {
     const response = await getOne<ReviewResponse>(`/schedule-agreements/${saId}/outlet-plan-review?date=${encodeURIComponent(date)}`);
     const statuses: SourcePlanStatus[] = ["ready", "no_source", "uncovered_date", "empty_day", "incomplete"];
     if (!statuses.includes(response.status) || !Array.isArray(response.rows) || !Array.isArray(response.unresolved_registration_codes)) {
-      throw new Error("Hasil peninjauan sumber SIM3LON tidak valid.");
+      throw new Error("Data alokasi SIM3LON tidak bisa dibaca. Muat ulang halaman, lalu coba lagi.");
     }
     if (response.date !== date || (response.status === "ready" && (!response.batch_id || !response.branch_id || !response.product_id || response.period_month !== date.slice(0, 7) || response.rows.length === 0 || response.unresolved_registration_codes.length > 0 || response.rows.some((row) => !row.outlet_id || row.product_id !== response.product_id || !Number.isInteger(row.planned_qty) || row.planned_qty <= 0)))) {
       throw new Error("Alokasi SIM3LON belum lengkap untuk tanggal yang dipilih.");

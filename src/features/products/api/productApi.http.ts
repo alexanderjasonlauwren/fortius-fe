@@ -69,7 +69,7 @@ async function resolveDefaultCategory(): Promise<string> {
   const first = categories[0];
   if (!first) {
     throw new Error(
-      "Tenant ini belum memiliki kategori produk terdaftar, jadi produk baru tidak dapat dibuat.",
+      "Perusahaan ini belum punya kategori produk, jadi produk baru belum bisa dibuat.",
     );
   }
   return first.code;
@@ -94,7 +94,7 @@ function parseWeightKg(ukuran: string): number {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(
       `"${ukuran}" tidak mengandung angka berat yang valid (contoh: "12 kg"). ` +
-        "Bangun ini menyimpan ukuran sebagai berat produk di build API.",
+        "Ukuran disimpan sebagai berat produk dalam kg.",
     );
   }
   return value;
@@ -212,7 +212,7 @@ async function resolveAccountId(code: string | undefined): Promise<string | unde
   const accounts = leafAccounts(await financeApiHttp.getChartOfAccounts());
   const match = accounts.find((a) => a.akun.kode === code);
   if (!match) {
-    throw new Error(`Akun "${code}" tidak ditemukan atau bukan akun sub (leaf).`);
+    throw new Error(`Akun "${code}" tidak ditemukan, atau merupakan akun induk. Pilih akun turunannya.`);
   }
   return match.akun.id;
 }
@@ -330,7 +330,7 @@ async function removeProduct(id: string): Promise<void> {
  * not a normal path.
  */
 async function changeStock(): Promise<ProductView> {
-  throw new Error("Penyesuaian stok belum tersedia dari API di build ini.");
+  throw new Error("Penyesuaian stok belum tersedia di sini. Koreksi stok lewat stok opname di menu Persediaan.");
 }
 
 async function getStockSummary(): Promise<StockSummary> {

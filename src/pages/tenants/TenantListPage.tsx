@@ -80,7 +80,7 @@ export function TenantListPage() {
                           {t.nama}
                           {isActing && (
                             <span className="ml-2 text-2xs font-normal text-ink-muted">
-                              — tenant aktif
+                              (tenant aktif)
                             </span>
                           )}
                         </span>

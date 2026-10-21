@@ -325,8 +325,7 @@ export function TransportInvoicePage() {
             <DialogHeader>
               <DialogTitle>Buat invoice {creatingFor?.claimNumber}</DialogTitle>
               <DialogDescription>
-                Nilai invoice adalah nilai BA LO dan tidak dapat diubah. Nomor, penerima, order dan rekening
-                diisi dari invoice sebelumnya -- periksa lalu simpan.
+                Nilai invoice adalah nilai BA LO dan tidak dapat diubah. Nomor, penerima, order dan rekening diisi dari invoice sebelumnya. Periksa lalu simpan.
               </DialogDescription>
             </DialogHeader>
 

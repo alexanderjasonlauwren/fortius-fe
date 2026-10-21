@@ -112,7 +112,7 @@ function toLiveCandidate(row: SIM3LONLiveCandidateResponse): SIM3LONLiveCandidat
  * for a state nobody can reach is a word to explain.
  */
 const STATUS_TO_DOMAIN: Record<string, SAStatus> = {
-  draft: "Draft",
+  draft: "Draf",
   active: "Aktif",
   completed: "Selesai",
   amended: "Selesai",
@@ -128,7 +128,7 @@ const STATUS_TO_DOMAIN: Record<string, SAStatus> = {
  * changed.
  */
 function statusOf(row: AgreementResponse): SAStatus {
-  const mapped = STATUS_TO_DOMAIN[row.sa_status] ?? "Draft";
+  const mapped = STATUS_TO_DOMAIN[row.sa_status] ?? "Draf";
   if (mapped === "Aktif" && row.total_quota_qty > 0 && row.allocated_quota_qty >= row.total_quota_qty) {
     return "Limit";
   }
@@ -201,7 +201,7 @@ function toImportSummary(row: ImportSummaryResponse | null): SAImportSummary | n
 
 /** The console's status words, back to the backend's. */
 const STATUS_TO_WIRE: Partial<Record<SAStatus, string>> = {
-  Draft: "draft",
+  Draf: "draft",
   Aktif: "active",
   Selesai: "completed",
 };
@@ -222,7 +222,7 @@ async function defaultBranchID(): Promise<string> {
   const preferred = page.items.find((b) => b.is_default) ?? page.items[0];
   if (!preferred) {
     throw new Error(
-      "Tenant ini belum punya cabang, sehingga SA tidak bisa dicatat. Buat cabang lebih dulu.",
+      "Perusahaan ini belum punya cabang, jadi SA belum bisa dicatat. Buat cabang lebih dulu.",
     );
   }
   return preferred.id;
@@ -511,7 +511,7 @@ function toSIM3LONReconciliation(row: SIM3LONReconciliationResponse): SIM3LONRec
 
 function assertScope(originScope: readonly [string, string]): void {
   if (scopeKey().join("|") !== originScope.join("|")) {
-    throw new Error("Tenant berubah. Muat ulang impor pada tenant yang sesuai.");
+    throw new Error("Perusahaan yang aktif sudah berganti. Unggah ulang berkasnya dari perusahaan yang benar.");
   }
 }
 

@@ -252,7 +252,7 @@ export function TransactionListPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Daftar Penjualan"
-        description="Setiap surat jalan beserta tagihan dan status bayarnya, ditambah kwitansi yang masuk lewat pindaian — daftar kerja untuk menagih yang belum ditagih atau belum lunas. Saring, lalu unduh untuk diolah di Excel."
+        description="Setiap surat jalan beserta tagihan dan status bayarnya, ditambah kwitansi yang masuk lewat pindaian. Pakai sebagai daftar kerja untuk menagih yang belum ditagih atau belum lunas. Saring, lalu unduh untuk diolah di Excel."
         actions={
           <CanAccess permission={PERMISSIONS.TRANSACTIONS_EXPORT}>
             <Button
@@ -342,7 +342,7 @@ export function TransactionListPage() {
             <SearchInput
               value={filters.search ?? ""}
               onChange={(search) => patch({ search })}
-              placeholder={`Surat jalan, invoice, ${outletLabel()}, driver, atau plat`}
+              placeholder={`Surat jalan, invoice, ${outletLabel()}, sopir, atau plat`}
             />
           </Field>
 

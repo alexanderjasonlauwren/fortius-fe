@@ -7,7 +7,7 @@ describe("failure messages", () => {
     const closed = new ApiError({ message: "The period 2026-09 is closed; date the entry in an open month", code: "PERIOD_CLOSED", status: 409 });
     expect(describeFailure(closed)).toMatch(/sudah ditutup/);
     const review = new ApiError({ message: "x", code: "PERIOD_IN_REVIEW", status: 409 });
-    expect(describeFailure(review)).toMatch(/sedang direview/);
+    expect(describeFailure(review)).toMatch(/sedang ditinjau/);
   });
 
   it("keep the server's message for anything else", () => {

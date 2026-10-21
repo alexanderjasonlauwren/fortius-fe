@@ -79,8 +79,7 @@ export function ImportBankStatementDialog({ open, onClose, onImported }: ImportB
         <DialogHeader>
           <DialogTitle>Impor rekening koran</DialogTitle>
           <DialogDescription>
-            Kolom dibaca mengikuti preset BNI secara default -- buka "Pemetaan kolom" di bawah bila
-            berkas memakai susunan kolom lain.
+            Kolom dibaca dengan format BNI. Bila berkas memakai susunan kolom lain, atur di Pemetaan kolom di bawah.
           </DialogDescription>
         </DialogHeader>
 

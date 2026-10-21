@@ -140,7 +140,7 @@ export function AssetsPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Aset Tetap"
-        description="Register aset tetap/tidak berwujud/prepaid, penyusutan bulanan, dan rekonsiliasi dengan buku besar."
+        description="Daftar aset tetap, aset tak berwujud, dan biaya dibayar di muka, beserta penyusutan bulanan dan pencocokannya dengan buku besar."
         meta={
           <SegmentedControl
             value={tab}
@@ -178,7 +178,7 @@ export function AssetsPage() {
             defaultSortKey="asset"
             dense
             emptyMessage="Belum ada aset terdaftar"
-            emptyDescription="Daftarkan bangunan, kendaraan, inventaris, aset tidak berwujud, atau prepaid."
+            emptyDescription="Daftarkan bangunan, kendaraan, inventaris, aset tak berwujud, atau biaya dibayar di muka."
           />
         </Panel>
       )}
@@ -200,7 +200,7 @@ export function AssetsPage() {
           {runs.isLoading ? (
             <Skeleton className="h-64 w-full" />
           ) : (runs.data ?? []).length === 0 ? (
-            <p className="p-6 text-center text-sm text-ink-muted">Belum ada run penyusutan yang diposting.</p>
+            <p className="p-6 text-center text-sm text-ink-muted">Belum ada penyusutan yang diposting.</p>
           ) : (
             <ul className="divide-y divide-line">
               {(runs.data ?? []).map((run) => (
@@ -235,7 +235,7 @@ export function AssetsPage() {
 
       {tab === "rekonsiliasi" && (
         <Panel>
-          <PanelHeader title="Rekonsiliasi" hint="Register dibandingkan dengan saldo buku besar, per kelas aset." />
+          <PanelHeader title="Rekonsiliasi" hint="Daftar aset dibandingkan dengan saldo buku besar, per kelas aset." />
           <div className="flex flex-wrap items-end gap-4 border-b border-line p-4">
             <Field label="Per tanggal" htmlFor="recon-asof">
               <input
@@ -291,7 +291,7 @@ export function AssetsPage() {
                   {row.assetClass === "prepaid" && (
                     <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-muted">
                       <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
-                      Prepaid tidak memiliki akun akumulasi terpisah -- amortisasinya mengkredit akun aset itu sendiri, jadi selisih akumulasi di atas bukan indikasi masalah.
+                      Biaya dibayar di muka tidak punya akun akumulasi sendiri karena amortisasinya langsung mengurangi akun asetnya, jadi selisih akumulasi di atas wajar.
                     </p>
                   )}
                 </div>

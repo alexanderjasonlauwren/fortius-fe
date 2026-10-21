@@ -187,7 +187,7 @@ export function ChartOfAccountsPanel() {
                   <ul className="space-y-0.5">
                     {preview.konflik.map((k) => (
                       <li key={k.kode}>
-                        <span className="data">{k.kode}</span> — {k.alasan}
+                        <span className="data">{k.kode}</span>: {k.alasan}
                       </li>
                     ))}
                   </ul>

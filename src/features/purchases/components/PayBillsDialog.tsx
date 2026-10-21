@@ -91,7 +91,7 @@ export function PayBillsDialog({ open, onClose, onPaid }: PayBillsDialogProps) {
           <Field label="Vendor" htmlFor="pay-bills-vendor" required className="sm:col-span-2">
             <SelectInput id="pay-bills-vendor" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
               <option value="">— Pilih —</option>
-              {(vendors.data ?? []).map((v) => <option key={v.id} value={v.id}>{v.code} — {v.name}</option>)}
+              {(vendors.data ?? []).map((v) => <option key={v.id} value={v.id}>{v.code} · {v.name}</option>)}
             </SelectInput>
           </Field>
           <Field label="Jumlah transfer" htmlFor="pay-bills-total">

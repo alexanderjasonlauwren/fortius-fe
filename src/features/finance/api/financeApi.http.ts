@@ -426,7 +426,7 @@ async function defaultPaymentMethodId(): Promise<string> {
   const methods = await getPaymentMethods();
   const chosen = methods.find((m) => m.kode === "bank_transfer") ?? methods[0];
   if (!chosen) {
-    throw new Error("Tidak ada metode pembayaran terdaftar untuk tenant ini.");
+    throw new Error("Belum ada metode pembayaran untuk perusahaan ini.");
   }
   return chosen.id;
 }

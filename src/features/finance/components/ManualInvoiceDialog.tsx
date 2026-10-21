@@ -159,7 +159,7 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
         <DialogHeader>
           <DialogTitle>Buat tagihan</DialogTitle>
           <DialogDescription>
-            Tagihan tanpa surat jalan di baliknya -- pendaftaran pangkalan baru, atau biaya lain-lain.
+            Tagihan tanpa surat jalan, misalnya pendaftaran pangkalan baru atau biaya lain-lain.
           </DialogDescription>
         </DialogHeader>
 
@@ -202,7 +202,7 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
 
           {jenis === "registration" ? (
             <>
-              <Field label="Paket pendaftaran" htmlFor="mi-package" hint="Opsional -- mengisi nilai dan item kit di bawah.">
+              <Field label="Paket pendaftaran" htmlFor="mi-package" hint="Opsional. Mengisi nilai dan item kit di bawah secara otomatis.">
                 <SelectInput id="mi-package" value={packageId} onChange={(e) => applyPackage(e.target.value)}>
                   <option value="">— Tanpa paket —</option>
                   {(packages.data ?? []).filter((p: RegistrationPackage) => p.isActive).map((p) => (
@@ -268,7 +268,7 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
                       >
                         <option value="">— Pilih —</option>
                         {revenueAccounts.map((a) => (
-                          <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                          <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                         ))}
                       </SelectInput>
                     </Field>

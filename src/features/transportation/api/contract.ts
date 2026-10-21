@@ -16,7 +16,7 @@ export type ClaimView = TransportationClaimEntity;
 
 /** Indonesian display labels -- the wire/store value stays the CHECK constraint's own English word. */
 export const CLAIM_STATUS_LABEL: Record<ClaimStatus, string> = {
-  draft: "Draft",
+  draft: "Draf",
   submitted: "Diserahkan",
   under_review: "Sedang Ditinjau",
   approved: "Disetujui",

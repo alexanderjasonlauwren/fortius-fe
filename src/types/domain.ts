@@ -265,7 +265,7 @@ export interface GeofenceAlertEntity extends Scoped {
   version: number;
 }
 
-export type SAStatusEntity = "Draft" | "Aktif" | "Limit" | "Selesai";
+export type SAStatusEntity = "Draf" | "Aktif" | "Limit" | "Selesai";
 
 export interface SAEntity extends Scoped {
   id: ID;
@@ -366,7 +366,7 @@ export interface SIM3LONPlanSourceEntity extends Scoped {
   operationalDate: string;
 }
 
-export type PlanStatusEntity = "Draft" | "Terkonfirmasi" | "Selesai" | "Batal";
+export type PlanStatusEntity = "Draf" | "Terkonfirmasi" | "Selesai" | "Batal";
 
 export interface PlanEntity extends Scoped {
   id: ID;
@@ -841,7 +841,7 @@ export interface JournalEntity extends Scoped {
   version: number;
 }
 
-export type ReceiptStatus = "Menunggu Review" | "Tervalidasi" | "Ditolak";
+export type ReceiptStatus = "Menunggu Diperiksa" | "Tervalidasi" | "Ditolak";
 
 /**
  * One item read off a scanned receipt.

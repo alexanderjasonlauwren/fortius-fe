@@ -11,7 +11,7 @@ const EVENT_LABEL: Record<PlanHistoryEvent["event"], string> = {
   plan_confirmed: "Mengonfirmasi rencana",
   plan_cancelled: "Membatalkan rencana",
   crew_assigned: "Mengatur armada dan sopir",
-  trip_closed: "Menutup trip",
+  trip_closed: "Menutup rit",
 };
 
 /**
@@ -67,7 +67,7 @@ export function PlanHistory({ planId }: { planId: string }) {
                   </span>
                   {!event.succeeded && (
                     <span className="text-2xs text-rust-ink">
-                      ditolak{event.statusCode === 409 ? " — data sudah diubah orang lain" : ` (${event.statusCode})`}
+                      ditolak{event.statusCode === 409 ? " (data sudah diubah orang lain)" : ` (${event.statusCode})`}
                     </span>
                   )}
                 </li>

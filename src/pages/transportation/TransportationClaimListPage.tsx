@@ -258,7 +258,7 @@ export function TransportationClaimListPage() {
       render: (row) => (
         <div className="flex justify-end gap-1">
           <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
-            <ActionTooltip label="Lihat Berita Acara / BA LO -- cetak atau unduh PDF dari sana">
+            <ActionTooltip label="Lihat Berita Acara / BA LO. Cetak atau unduh PDF dari sana">
               <Button
                 variant="ghost"
                 size="icon-xs"
@@ -346,7 +346,7 @@ export function TransportationClaimListPage() {
               always fail past draft. */}
           {row.claimStatus === "draft" && (
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_DELETE}>
-              <ActionTooltip label="Hapus klaim draft ini">
+              <ActionTooltip label="Hapus klaim draf ini">
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -369,7 +369,7 @@ export function TransportationClaimListPage() {
       <PageHeader
         eyebrow="Operasi harian"
         title="Klaim Transportasi (BAST)"
-        description="Buka klaim untuk satu periode, lalu buat lininya dari pengiriman yang sudah selesai -- nilai klaim dihitung otomatis, tidak diketik manual."
+        description="Buka klaim untuk satu periode, lalu isi lininya dari LO SIM3LON atau dari pengiriman yang sudah selesai. Nilai klaim dihitung otomatis."
         actions={
           <div className="flex gap-2">
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
@@ -383,7 +383,7 @@ export function TransportationClaimListPage() {
               </ActionTooltip>
             </CanAccess>
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_CREATE}>
-              <ActionTooltip label="Buka klaim draft untuk satu bulan, lalu isi lininya dari LO SIM3LON atau pengiriman">
+              <ActionTooltip label="Buka klaim draf untuk satu bulan, lalu isi lininya dari LO SIM3LON atau pengiriman">
                 <Button onClick={() => openEditor(EMPTY)}>
                   <Plus className="h-3.5 w-3.5" />
                   Buka klaim baru
@@ -452,7 +452,7 @@ export function TransportationClaimListPage() {
               <DialogTitle>{editing?.id ? "Ubah BAST" : "Buka klaim baru"}</DialogTitle>
               <DialogDescription>
                 {editing?.id
-                  ? "Nomor BAST adalah nomor pada dokumen serah terima itu sendiri -- kosongkan jika belum diterbitkan."
+                  ? "Nomor BAST adalah nomor di dokumen serah terimanya. Kosongkan bila belum terbit."
                   : "Nomor klaim diterbitkan otomatis. Setelah dibuka, gunakan “Buat lini” pada baris klaim untuk menghitung nilainya dari pengiriman pada periode ini."}
               </DialogDescription>
             </DialogHeader>
@@ -489,7 +489,7 @@ export function TransportationClaimListPage() {
                 <Field
                   label="Nomor BAST"
                   htmlFor="tc-ref"
-                  hint="Nomor pada dokumen fisik/hasil pindai -- kosongkan jika belum ada."
+                  hint="Nomor di dokumen fisik atau hasil pindaian. Kosongkan bila belum ada."
                 >
                   <TextInput
                     id="tc-ref"
@@ -526,8 +526,7 @@ export function TransportationClaimListPage() {
             <DialogHeader>
               <DialogTitle>Ubah status {statusEditing?.labelForTitle}</DialogTitle>
               <DialogDescription>
-                Catat status yang dibaca dari iVendor. Bisa diubah ke status apa pun, kapan
-                pun -- ini catatan atas proses di luar sistem, bukan alur persetujuan internal.
+                Catat status terbaru dari iVendor. Status bisa diubah kapan saja mengikuti iVendor.
               </DialogDescription>
             </DialogHeader>
 
@@ -664,7 +663,7 @@ export function TransportationClaimListPage() {
       <ConfirmDialog
         isOpen={!!pendingDelete}
         title={`Hapus ${pendingDelete?.claimNumber}?`}
-        message="Hanya draft yang bisa dihapus. Klaim yang sudah diserahkan adalah catatan yang sudah dikirim ke prinsipal -- ubah statusnya jika perlu dikoreksi."
+        message="Hanya klaim draf yang bisa dihapus. Klaim yang sudah diajukan ke Pertamina cukup diubah statusnya bila perlu dikoreksi."
         confirmLabel="Hapus"
         variant="destructive"
         isPending={deleteMutation.isPending}

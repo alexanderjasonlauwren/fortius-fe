@@ -39,7 +39,7 @@ export interface RuleMeta {
 export const RULE_META: RuleMeta[] = [
   {
     key: "saExpiry",
-    label: "Agreement mendekati kedaluwarsa",
+    label: "SA mendekati kedaluwarsa",
     description:
       "Kuota yang tidak dijadwalkan akan hangus saat periode SA berakhir.",
     ambangLabel: "Peringatkan sebelum berakhir",

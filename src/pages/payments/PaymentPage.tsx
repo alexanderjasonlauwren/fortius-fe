@@ -273,7 +273,7 @@ export function PaymentPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Penerimaan Kas"
-        description={`Uang masuk dari ${outletLabel()}. Setiap penerimaan dialokasikan ke tagihan tertentu — satu transfer boleh melunasi beberapa tagihan sekaligus.`}
+        description={`Uang masuk dari ${outletLabel()}. Setiap penerimaan dialokasikan ke tagihan tertentu. Satu transfer boleh melunasi beberapa tagihan sekaligus.`}
         actions={
           <CanAccess permission={PERMISSIONS.PAYMENTS_CREATE}>
             <Button onClick={() => setRecording(true)}>

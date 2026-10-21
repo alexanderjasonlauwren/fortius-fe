@@ -69,8 +69,7 @@ export function NumberingSection() {
         </div>
 
         <p className="rounded-md border border-line bg-panel-sunk px-4 py-3 text-xs leading-relaxed text-ink-muted">
-          Awalan ditetapkan sistem saat cabang dibuat dan tidak dapat diubah dari
-          sini — nilai di atas adalah yang sesungguhnya dipakai.
+          Awalan diatur sistem saat cabang dibuat dan tidak bisa diubah di sini. Nilai di atas adalah yang dipakai.
         </p>
       </PanelBody>
     </Panel>

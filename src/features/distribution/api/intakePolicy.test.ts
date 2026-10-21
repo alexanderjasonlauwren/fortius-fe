@@ -17,7 +17,7 @@ describe("manual intake availability", () => {
   it("fails closed on unknown, failed, and invalid policy", async () => {
     expect(allowsManualIntake(undefined)).toBe(false);
     state.getOne.mockResolvedValue({ order_intake_mode: "unexpected" });
-    await expect(intakePolicyHttp.getIntakePolicy()).rejects.toThrow("tidak valid");
+    await expect(intakePolicyHttp.getIntakePolicy()).rejects.toThrow("tidak bisa dibaca");
     state.getOne.mockRejectedValue(new Error("network"));
     await expect(intakePolicyHttp.getIntakePolicy()).rejects.toThrow("network");
   });

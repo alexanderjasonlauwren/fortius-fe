@@ -63,7 +63,7 @@ export function SAManagementPage() {
   );
 
   const live = saList.filter((s) => s.status === "Aktif" || s.status === "Limit");
-  const drafts = saList.filter((s) => s.status === "Draft");
+  const drafts = saList.filter((s) => s.status === "Draf");
   const expiringSoon = live.filter((s) => s.sisaHari >= 0 && s.sisaHari <= 7);
 
   const handleUpload = (values: UploadSAFormValues & { namaDokumen?: string }) =>
@@ -74,7 +74,7 @@ export function SAManagementPage() {
       <PageHeader
         eyebrow="Operasi harian"
         title="Schedule Agreement"
-        description={`Kuota yang diterbitkan ${supplierLabel()} mitra. Setiap rencana distribusi menarik dari agreement yang aktif, jadi angka di sini adalah batas atas operasi bulan ini.`}
+        description={`Kuota yang diterbitkan ${supplierLabel()} mitra. Setiap rencana distribusi menarik dari SA yang aktif, jadi angka di sini adalah kuota maksimal bulan ini.`}
         actions={<div className="flex gap-2">
           <Button variant="outline" onClick={() => setUploading(true)}>
             <Upload className="h-3.5 w-3.5" />
@@ -101,7 +101,7 @@ export function SAManagementPage() {
         <Panel spine="text-rust" className="flex items-center gap-3 px-5 py-3.5">
           <AlertCircle className="h-4 w-4 shrink-0 text-rust-ink" />
           <p className="flex-1 text-sm text-ink">
-            Daftar agreement gagal dimuat.{" "}
+            Daftar SA gagal dimuat.{" "}
             <span className="text-ink-muted">{error?.message}</span>
           </p>
           <Button size="sm" variant="outline" onClick={() => refetch()}>
@@ -115,7 +115,7 @@ export function SAManagementPage() {
           <AlertCircle className="h-4 w-4 shrink-0 text-signal-ink" />
           <p className="flex-1 text-sm text-ink">
             <span className="font-semibold">
-              {expiringSoon.length} agreement berakhir dalam sepekan.
+              {expiringSoon.length} SA berakhir dalam sepekan.
             </span>{" "}
             <span className="text-ink-muted">
               Sisa {formatNumber(expiringSoon.reduce((s, x) => s + x.sisaKuota, 0))}{" "}
@@ -141,10 +141,10 @@ export function SAManagementPage() {
                 to the next step until the previous one is done. */}
             <ol className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
               {[
-                `${supplierLabel()} menerbitkan agreement. Unggah dokumennya, dan sistem mencatatnya sebagai draf.`,
-                "Aktifkan agreement setelah dokumen diverifikasi. Kuota baru dapat ditarik setelah langkah ini.",
+                `${supplierLabel()} menerbitkan SA. Unggah dokumennya, dan sistem mencatatnya sebagai draf.`,
+                "Aktifkan SA setelah dokumennya diverifikasi. Kuota baru dapat ditarik setelah langkah ini.",
                 "Rencana distribusi yang dikonfirmasi menarik kuota dan menerbitkan surat jalan.",
-                "Agreement berstatus Limit saat tersisa di bawah 5%, dan Selesai saat habis atau periodenya lewat.",
+                "SA berstatus Limit saat sisanya di bawah 5%, dan Selesai saat habis atau periodenya lewat.",
               ].map((text, i) => (
                 <li key={i} className="flex gap-3">
                   <span className="data flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-ink text-2xs font-semibold text-ink-on">
@@ -162,8 +162,8 @@ export function SAManagementPage() {
 
       <Panel>
         <PanelHeader
-          title="Daftar agreement"
-          hint={`${saList.length} agreement · ${drafts.length} menunggu aktivasi`}
+          title="Daftar SA"
+          hint={`${saList.length} SA · ${drafts.length} menunggu aktivasi`}
         />
         <SATable
           data={saList}
@@ -179,10 +179,9 @@ export function SAManagementPage() {
       <Dialog open={uploading} onOpenChange={setUploading}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Unggah Schedule Agreement</DialogTitle>
+            <DialogTitle>Unggah SA</DialogTitle>
             <DialogDescription>
-              Catat kuota yang diterbitkan {supplierLabel()} mitra. Agreement masuk sebagai draf
-              sampai Anda mengaktifkannya.
+              Catat kuota yang diterbitkan {supplierLabel()} mitra. SA masuk sebagai draf sampai Anda mengaktifkannya.
             </DialogDescription>
           </DialogHeader>
           <UploadSAForm
@@ -204,7 +203,7 @@ export function SAManagementPage() {
       <ConfirmDialog
         isOpen={!!pendingDelete}
         title={`Hapus ${pendingDelete?.nomorSA}?`}
-        message="Agreement ini belum menarik kuota apa pun, jadi aman dihapus. Tindakan ini tidak dapat dibatalkan."
+        message="SA ini belum menarik kuota apa pun, jadi aman dihapus. Tindakan ini tidak dapat dibatalkan."
         details={
           pendingDelete && (
             <dl className="space-y-1">
@@ -219,7 +218,7 @@ export function SAManagementPage() {
             </dl>
           )
         }
-        confirmLabel="Hapus agreement"
+        confirmLabel="Hapus SA"
         isPending={deleteMutation.isPending}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => {

@@ -1,4 +1,4 @@
-export type SAStatus = "Aktif" | "Selesai" | "Draft" | "Limit";
+export type SAStatus = "Aktif" | "Selesai" | "Draf" | "Limit";
 
 /**
  * One product's ceiling within the agreement.

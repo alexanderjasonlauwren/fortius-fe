@@ -39,7 +39,7 @@ export function InventoryPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Persediaan"
-        description="Jumlah dan nilai stok per produk dengan harga rata-rata bergerak -- harga yang dipakai untuk HPP setiap penjualan."
+        description="Jumlah dan nilai stok per produk dengan harga rata-rata bergerak, yaitu harga yang dipakai untuk HPP setiap penjualan."
         meta={
           <SegmentedControl<Tab>
             value={tab}

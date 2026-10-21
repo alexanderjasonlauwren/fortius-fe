@@ -91,7 +91,7 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
       if (f.outcome === "rejected") return { title: "Bukti ditolak" };
       return { title: result.expenseId ? "Bukti diarsipkan, pengeluaran menunggu persetujuan" : "Bukti diarsipkan" };
     },
-    errorTitle: "Review tidak tersimpan",
+    errorTitle: "Hasil pemeriksaan tidak tersimpan",
     onDone: () => { onReviewed(); close(); },
   });
 
@@ -111,7 +111,7 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
       <DialogContent className="sm:max-w-xl">
         <form onSubmit={(e) => { e.preventDefault(); if (canSubmit) save.mutate({ ...form, fileExpense: filing, bankAccountId: form.bankAccountId || defaultAccount?.id || "" }); }}>
           <DialogHeader>
-            <DialogTitle>Review bukti</DialogTitle>
+            <DialogTitle>Periksa bukti</DialogTitle>
             <DialogDescription>
               {receipt.merchantName || "Merchant belum diisi"} · {receipt.txnDate ? formatDateId(receipt.txnDate) : "tanpa tanggal"} ·{" "}
               {receipt.totalAmount ? formatRupiah(receipt.totalAmount) : "nilai belum diisi"}
@@ -127,7 +127,7 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
               ) : <span className="text-2xs text-ink-muted">Dicatat tanpa berkas</span>}
             </div>
             {receipt.note && (
-              <p className="col-span-2 text-xs text-ink-muted">Catatan review sebelumnya: {receipt.note}</p>
+              <p className="col-span-2 text-xs text-ink-muted">Catatan pemeriksaan sebelumnya: {receipt.note}</p>
             )}
             <Field className="col-span-2" label="Keputusan" htmlFor="ocr-outcome">
               <SegmentedControl value={form.outcome} onChange={(outcome) => set({ outcome })}
@@ -182,7 +182,7 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
                 </Field>
               </>
             )}
-            <Field className="col-span-2" label="Catatan review" htmlFor="ocr-note" required={!approving}
+            <Field className="col-span-2" label="Catatan pemeriksaan" htmlFor="ocr-note" required={!approving}
               hint={approving ? undefined : "Tulis apa yang perlu diperbaiki atau alasan penolakan."}>
               <TextareaInput id="ocr-note" maxLength={2000} value={form.note} onChange={(e) => set({ note: e.target.value })} />
             </Field>

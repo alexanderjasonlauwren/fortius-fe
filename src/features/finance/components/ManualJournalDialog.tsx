@@ -103,7 +103,7 @@ export function ManualJournalDialog({ open, onClose, onPosted, template }: Manua
         <DialogHeader>
           <DialogTitle>{template ? `Duplikat ${template.nomor}` : "Jurnal umum baru"}</DialogTitle>
           <DialogDescription>
-            Koreksi manual -- tidak dapat diubah setelah diposting, hanya dibalik.
+            Koreksi manual. Setelah diposting tidak bisa diubah, hanya bisa dibalik.
           </DialogDescription>
         </DialogHeader>
 
@@ -134,7 +134,7 @@ export function ManualJournalDialog({ open, onClose, onPosted, template }: Manua
                 >
                   <option value="">— Pilih —</option>
                   {postableAccounts.map((a) => (
-                    <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+                    <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                   ))}
                 </SelectInput>
                 <TextInput

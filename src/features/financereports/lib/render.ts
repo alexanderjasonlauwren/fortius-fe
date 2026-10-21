@@ -54,7 +54,7 @@ export function reportPrintHtml(report: Report, branchLabel?: string): string {
     })
     .join("");
   const checks = report.checks
-    .map((c) => `<div>${c.ok ? "✓" : "✗"} ${escapeHtml(c.label)}${c.ok ? "" : ` — buku besar ${escapeHtml(formatRupiah(c.expected))}, laporan ${escapeHtml(formatRupiah(c.actual))}`}</div>`)
+    .map((c) => `<div>${c.ok ? "✓" : "✗"} ${escapeHtml(c.label)}${c.ok ? "" : `: buku besar ${escapeHtml(formatRupiah(c.expected))}, laporan ${escapeHtml(formatRupiah(c.actual))}`}</div>`)
     .join("");
   const notes = report.notes.map((n) => `<div>${escapeHtml(n)}</div>`).join("");
   return `

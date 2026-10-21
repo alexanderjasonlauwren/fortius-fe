@@ -46,7 +46,7 @@ export function SupplierSection() {
     },
     {
       key: "sa",
-      header: "Agreement",
+      header: "SA",
       align: "right",
       render: (row) => (
         <>
@@ -72,7 +72,7 @@ export function SupplierSection() {
     <Panel>
       <PanelHeader
         title={`Mitra ${supplierLabel()}`}
-        hint={`Nama ${supplierLabel()} berbeda yang tercatat pada Schedule Agreement. Tidak ada data induk terpisah untuk ditambah atau dihapus di sini.`}
+        hint={`Nama ${supplierLabel()} berbeda yang tercatat di SA. Tidak ada data induk terpisah untuk ditambah atau dihapus di sini.`}
       />
       <DataTable
         columns={columns}
@@ -82,7 +82,7 @@ export function SupplierSection() {
         spineFor={(row) => (row.aktif ? "text-pine" : "text-draft")}
         emptyIcon={Factory}
         emptyMessage={`Belum ada mitra ${supplierLabel()}`}
-        emptyDescription={`Muncul di sini begitu ada Schedule Agreement yang menyebutkan ${supplierLabel()}.`}
+        emptyDescription={`Muncul di sini begitu ada SA yang menyebutkan ${supplierLabel()}.`}
         dense
       />
     </Panel>

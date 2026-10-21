@@ -85,7 +85,7 @@ const FRIENDLY: Record<string, string> = {
   PERIOD_CLOSED:
     "Periode ini sudah ditutup. Gunakan tanggal di bulan yang masih terbuka, atau minta tim keuangan membukanya kembali di Tutup Buku.",
   PERIOD_IN_REVIEW:
-    "Periode ini sedang direview. Hanya tim keuangan yang dapat mencatat transaksi di bulan ini sampai review selesai.",
+    "Periode ini sedang ditinjau. Sampai selesai, hanya tim keuangan yang bisa mencatat transaksi di bulan ini.",
   USE_STOCK_COUNT: "Akun ini memegang stok produk. Koreksi lewat stok opname per produk di menu Persediaan.",
   VOID_APPROVAL_REQUIRED: "Pembatalan dokumen yang sudah dijurnal harus diajukan dan disetujui. Gunakan Ajukan pembatalan.",
   OWN_REQUEST: "Pengajuan Anda sendiri harus disetujui orang lain.",
@@ -122,5 +122,5 @@ export function describeFailure(error: Error): string {
   const fields = error.violations
     .map((v) => (v.message ? `${v.field}: ${v.message}` : v.field))
     .join(" · ");
-  return `${error.message} — ${fields}`;
+  return `${error.message}: ${fields}`;
 }

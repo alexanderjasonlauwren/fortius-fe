@@ -62,7 +62,7 @@ function ClassifyRow({ line, importId }: { line: BankStatementLine; importId: st
         {/* Leaves no module controls: classifying posts a cash voucher,
             which refuses a parent or a control account. */}
         {leafAccounts(accounts.data ?? []).filter((a) => !a.akun.kontrol).map((a) => (
-          <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} — {a.akun.nama}</option>
+          <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
         ))}
       </SelectInput>
       <Button

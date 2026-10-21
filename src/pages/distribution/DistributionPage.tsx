@@ -99,7 +99,7 @@ export function DistributionPage() {
   const [cancelling, setCancelling] = useState(false);
 
   const total = planDetail.reduce((s, r) => s + r.jumlahUnit, 0);
-  const drafts = planList.filter((p) => p.status === "Draft").length;
+  const drafts = planList.filter((p) => p.status === "Draf").length;
   const sourceBlocked = !intakePolicy.allowsManualIntake && (!sourceReview.isSuccess || sourceReview.data.status !== "ready");
 
   const handleSaveDraft = (rows: PlanRow[]) => {
@@ -151,9 +151,9 @@ export function DistributionPage() {
         error={sourceReview.error}
         fillError={fillSourceMutation.variables?.id === selectedPlan.id ? fillSourceMutation.error : null}
         isFilling={fillSourceMutation.isPending && fillSourceMutation.variables?.id === selectedPlan.id}
-        canFill={selectedPlan.status === "Draft" && !isLoadingDetail && planDetail.length === 0}
+        canFill={selectedPlan.status === "Draf" && !isLoadingDetail && planDetail.length === 0}
         onRetry={() => {
-          if (selectedPlan.status === "Draft" && !isLoadingDetail && planDetail.length === 0) fillSourceMutation.mutate(selectedPlan);
+          if (selectedPlan.status === "Draf" && !isLoadingDetail && planDetail.length === 0) fillSourceMutation.mutate(selectedPlan);
           else void sourceReview.refetch();
         }}
       /> : null}
@@ -243,9 +243,9 @@ export function DistributionPage() {
             </Field>
 
             <Field
-              label="Schedule Agreement"
+              label="SA"
               htmlFor="sa"
-              hint="Hanya agreement aktif yang masih punya sisa kuota."
+              hint="Hanya SA aktif yang masih punya sisa kuota."
               required
             >
               <SelectInput
@@ -253,10 +253,10 @@ export function DistributionPage() {
                 value={newSaId}
                 onChange={(e) => setNewSaId(e.target.value)}
               >
-                <option value="">Pilih agreement</option>
+                <option value="">Pilih SA</option>
                 {saOptions.map((s) => (
                   <option key={s.id} value={s.id} disabled={s.disabled}>
-                    {s.label} — {s.sublabel}
+                    {s.label} · {s.sublabel}
                   </option>
                 ))}
               </SelectInput>
@@ -301,7 +301,7 @@ export function DistributionPage() {
               </li>
               <li>
                 <span className="data">{planDetail.length}</span> titik singgah direncanakan
-                untuk {formatDateLong(selectedPlan.tanggal)}. Surat jalan terbit saat keberangkatan trip.
+                untuk {formatDateLong(selectedPlan.tanggal)}. Surat jalan terbit saat rit berangkat.
               </li>
               <li>Pemberhentian muncul di Monitoring Distribusi dan papan berangkat.</li>
             </ul>
@@ -322,21 +322,21 @@ export function DistributionPage() {
       <ConfirmDialog
         isOpen={cancelling}
         title={
-          selectedPlan?.status === "Draft"
+          selectedPlan?.status === "Draf"
             ? `Batalkan ${selectedPlan?.kode ?? "draf"}?`
             : `Batalkan ${selectedPlan?.kode ?? "rencana"}?`
         }
         message={
-          selectedPlan?.status === "Draft"
-            ? "Draf dibatalkan tanpa menghapus histori. Reservasi kuota titik singgah yang belum berjalan dikembalikan ke Schedule Agreement."
-            : "Surat jalan yang belum berjalan akan ditarik kembali dan kuota dikembalikan ke agreement."
+          selectedPlan?.status === "Draf"
+            ? "Draf dibatalkan tanpa menghapus histori. Kuota yang dipesan titik singgah yang belum berjalan dikembalikan ke SA."
+            : "Surat jalan yang belum berjalan akan ditarik kembali dan kuotanya dikembalikan ke SA."
         }
         details={
-          selectedPlan?.status === "Draft"
+          selectedPlan?.status === "Draf"
             ? undefined
-            : "Rencana yang sebagian armadanya sudah bergerak tidak dapat dibatalkan sekaligus — tutup surat jalan satu per satu di Monitoring Distribusi."
+            : "Rencana yang sebagian armadanya sudah berangkat tidak bisa dibatalkan sekaligus. Tutup surat jalannya satu per satu di Monitoring Distribusi."
         }
-        confirmLabel={selectedPlan?.status === "Draft" ? "Batalkan draf" : "Batalkan rencana"}
+        confirmLabel={selectedPlan?.status === "Draf" ? "Batalkan draf" : "Batalkan rencana"}
         isPending={cancelPlanMutation.isPending}
         onCancel={() => setCancelling(false)}
         onConfirm={() => {
@@ -365,13 +365,13 @@ export function DistributionPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Keberangkatan ditahan -- kredit</DialogTitle>
+            <DialogTitle>Keberangkatan ditahan: kredit</DialogTitle>
             <DialogDescription>{overrideDialog?.message}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <Field
               label="Penyetuju kedua"
-              hint="Harus orang lain dari yang memberangkatkan. Otoritas diperiksa oleh layanan saat dikirim."
+              hint="Harus orang lain, bukan yang memberangkatkan armada. Haknya diperiksa saat disimpan."
               required
             >
               <SelectInput
@@ -381,7 +381,7 @@ export function DistributionPage() {
                 <option value="">Pilih pengguna</option>
                 {(users.data ?? []).map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.nama} — {u.email}
+                    {u.nama} · {u.email}
                   </option>
                 ))}
               </SelectInput>

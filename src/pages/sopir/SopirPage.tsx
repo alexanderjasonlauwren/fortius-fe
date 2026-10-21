@@ -645,7 +645,7 @@ function StopCard({
           ) : (
             <Button size="lg" className="w-full" disabled={isPending} onClick={onComplete}>
               <PackageCheck className="h-4 w-4" />
-              Selesai — catat penerimaan
+              Selesai: catat penerimaan
             </Button>
           )}
 

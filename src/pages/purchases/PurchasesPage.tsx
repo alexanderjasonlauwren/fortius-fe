@@ -141,7 +141,7 @@ export function PurchasesPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Pembelian"
-        description="Tagihan dari vendor -- penebusan SA dan pembelian umum -- dan pembayarannya, sekaligus atau bertahap."
+        description="Tagihan dari vendor (penebusan SA dan pembelian umum) beserta pembayarannya, sekaligus atau bertahap."
         actions={
           <div className="flex gap-2">
             <CanAccess permission={PERMISSIONS.PURCHASES_VERIFY}>

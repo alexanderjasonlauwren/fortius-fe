@@ -216,9 +216,9 @@ export function ExpensePage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Setujui {approving?.expenseNumber}?</DialogTitle>
-            <DialogDescription>Persetujuan langsung memposting jurnal; koreksi sesudahnya lewat pembatalan. Pilih penyetuju kedua bila nilai ini melewati ambang tenant.</DialogDescription>
+            <DialogDescription>Persetujuan langsung memposting jurnal; koreksi sesudahnya lewat pembatalan. Pilih penyetuju kedua bila nilainya melewati batas yang ditetapkan perusahaan.</DialogDescription>
           </DialogHeader>
-          <Field label="Penyetuju kedua" htmlFor="expense-second-approver" hint="Opsional kecuali server mewajibkannya berdasarkan ambang tenant.">
+          <Field label="Penyetuju kedua" htmlFor="expense-second-approver" hint="Wajib bila nilainya melewati batas yang ditetapkan perusahaan.">
             <SelectInput id="expense-second-approver" value={secondApproverId} onChange={(event) => setSecondApproverId(event.target.value)}>
               <option value="">Tidak dipilih</option>
               {(users.data ?? []).filter((user) => user.id !== currentUserId).map((user) => <option key={user.id} value={user.id}>{user.nama}</option>)}

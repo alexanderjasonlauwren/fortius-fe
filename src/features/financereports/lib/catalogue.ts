@@ -26,7 +26,7 @@ const STATIC_ENTRIES: StaticEntry[] = [
   { key: "komparasi", category: "ikhtisar", title: "Komparasi", description: "Laporan sistem dibandingkan dengan laporan yang diimpor atau periode lain.", href: "/financial-statements?tab=komparasi", permission: PERMISSIONS.FINANCIAL_STATEMENTS_VIEW },
   { key: "buku_besar", category: "ikhtisar", title: "Buku Besar", description: "Mutasi dan saldo berjalan satu akun.", href: "/financial-statements?tab=buku-besar", permission: PERMISSIONS.FINANCIAL_STATEMENTS_VIEW },
   { key: "neraca_saldo", category: "ikhtisar", title: "Neraca Saldo", description: "Saldo awal, mutasi, dan saldo akhir setiap akun.", href: "/ledger?tab=neraca-saldo", permission: PERMISSIONS.JOURNALS_VIEW },
-  { key: "daftar_penjualan", category: "penjualan", title: "Daftar Penjualan", description: "Setiap surat jalan dengan tagihan dan status bayarnya — daftar kerja penagihan.", href: "/transactions", permission: PERMISSIONS.TRANSACTIONS_VIEW },
+  { key: "daftar_penjualan", category: "penjualan", title: "Daftar Penjualan", description: "Setiap surat jalan dengan tagihan dan status bayarnya, untuk daftar kerja penagihan.", href: "/transactions", permission: PERMISSIONS.TRANSACTIONS_VIEW },
 ];
 
 /** Opened most, shown first on the hub. */

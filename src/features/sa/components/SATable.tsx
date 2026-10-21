@@ -156,7 +156,7 @@ export function SATable({
       width: "1%",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
-          {row.status === "Draft" && (
+          {row.status === "Draf" && (
             <Button
               size="xs"
               onClick={() => onActivate(row.id)}
@@ -169,7 +169,7 @@ export function SATable({
           {/* Draft excluded: targets belong to an agreement that is in force,
               and importing a month of obligations against something nobody has
               verified yet writes a record with no authority behind it. */}
-          {onImport && row.status !== "Draft" && (
+          {onImport && row.status !== "Draf" && (
             <Button
               variant="ghost"
               size="icon-xs"
@@ -194,7 +194,7 @@ export function SATable({
               variant="ghost"
               size="icon-xs"
               aria-label={`Hapus ${row.nomorSA}`}
-              title="Hapus agreement"
+              title="Hapus SA"
               onClick={() => onDelete(row)}
               className="hover:bg-rust-soft hover:text-rust-ink"
             >
@@ -217,8 +217,8 @@ export function SATable({
       defaultSortKey="periode"
       defaultSortDir="desc"
       emptyIcon={FileText}
-      emptyMessage="Tidak ada agreement yang cocok"
-      emptyDescription="Ubah filter, atau unggah Schedule Agreement baru dari panel di samping."
+      emptyMessage="Tidak ada SA yang cocok"
+      emptyDescription="Ubah filter, atau unggah SA baru dari panel di samping."
       dense
     />
   );

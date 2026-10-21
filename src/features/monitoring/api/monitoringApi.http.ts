@@ -492,7 +492,7 @@ async function printSuratJalan(rowId: string): Promise<void> {
     : "—";
 
   printDocument(
-    `${kode} — Surat Jalan`,
+    `${kode} · Surat Jalan`,
     `
     <p class="eyebrow">${settings.namaPerusahaan} · Agen ${settings.nomorAgen}</p>
     <h1>Surat Jalan</h1>

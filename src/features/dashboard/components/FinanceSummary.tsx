@@ -18,7 +18,7 @@ export function FinanceSummary({ summary }: { summary: ReturnType<typeof useFina
       <PanelHeader
         title="Ringkasan keuangan"
         hint={<>{canSeeReports ? "Posisi hari ini" : "Bulan berjalan"} · <span className="data">{formatDateId(window.from)} – {formatDateId(window.to)}</span>
-          <span className="block mt-1">Seluruh cabang dalam cakupan akses, bukan filter cabang di atas.</span>
+          <span className="block mt-1">Semua cabang yang bisa Anda akses, tidak mengikuti pilihan cabang di atas.</span>
         </>}
         actions={(canSeeDashboard || canSeeReceivables) && (
           <Button asChild variant="ghost" size="sm">

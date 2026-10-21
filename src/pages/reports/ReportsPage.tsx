@@ -154,7 +154,7 @@ export function ReportsPage() {
   const driverColumns: Column<DriverRow>[] = [
     {
       key: "nama",
-      header: "Driver",
+      header: "Sopir",
       render: (row) => (
         <>
           <span className="block font-medium text-ink">{row.nama}</span>
@@ -272,7 +272,7 @@ export function ReportsPage() {
         <Stat
           label="Pendapatan terverifikasi"
           value={formatRupiahShort(s?.pendapatan ?? 0)}
-          hint="Kas yang sudah diverifikasi, bukan akrual — untuk laba rugi akrual lihat Buku Besar"
+          hint="Kas yang sudah diverifikasi, bukan akrual. Untuk laba rugi akrual, lihat Buku Besar"
           isLoading={summary.isLoading}
           tone="pine"
         />
@@ -431,7 +431,7 @@ export function ReportsPage() {
         </Panel>
 
         <Panel>
-          <PanelHeader title="Kinerja armada" hint="Surat jalan diselesaikan per driver" />
+          <PanelHeader title="Kinerja armada" hint="Surat jalan diselesaikan per sopir" />
           <DataTable
             columns={driverColumns}
             data={drivers.data ?? []}

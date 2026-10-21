@@ -156,7 +156,7 @@ export function RegistrationPackageSection() {
             <DialogHeader>
               <DialogTitle>{editing?.id ? "Ubah paket" : "Tambah paket pendaftaran"}</DialogTitle>
               <DialogDescription>
-                Dipilih saat membuat tagihan pendaftaran pangkalan -- mengisi nilai dan item kit sekaligus.
+                Dipilih saat membuat tagihan pendaftaran pangkalan, lalu nilai dan item kitnya terisi sekaligus.
               </DialogDescription>
             </DialogHeader>
 

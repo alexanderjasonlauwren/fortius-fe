@@ -175,7 +175,7 @@ export function VendorSection() {
       <Panel>
         <PanelHeader
           title="Vendor"
-          hint="Dipakai saat mencatat pembelian umum (bukan lewat Schedule Agreement)."
+          hint="Dipakai saat mencatat pembelian umum (bukan lewat SA)."
           actions={
             <div className="flex items-center gap-2">
               <SearchInput value={search} onChange={setSearch} placeholder="Nama, kode, kontak" className="w-48" />
@@ -209,7 +209,7 @@ export function VendorSection() {
           >
             <DialogHeader>
               <DialogTitle>{editing?.id ? `Ubah ${editing.name}` : "Tambah vendor"}</DialogTitle>
-              <DialogDescription>Vendor pembelian umum, terpisah dari pemasok Schedule Agreement.</DialogDescription>
+              <DialogDescription>Vendor pembelian umum, terpisah dari pemasok SA.</DialogDescription>
             </DialogHeader>
 
             {editing && (

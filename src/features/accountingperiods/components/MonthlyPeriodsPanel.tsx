@@ -54,7 +54,7 @@ export function MonthlyPeriodsPanel() {
     <Panel>
       <PanelHeader
         title="Periode bulanan"
-        hint="Terbuka: semua yang berwenang bisa mencatat. Direview: hanya tim keuangan. Ditutup: tidak ada yang bisa mencatat; pembatalan dokumen masuk ke bulan terbuka berikutnya."
+        hint="Terbuka: semua yang berwenang bisa mencatat. Ditinjau: hanya tim keuangan. Ditutup: tidak ada yang bisa mencatat; pembatalan dokumen masuk ke bulan terbuka berikutnya."
         actions={
           <SelectInput aria-label="Tahun" value={year} onChange={(e) => setYear(Number(e.target.value))}>
             {[current + 1, current, current - 1, current - 2].map((y) => <option key={y} value={y}>{y}</option>)}
@@ -84,7 +84,7 @@ export function MonthlyPeriodsPanel() {
                   <div className="flex gap-2">
                     {m.status === "open" && (
                       <Button variant="outline" size="sm" disabled={move.isPending} onClick={() => move.mutate({ month: m, status: "review" })}>
-                        <Search className="h-3.5 w-3.5" /> Review
+                        <Search className="h-3.5 w-3.5" /> Tinjau
                       </Button>
                     )}
                     {m.status !== "closed" && (

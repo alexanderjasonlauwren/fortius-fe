@@ -2,7 +2,7 @@ import type { StatusVariant } from "@/lib/status";
 import type { ReceiptStatus } from "../api/contract";
 
 export const RECEIPT_STATUS_LABEL: Record<ReceiptStatus, string> = {
-  pending: "Menunggu review",
+  pending: "Menunggu diperiksa",
   needs_review: "Perlu dicek ulang",
   rejected: "Ditolak",
   approved: "Diarsipkan",

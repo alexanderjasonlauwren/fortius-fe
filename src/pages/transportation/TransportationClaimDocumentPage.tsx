@@ -29,7 +29,7 @@ const groupColumns: Column<BeritaAcaraGroup>[] = [
   },
   {
     key: "trip",
-    header: "Trip",
+    header: "Rit",
     render: (row) => <span className="data text-xs text-ink-muted">{row.tripNumber ?? "—"}</span>,
   },
   {
@@ -101,7 +101,7 @@ const lineColumns: Column<BeritaAcaraLine>[] = [
         {row.hasDrift && (
           <span
             className="ml-1 inline-flex items-center text-rust"
-            title={`Data pengiriman berubah setelah lini dibuat -- kini ${row.currentDeliveredQty ?? "?"} tabung`}
+            title={`Data pengiriman berubah setelah lini dibuat. Sekarang ${row.currentDeliveredQty ?? "?"} tabung`}
           >
             <AlertTriangle className="h-3 w-3" />
           </span>
@@ -247,7 +247,7 @@ function documentHtml(doc: BeritaAcaraDocument): string {
       </tfoot>
     </table>
     <div class="sign">
-      <div>${signatory.companyName}<span>${signatory.name ?? ""}${signatory.title ? " — " + signatory.title : ""}</span></div>
+      <div>${signatory.companyName}<span>${signatory.name ?? ""}${signatory.title ? " · " + signatory.title : ""}</span></div>
     </div>`;
 }
 
@@ -346,9 +346,7 @@ export function TransportationClaimDocumentPage() {
         <Panel spine="text-rust">
           <PanelBody className="flex items-center gap-2 text-sm text-rust-ink">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            {footer.driftedLineCount} lini pada dokumen ini datanya sudah berubah sejak dibuat --
-            lihat tanda peringatan pada baris terkait. Nilai klaim tetap yang tercatat saat dibuat,
-            bukan yang terbaru.
+            {footer.driftedLineCount} lini di dokumen ini datanya sudah berubah sejak dibuat. Lihat tanda peringatan di barisnya. Nilai klaim tetap memakai angka saat lini dibuat.
           </PanelBody>
         </Panel>
       )}
@@ -369,8 +367,7 @@ export function TransportationClaimDocumentPage() {
         <p className="text-xs text-ink-muted">
           Selisih pembulatan {formatRupiah(footer.roundingDifference)} antara nilai klaim
           ({formatRupiah(footer.amount)}, dihitung dari total kg &times; tarif) dan jumlah baris
-          per lini ({formatRupiah(footer.sumOfLineAmounts)}) -- keduanya ditampilkan agar selisih
-          terlihat, bukan didiamkan.
+          per lini ({formatRupiah(footer.sumOfLineAmounts)}). Keduanya ditampilkan supaya selisihnya terlihat.
         </p>
       )}
 
@@ -396,7 +393,7 @@ export function TransportationClaimDocumentPage() {
       <Panel>
         <PanelHeader
           title="Ringkasan per muatan"
-          hint="Dikelompokkan per tanggal, trip, dan produk -- satu kelompok mendekati satu muatan truk"
+          hint="Dikelompokkan per tanggal, rit, dan produk. Satu kelompok kira-kira satu muatan truk"
         />
         <DataTable
           columns={groupColumns}
@@ -432,7 +429,7 @@ export function TransportationClaimDocumentPage() {
         <PanelBody className="text-sm text-ink">
           <p className="font-medium">{signatory.companyName}</p>
           <p className="text-ink-muted">
-            {signatory.name ? `${signatory.name}${signatory.title ? ` — ${signatory.title}` : ""}` : "Belum ada penandatangan tercatat."}
+            {signatory.name ? `${signatory.name}${signatory.title ? ` · ${signatory.title}` : ""}` : "Belum ada penandatangan tercatat."}
           </p>
         </PanelBody>
       </Panel>

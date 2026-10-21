@@ -3,7 +3,7 @@ import type { SourcePlanReview } from "./sourcePlanReview.contract";
 
 /** Only initialize an empty draft. Existing drafts require reviewed reconciliation. */
 export function sourceRowsForEmptyDraft(plan: DistributionPlan, existing: PlanRow[], review: SourcePlanReview, outlets: PlanOption[]): PlanRow[] {
-  if (plan.status !== "Draft" || existing.length > 0) {
+  if (plan.status !== "Draf" || existing.length > 0) {
     throw new Error("Rencana sudah berisi titik singgah atau tidak lagi berupa draf. Jangan menimpa rencana; tinjau perubahan sumber terlebih dahulu.");
   }
   if (review.status !== "ready") return [];

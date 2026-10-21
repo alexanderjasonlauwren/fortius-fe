@@ -30,7 +30,7 @@ export function UploadReceiptDialog({ open, onClose, onUploaded }: Props) {
   };
   const save = useDeskMutation({
     mutationFn: (f: File) => uploadReceipt({ file: f, merchantName, txnDate, totalAmount: totalAmount || undefined }),
-    success: "Bukti diunggah ke antrian review",
+    success: "Bukti diunggah dan menunggu diperiksa",
     errorTitle: "Bukti tidak terunggah",
     onDone: () => { onUploaded(); close(); },
   });
@@ -41,7 +41,7 @@ export function UploadReceiptDialog({ open, onClose, onUploaded }: Props) {
         <form onSubmit={(e) => { e.preventDefault(); if (file && !tooBig) save.mutate(file); }}>
           <DialogHeader>
             <DialogTitle>Unggah bukti pengeluaran</DialogTitle>
-            <DialogDescription>Foto struk atau PDF nota, paling besar 10 MB. Isi yang terbaca supaya reviewer tidak perlu mengetik ulang.</DialogDescription>
+            <DialogDescription>Foto struk atau PDF nota, paling besar 10 MB. Isi yang terbaca supaya pemeriksa tidak perlu mengetik ulang.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             <Field className="col-span-2" label="Berkas" htmlFor="ocr-file" required

@@ -25,6 +25,6 @@ export interface AccountingPeriodApi {
 
 export const PERIOD_STATUS_LABEL: Record<PeriodStatus, string> = {
   open: "Terbuka",
-  review: "Direview",
+  review: "Ditinjau",
   closed: "Ditutup",
 };

@@ -160,7 +160,7 @@ export async function buildBeritaAcaraPdf(doc: BeritaAcaraDocument): Promise<jsP
     pdf.setFont("helvetica", "bold").text(signatory.name ?? "", signX, signY + 32);
   } else {
     pdf.setDrawColor(...INK).setLineWidth(0.3).line(signX, signY + 24, signX + 70, signY + 24);
-    pdf.text(`${signatory.name ?? ""}${signatory.title ? ` — ${signatory.title}` : ""}`, signX, signY + 29);
+    pdf.text(`${signatory.name ?? ""}${signatory.title ? ` · ${signatory.title}` : ""}`, signX, signY + 29);
   }
 
   const pages = pdf.getNumberOfPages();

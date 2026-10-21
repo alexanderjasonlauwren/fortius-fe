@@ -184,7 +184,7 @@ describe("SIM3LON acceptance review", () => {
     await act(async () => {
       await expect(result.current.reconciliationMutation.mutateAsync({
         batchId: review.candidateBatchId,
-      })).rejects.toThrow(/Tenant berubah/);
+      })).rejects.toThrow(/Perusahaan yang aktif/);
     });
 
     expect(state.reconciliation).not.toHaveBeenCalled();
@@ -207,7 +207,7 @@ describe("SIM3LON acceptance review", () => {
       await expect(result.current.applyMutation.mutateAsync({
         batchId: review.candidateBatchId,
         review: buildSIM3LONApplyReview(review),
-      })).rejects.toThrow(/Tenant berubah/);
+      })).rejects.toThrow(/Perusahaan yang aktif/);
     });
 
     expect(state.apply).not.toHaveBeenCalled();

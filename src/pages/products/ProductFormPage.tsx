@@ -124,7 +124,7 @@ export function ProductFormPage() {
     if (!form.nama.trim()) next.nama = "Nama produk wajib diisi.";
     if (form.hargaJual <= 0) next.hargaJual = "Harga jual harus lebih dari nol.";
     if (form.hargaBeli > form.hargaJual)
-      next.hargaBeli = "Harga beli melebihi harga jual — margin akan negatif.";
+      next.hargaBeli = "Harga beli melebihi harga jual, jadi marginnya negatif.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     saveMutation.mutate(form);
@@ -291,7 +291,7 @@ export function ProductFormPage() {
         <Panel className="mt-4">
           <PanelHeader
             title="Jenis & Akun"
-            hint="Opsional -- kosongkan akun untuk memakai akun bawaan tenant."
+            hint="Opsional. Kosongkan untuk memakai akun bawaan perusahaan."
           />
           <PanelBody className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
@@ -328,7 +328,7 @@ export function ProductFormPage() {
               >
                 <option value="">— Gunakan bawaan —</option>
                 {postableAccounts.map((a) => (
-                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} — {a.akun.nama}</option>
+                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} · {a.akun.nama}</option>
                 ))}
               </SelectInput>
             </Field>
@@ -340,7 +340,7 @@ export function ProductFormPage() {
               >
                 <option value="">— Gunakan bawaan —</option>
                 {postableAccounts.map((a) => (
-                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} — {a.akun.nama}</option>
+                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} · {a.akun.nama}</option>
                 ))}
               </SelectInput>
             </Field>
@@ -352,7 +352,7 @@ export function ProductFormPage() {
               >
                 <option value="">— Gunakan bawaan —</option>
                 {postableAccounts.map((a) => (
-                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} — {a.akun.nama}</option>
+                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} · {a.akun.nama}</option>
                 ))}
               </SelectInput>
             </Field>

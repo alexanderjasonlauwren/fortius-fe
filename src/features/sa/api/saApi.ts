@@ -49,7 +49,7 @@ export async function printSA(id: string): Promise<void> {
     });
 
   printDocument(
-    `${sa.nomorSA} — Ringkasan Kuota`,
+    `${sa.nomorSA} · Ringkasan Kuota`,
     `
     <h1>Ringkasan Kuota Schedule Agreement</h1>
     <hr class="rule" />

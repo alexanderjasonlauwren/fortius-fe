@@ -22,7 +22,7 @@ async function defaultBranchID(): Promise<string> {
   const page = await getList<{ id: string; is_default: boolean }>("/branches", { pageSize: 100 });
   const preferred = page.items.find((b) => b.is_default) ?? page.items[0];
   if (!preferred) {
-    throw new Error("Tenant ini belum punya cabang, sehingga pembelian tidak dapat dicatat.");
+    throw new Error("Perusahaan ini belum punya cabang, jadi pembelian belum bisa dicatat.");
   }
   return preferred.id;
 }

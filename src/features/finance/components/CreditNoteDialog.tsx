@@ -57,8 +57,7 @@ export function CreditNoteDialog({ invoice, onClose, onIssued }: CreditNoteDialo
         <DialogHeader>
           <DialogTitle>Nota kredit untuk {invoice?.nomor}</DialogTitle>
           <DialogDescription>
-            Mengurangi jumlah yang ditagih — untuk barang yang dikembalikan atau koreksi
-            penagihan. Tercatat sebagai retur penjualan, bukan pengurangan omzet kotor.
+            Mengurangi jumlah yang ditagih, untuk barang yang dikembalikan atau koreksi penagihan. Dicatat sebagai retur penjualan.
           </DialogDescription>
         </DialogHeader>
 
