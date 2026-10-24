@@ -313,8 +313,10 @@ export function AssetsPage() {
         </Panel>
       )}
 
+      {/* The dialogs are siblings, so each key carries its dialog's name:
+          shut, all three would otherwise be keyed "closed" at once. */}
       <AssetDialog
-        key={assetDialog === "new" ? "new" : assetDialog ? assetDialog.id : "closed"}
+        key={`asset:${assetDialog === "new" ? "new" : assetDialog ? assetDialog.id : "closed"}`}
         open={!!assetDialog}
         asset={assetDialog === "new" ? null : assetDialog}
         onClose={() => setAssetDialog(null)}
@@ -322,7 +324,7 @@ export function AssetsPage() {
       />
       <AssetScheduleDialog asset={scheduleTarget} onClose={() => setScheduleTarget(null)} />
       <DisposeAssetDialog
-        key={disposeTarget?.id ?? "closed"}
+        key={`dispose:${disposeTarget?.id ?? "closed"}`}
         asset={disposeTarget}
         onClose={() => setDisposeTarget(null)}
         onDisposed={() => void assets.refetch()}
@@ -334,7 +336,7 @@ export function AssetsPage() {
         // would go stale the moment a run posts: reopening the same
         // instance after posting August would still default to August,
         // not September, since nothing re-runs the lazy initializer.
-        key={runDialogOpen ? (latestPosted?.period ?? "none") : "closed"}
+        key={`run:${runDialogOpen ? (latestPosted?.period ?? "none") : "closed"}`}
         open={runDialogOpen}
         latestPostedPeriod={latestPosted?.period}
         onClose={() => setRunDialogOpen(false)}
