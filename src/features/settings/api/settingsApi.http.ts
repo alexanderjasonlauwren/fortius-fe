@@ -15,6 +15,7 @@ import type {
   TenantEntity,
 } from "@/types/domain";
 import type { InheritableFieldKey } from "./fields";
+import type { SettlementTarget } from "./contract";
 import { getActingTenant } from "@/lib/scope";
 import { DEFAULT_SETTINGS } from "./defaults";
 
@@ -30,7 +31,9 @@ interface SettingsPayload {
   planning_lead_time_days: number | null;
   geofence_radius_m: number | null;
   record_driver_location: boolean | null;
+  sim3lon_settlement_target?: SettlementTarget | null;
 }
+
 
 interface SettingsResponse {
   own: SettingsPayload;
@@ -193,4 +196,19 @@ export async function clearSettingOverride(field: InheritableFieldKey): Promise<
               }
             : {};
   await send<SettingsResponse>("put", tenantPath(), { ...current.own, ...cleared });
+}
+
+/** The tenant's own choice (null: inherited) and what applies. */
+export async function getSettlementTarget(): Promise<{ own: SettlementTarget | null; effective: SettlementTarget }> {
+  const row = await getOne<SettingsResponse>(tenantPath());
+  return {
+    own: row.own.sim3lon_settlement_target ?? null,
+    effective: row.effective.sim3lon_settlement_target ?? "bank",
+  };
+}
+
+export async function saveSettlementTarget(target: SettlementTarget): Promise<void> {
+  // A replacement like updateSettings: every other field travels as stored.
+  const current = await getOne<SettingsResponse>(tenantPath());
+  await send<SettingsResponse>("put", tenantPath(), { ...current.own, sim3lon_settlement_target: target });
 }
