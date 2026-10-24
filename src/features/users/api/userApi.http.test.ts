@@ -91,3 +91,51 @@ describe("users access adapter", () => {
     expect(user.cabang).toBe("");
   });
 });
+
+// Plan 3.4: roles are granted through the API (regression 2026-10-24: no
+// screen or route could give anyone a role).
+describe("role grants", () => {
+  beforeEach(() => {
+    getOne.mockReset();
+    send.mockReset();
+  });
+
+  it("lists grantable roles and a user's grants in domain shape", async () => {
+    const { listGrantableRoles, getUserRoles } = await import("./userApi.http");
+    getOne.mockResolvedValueOnce([{ id: "r1", code: "finance_officer", name: "Finance Officer", is_system: true }]);
+    expect(await listGrantableRoles()).toEqual([{ id: "r1", code: "finance_officer", name: "Finance Officer", isSystem: true }]);
+    expect(getOne).toHaveBeenLastCalledWith("/roles");
+
+    getOne.mockResolvedValueOnce([{
+      id: "g1", role_id: "r1", role_code: "finance_officer", role_name: "Finance Officer",
+      scope_type: "branch", branch_id: BRANCH_ID, branch_name: "Pool Salatiga", created_at: "2026-10-24T00:00:00Z",
+    }]);
+    expect(await getUserRoles(USER_ID)).toEqual([{
+      id: "g1", roleId: "r1", roleCode: "finance_officer", roleName: "Finance Officer",
+      scope: "branch", branchId: BRANCH_ID, branchName: "Pool Salatiga",
+    }]);
+    expect(getOne).toHaveBeenLastCalledWith(`/users/${USER_ID}/roles`);
+  });
+
+  it("grants tenant-wide or in one branch, and revokes by grant", async () => {
+    const { grantRole, revokeRole } = await import("./userApi.http");
+    send.mockResolvedValue({ id: "g2", role_id: "r1", role_code: "x", role_name: "X", scope_type: "tenant", created_at: "" });
+    await grantRole(USER_ID, { roleId: "r1", scope: "tenant" });
+    expect(send).toHaveBeenLastCalledWith("post", `/users/${USER_ID}/roles`, { role_id: "r1", scope_type: "tenant" });
+    await grantRole(USER_ID, { roleId: "r1", scope: "branch", branchId: BRANCH_ID });
+    expect(send).toHaveBeenLastCalledWith("post", `/users/${USER_ID}/roles`, { role_id: "r1", scope_type: "branch", branch_id: BRANCH_ID });
+
+    send.mockResolvedValue(null);
+    await revokeRole(USER_ID, "g2");
+    expect(send).toHaveBeenLastCalledWith("delete", `/users/${USER_ID}/roles/g2`);
+  });
+
+  // The backend refuses a user with no password, so the console's create
+  // form could never succeed.
+  it("sends the initial password when creating a user", async () => {
+    const { createOrUpdateUser } = await import("./userApi.http");
+    send.mockResolvedValue(wire());
+    await createOrUpdateUser({ nama: "Kasir Dua", email: "kasir2@fortius.local", password: "Rahasia-2026!" });
+    expect(send.mock.calls[0][2]).toMatchObject({ username: "kasir2", password: "Rahasia-2026!" });
+  });
+});

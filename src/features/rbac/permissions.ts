@@ -28,6 +28,7 @@ export const PERMISSIONS = {
   USERS_EDIT: "iam.update.users",
   USERS_DELETE: "iam.delete.users",
   USER_ROLES_VIEW: "iam.read.user_roles",
+  USER_ROLES_ASSIGN: "iam.assign.user_roles",
 
   // Products. `masterdata` spans products, outlets, drivers, vehicles and
   // units — grouped for the person granting access, not by schema.
