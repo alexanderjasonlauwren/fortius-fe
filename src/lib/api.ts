@@ -58,7 +58,25 @@ let refreshInFlight: Promise<string> | null = null;
 
 /** Requests that already retried once, so a persistent 401 cannot loop. */
 const RETRIED = Symbol("retried");
-type RetriableConfig = AxiosRequestConfig & { [RETRIED]?: boolean };
+/** Reads that already waited out one 429, so a sustained limit cannot loop. */
+const RATE_RETRIED = Symbol("rateRetried");
+type RetriableConfig = AxiosRequestConfig & { [RETRIED]?: boolean; [RATE_RETRIED]?: boolean };
+
+/** The longest a read waits on Retry-After before giving up on it. */
+const MAX_RATE_WAIT_MS = 10_000;
+
+/**
+ * Whether a failed refresh means the session is over. Only the server
+ * refusing the refresh token does: a rate limit, a 5xx or a dropped
+ * connection says nothing about the session, and logging out on one sent a
+ * user to the login page in the middle of their work (regression
+ * 2026-10-24 F16: a 429 during a fast page sweep).
+ */
+function sessionRefused(error: unknown): boolean {
+  if (!(error instanceof AxiosError)) return true; // no refresh token at all
+  const status = error.response?.status;
+  return status === 401 || status === 403;
+}
 
 /**
  * Called when the session cannot be recovered. Assigned by the auth store so
@@ -152,6 +170,22 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const original = error.config as RetriableConfig | undefined;
 
+    // A rate-limited read waits out Retry-After once and tries again. A
+    // write is never repeated behind the caller's back: it is refused, and
+    // the person decides whether to send it again.
+    if (
+      error.response?.status === 429 &&
+      original !== undefined &&
+      (original.method ?? "get").toLowerCase() === "get" &&
+      !original[RATE_RETRIED]
+    ) {
+      original[RATE_RETRIED] = true;
+      const seconds = Number(error.response.headers?.["retry-after"]);
+      const waitMs = Math.min(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000, MAX_RATE_WAIT_MS);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      return apiClient.request(original);
+    }
+
     const recoverable =
       error.response?.status === 401 &&
       original !== undefined &&
@@ -173,9 +207,9 @@ apiClient.interceptors.response.use(
       original.headers = { ...original.headers, Authorization: `Bearer ${token}` };
       return apiClient.request(original);
     } catch (refreshError) {
-      // The refresh itself failed: expired, revoked, or a replay the server
-      // refused. Nothing left to try.
-      onSessionExpired();
+      // The refresh itself failed. Expired, revoked, or a replay the server
+      // refused ends the session; anything else leaves it for the next try.
+      if (sessionRefused(refreshError)) onSessionExpired();
       return Promise.reject(refreshError);
     } finally {
       // Cleared in finally, not on success: leaving a rejected promise cached

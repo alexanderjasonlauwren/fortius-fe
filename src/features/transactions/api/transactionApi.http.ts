@@ -52,6 +52,8 @@ import type {
   TransactionsApi,
   TransactionSummary,
 } from "./contract";
+import { holds } from "@/features/rbac/holds";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 
 /** 100 is every list definition's MaxPageSize; the server refuses more. */
 const PAGE_SIZE = 100;
@@ -231,7 +233,12 @@ async function getTransactionSummary(filters?: TransactionFilters): Promise<Tran
  * delivery, and a filter option is not one delivery.
  */
 async function getTransactionFilterOptions(): Promise<TransactionFilterOptions> {
-  const [outlets, drivers] = await Promise.all([getOutletList(), getDrivers()]);
+  // A role that may see sales but not drivers gets no driver filter rather
+  // than a 403 on every visit.
+  const [outlets, drivers] = await Promise.all([
+    getOutletList(),
+    holds(PERMISSIONS.DRIVERS_VIEW) ? getDrivers() : Promise.resolve([]),
+  ]);
   return {
     outlet: outlets
       .map((o) => ({ id: o.id, label: o.nama }))

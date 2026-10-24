@@ -65,6 +65,8 @@ import {
   type ReportsApi,
   type TopOutletRow,
 } from "./contract";
+import { holds } from "@/features/rbac/holds";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 
 /** 100 is every list definition's MaxPageSize; the server refuses more. */
 const PAGE_SIZE = 100;
@@ -292,7 +294,12 @@ async function getTopOutlet(range: ReportRange, limit = 8): Promise<TopOutletRow
 
 async function getDriverPerformance(range: ReportRange): Promise<DriverPerformanceRow[]> {
   const window = resolveRange(range);
-  const [deliveries, vehicles] = await Promise.all([fetchDeliveries(window), getVehicles()]);
+  // The plate rides on the delivery row; the vehicle list only adds the
+  // armada, and a role that may not read vehicles goes without it.
+  const [deliveries, vehicles] = await Promise.all([
+    fetchDeliveries(window),
+    holds(PERMISSIONS.VEHICLES_VIEW) ? getVehicles() : Promise.resolve([]),
+  ]);
   const vehiclesById = new Map(vehicles.map((v) => [v.id, v]));
 
   const byDriver = new Map<

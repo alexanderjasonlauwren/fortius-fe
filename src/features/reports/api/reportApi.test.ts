@@ -21,6 +21,9 @@ vi.mock("@/features/outlet/api/outletApi", () => ({
 }));
 
 const getVehicles = vi.fn();
+const holds = vi.fn<(permission: string) => boolean>(() => true);
+vi.mock("@/features/rbac/holds", () => ({ holds: (p: string) => holds(p) }));
+
 vi.mock("@/features/vehicles/api/vehicleApi", () => ({
   getVehicles: (...args: unknown[]) => getVehicles(...args),
 }));
@@ -250,6 +253,20 @@ describe("getDriverPerformance", () => {
     expect(row.selesai).toBe(1);
     expect(row.tertunda).toBe(1);
     expect(row.ketepatan).toBe(50);
+  });
+
+  // Regression 2026-10-24 F16: the finance officer may open the reports but
+  // not read vehicles; the plate rides on the delivery row anyway.
+  it("does not ask for vehicles the user may not read", async () => {
+    getVehicles.mockClear();
+    holds.mockImplementation((p) => p !== "masterdata.read.vehicles");
+    mockLists({ deliveries: [delivery({ delivery_status: "delivered" })], payments: [], invoices: [] });
+    const [row] = await reportApiHttp.getDriverPerformance("7h");
+    holds.mockImplementation(() => true);
+
+    expect(getVehicles).not.toHaveBeenCalled();
+    expect(row.plat).toBe("H 1234 AB");
+    expect(row.armada).toBe("—");
   });
 });
 

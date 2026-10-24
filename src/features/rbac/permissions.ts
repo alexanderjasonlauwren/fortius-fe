@@ -319,6 +319,7 @@ export const PERMISSIONS = {
   // driver, which is why ASSIGN and MANAGE point at different resources --
   // and its own action, separate from editing the plan's stops.
   DRIVERS_VIEW: "masterdata.read.drivers",
+  BRANCHES_VIEW: "masterdata.read.branches",
   DRIVERS_ASSIGN: "distribution.assign.distribution_orders",
   DRIVERS_MANAGE: "masterdata.update.drivers",
 

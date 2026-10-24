@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import { useAuthStore } from "@/features/auth/store/authStore";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { useSidebarShortcut, useSidebarStore } from "@/hooks/useSidebar";
@@ -31,10 +33,15 @@ export function DashboardLayout() {
 
   // Same pattern for branches. A tenant switch empties the registry and clears
   // the cache, so this refetches for the new tenant.
+  // Only for a role that may read branches: the finance officer may not,
+  // and every page it opened fired a 403 here (regression 2026-10-24 F16).
+  // Without the list there is simply no branch to pick.
+  const canReadBranches = useAuthStore((s) => s.hasPermission(PERMISSIONS.BRANCHES_VIEW));
   const branchList = useQuery({
     queryKey: ["branches", "registry"],
     queryFn: () => getBranches(getActingTenant()),
     staleTime: 5 * 60_000,
+    enabled: canReadBranches,
   });
   if (branchList.data) setBranchRegistry(branchList.data);
 
