@@ -13,7 +13,7 @@ import {
   updateClaimStatus,
   type ClaimView,
 } from "@/features/transportation/api/transportationApi";
-import { CLAIM_STATUSES, CLAIM_STATUS_LABEL } from "@/features/transportation/api/contract";
+import { CLAIM_NEXT_STATUSES, CLAIM_STATUSES, CLAIM_STATUS_LABEL } from "@/features/transportation/api/contract";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
@@ -58,6 +58,8 @@ function periodLabel(periodStart: string): string {
 interface StatusFormState {
   id: string;
   version: number;
+  /** The claim's status now; claimStatus is where it is being moved. */
+  fromStatus: ClaimStatus;
   claimStatus: ClaimStatus;
   principalInvoiceNumber: string;
   statusNote: string;
@@ -166,7 +168,8 @@ export function TransportationClaimListPage() {
     setStatusEditing({
       id: row.id,
       version: row.version,
-      claimStatus: row.claimStatus,
+      fromStatus: row.claimStatus,
+      claimStatus: CLAIM_NEXT_STATUSES[row.claimStatus][0] ?? row.claimStatus,
       principalInvoiceNumber: row.principalInvoiceNumber ?? "",
       statusNote: "",
       settledAt: row.settledAt ?? "",
@@ -311,11 +314,18 @@ export function TransportationClaimListPage() {
             </CanAccess>
           )}
           <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
-            <ActionTooltip label="Ubah status: ajukan, disetujui, ditolak, atau tandai lunas">
+            <ActionTooltip
+              label={
+                CLAIM_NEXT_STATUSES[row.claimStatus].length > 0
+                  ? "Ubah status: ajukan, tinjau, setujui, tolak, atau tandai lunas"
+                  : `Klaim ${CLAIM_STATUS_LABEL[row.claimStatus].toLowerCase()} tidak dapat diubah lagi`
+              }
+            >
               <Button
                 variant="ghost"
                 size="icon-xs"
                 aria-label={`Ubah status ${row.claimNumber}`}
+                disabled={CLAIM_NEXT_STATUSES[row.claimStatus].length === 0}
                 onClick={() => openStatusEditor(row)}
               >
                 <ShieldCheck className="h-3.5 w-3.5" />
@@ -543,7 +553,7 @@ export function TransportationClaimListPage() {
                       })
                     }
                   >
-                    {CLAIM_STATUSES.map((s) => (
+                    {CLAIM_NEXT_STATUSES[statusEditing.fromStatus].map((s) => (
                       <option key={s} value={s}>
                         {CLAIM_STATUS_LABEL[s]}
                       </option>

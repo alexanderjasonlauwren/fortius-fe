@@ -24,6 +24,21 @@ export const CLAIM_STATUS_LABEL: Record<ClaimStatus, string> = {
   paid: "Lunas",
 };
 
+/**
+ * Where a claim may go from each status -- the backend's claimTransitions,
+ * which refuses anything else (INVALID_TRANSITION). Forward through the
+ * principal's review and approval, rejectable until paid; rejected and paid
+ * are final (regression 2026-10-24 F10).
+ */
+export const CLAIM_NEXT_STATUSES: Record<ClaimStatus, ClaimStatus[]> = {
+  draft: ["submitted", "rejected"],
+  submitted: ["under_review", "rejected"],
+  under_review: ["approved", "rejected"],
+  approved: ["paid", "rejected"],
+  rejected: [],
+  paid: [],
+};
+
 export const CLAIM_STATUSES: ClaimStatus[] = [
   "draft",
   "submitted",

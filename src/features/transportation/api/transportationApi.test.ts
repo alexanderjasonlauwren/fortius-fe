@@ -459,3 +459,18 @@ describe("transport fee invoice", () => {
     expect(out[0].claimNumber).toBe("BAST-SLT-202610-0003");
   });
 });
+
+// Regression 2026-10-24 F10: the status dialog offered every status, and a
+// submitted claim could be marked paid. It offers what the backend allows.
+describe("CLAIM_NEXT_STATUSES", () => {
+  it("reaches paid only through review and approval, and ends at paid or rejected", async () => {
+    const { CLAIM_NEXT_STATUSES } = await import("./contract");
+    const reachesPaid = Object.entries(CLAIM_NEXT_STATUSES)
+      .filter(([, next]) => next.includes("paid"))
+      .map(([from]) => from);
+    expect(reachesPaid).toEqual(["approved"]);
+    expect(CLAIM_NEXT_STATUSES.paid).toEqual([]);
+    expect(CLAIM_NEXT_STATUSES.rejected).toEqual([]);
+    expect(CLAIM_NEXT_STATUSES.submitted).toEqual(["under_review", "rejected"]);
+  });
+});
