@@ -54,15 +54,14 @@ export function PaymentControlBoard() {
   const [date, setDate] = useState(today);
   const [funding, setFunding] = useState<StopTarget | null>(null);
   const canSeePayments = useAuthStore((state) => state.hasPermission(PERMISSIONS.PAYMENTS_VIEW));
-  // The route this hangs off requires BOTH finance.create.payment_allocations
-  // AND distribution.update.distribution_orders (see fortius-backend's
-  // routes.go) -- funding a stop writes payment state and releases a
-  // distribution slot, and neither permission alone carries both authorities.
-  // DISTRIBUTION_EDIT is the frontend constant for the second; the first has
-  // none yet, matching PaymentPage's own "Alokasikan" button, which is
-  // likewise ungated in the console and left to the backend to refuse.
-  const canEditDistribution = useAuthStore((state) => state.hasPermission(PERMISSIONS.DISTRIBUTION_EDIT));
-  const canFund = canSeePayments && canEditDistribution;
+  // The funding routes require BOTH finance.create.payment_allocations and
+  // finance.fund.distribution_stops (fortius-backend's payment routes.go):
+  // funding spends a receipt's balance and releases the stop for dispatch.
+  // It used to be gated on editing plans, which finance may not do, so the
+  // finance officer could not use this page (regression 2026-10-24 F11).
+  const canAllocate = useAuthStore((state) => state.hasPermission(PERMISSIONS.PAYMENT_ALLOCATIONS_CREATE));
+  const canFundStops = useAuthStore((state) => state.hasPermission(PERMISSIONS.DISTRIBUTION_STOPS_FUND));
+  const canFund = canSeePayments && canAllocate && canFundStops;
 
   const releaseMutation = useDeskMutation({
     mutationFn: (input: { paymentId: string; distributionOrderId: string; outletId: string }) =>

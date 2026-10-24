@@ -258,6 +258,8 @@ export const PERMISSIONS = {
   VOID_REQUESTS_VIEW: "finance.read.void_requests",
   VOID_REQUESTS_CREATE: "finance.create.void_requests",
   VOID_REQUESTS_APPROVE: "finance.approve.void_requests",
+  PAYMENT_ALLOCATIONS_CREATE: "finance.create.payment_allocations",
+  DISTRIBUTION_STOPS_FUND: "finance.fund.distribution_stops",
   PAYMENT_REFUNDS_VIEW: "finance.read.payment_refunds",
   PAYMENT_REFUNDS_CREATE: "finance.create.payment_refunds",
   PAYMENT_REFUNDS_APPROVE: "finance.approve.payment_refunds",
