@@ -37,6 +37,7 @@ import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { printDocument } from "@/lib/export";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
+import { effectiveLayout, layoutsForPeriod } from "@/features/financialstatements/lib/layouts";
 
 type Tab = "laba-rugi" | "neraca" | "penjelasan" | "komparasi" | "buku-besar";
 type KomparasiView = "laba-rugi" | "penjelasan" | "neraca";
@@ -102,10 +103,15 @@ export function FinancialStatementsPage() {
   // Which format each statement is drawn on: "" is the tenant's default
   // (the current Laba Rugi and Neraca); the FY2025 format stays selectable
   // for reading 2025 the way it was reported.
-  const [plLayout, setPlLayout] = useState("");
-  const [bsLayout, setBsLayout] = useState("");
+  // A format the period does not offer (the FY2025 one, once the period
+  // leaves 2025) falls back to the default during render.
+  const [plChosen, setPlLayout] = useState("");
+  const [bsChosen, setBsLayout] = useState("");
   const layouts = useQuery({ queryKey: [...scopeKey(), "financial-statements", "layouts"], queryFn: getLayouts });
-  const layoutsOf = (kind: "profit_loss" | "balance_sheet") => (layouts.data ?? []).filter((l) => l.kind === kind);
+  const plOffered = layoutsForPeriod(layouts.data ?? [], "profit_loss", { from: period.from, to: period.to });
+  const bsOffered = layoutsForPeriod(layouts.data ?? [], "balance_sheet", { from: period.asOf, to: period.asOf });
+  const plLayout = effectiveLayout(plChosen, plOffered);
+  const bsLayout = effectiveLayout(bsChosen, bsOffered);
 
   const pl = useQuery({
     queryKey: [...scopeKey(), "financial-statements", "pl", period.from, period.to, plLayout],
@@ -246,13 +252,13 @@ export function FinancialStatementsPage() {
             </SelectInput>
           </Field>
           {(tab === "laba-rugi" || tab === "neraca" || tab === "penjelasan") && (
-            <Field label="Format" htmlFor="fs-layout" hint="Format 2025 untuk membaca laporan tahun 2025 seperti dilaporkan.">
+            <Field label="Format" htmlFor="fs-layout" hint="Format 2025 tersedia untuk periode tahun 2025.">
               <SelectInput
                 id="fs-layout"
                 value={tab === "laba-rugi" ? plLayout : bsLayout}
                 onChange={(e) => (tab === "laba-rugi" ? setPlLayout(e.target.value) : setBsLayout(e.target.value))}
               >
-                {layoutsOf(tab === "laba-rugi" ? "profit_loss" : "balance_sheet").map((l) => (
+                {(tab === "laba-rugi" ? plOffered : bsOffered).map((l) => (
                   <option key={l.code} value={l.isDefault ? "" : l.code}>{l.name}{l.isDefault ? " (utama)" : ""}</option>
                 ))}
               </SelectInput>
