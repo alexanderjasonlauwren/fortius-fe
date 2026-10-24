@@ -9,7 +9,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, LogOut, Pencil, Plus, TriangleAlert, X } from "lucide-react";
 import { DisposeAssetDialog } from "@/features/assets/components/DisposeAssetDialog";
-import { getAssetReconciliation, listAssets, type AssetClass, type AssetView } from "@/features/assets/api/assetApi";
+import { getAssetReconciliation, listAssets, type AssetClass, type AssetReconciliationRow, type AssetView } from "@/features/assets/api/assetApi";
 import { AssetDialog } from "@/features/assets/components/AssetDialog";
 import { AssetScheduleDialog } from "@/features/assets/components/AssetScheduleDialog";
 import { listRuns, type DepreciationRunView } from "@/features/depreciationruns/api/depreciationRunApi";
@@ -47,6 +47,10 @@ const RUN_STATUS_LABEL: Record<DepreciationRunView["status"], string> = {
   posted: "Diposting",
   void: "Dibatalkan",
 };
+
+/** Prepaid expenses carry no accumulated account of their own. */
+const isPrepaidOnly = (row: AssetReconciliationRow) =>
+  row.assetClasses.length === 1 && row.assetClasses[0] === "prepaid";
 
 export function AssetsPage() {
   const [tab, setTab] = useState<Tab>("daftar");
@@ -256,7 +260,15 @@ export function AssetsPage() {
             <div className="divide-y divide-line">
               {(reconciliation.data ?? []).map((row) => (
                 <div key={row.assetClass} className="p-5">
-                  <p className="text-sm font-semibold text-ink">{CLASS_LABEL[row.assetClass]}</p>
+                  <p className="text-sm font-semibold text-ink">
+                    {row.assetClasses.map((c) => CLASS_LABEL[c]).join(" + ")}
+                  </p>
+                  {row.ledgerAccounts.length > 0 && (
+                    <p className="mt-0.5 text-2xs text-ink-muted">
+                      Akun {row.ledgerAccounts.join(", ")}
+                      {row.assetClasses.length > 1 && " — digabung karena memakai akun yang sama"}
+                    </p>
+                  )}
                   <div className="mt-2 grid grid-cols-2 gap-4 sm:grid-cols-4">
                     <div>
                       <p className="text-2xs text-ink-muted">Harga perolehan (register)</p>
@@ -283,12 +295,12 @@ export function AssetsPage() {
                     </div>
                     <div>
                       <p className="text-2xs text-ink-muted">Selisih akumulasi</p>
-                      <p className={`data mt-0.5 text-sm font-semibold ${row.assetClass === "prepaid" || row.accumulatedDifference === 0 ? "text-pine" : "text-rust"}`}>
+                      <p className={`data mt-0.5 text-sm font-semibold ${isPrepaidOnly(row) || row.accumulatedDifference === 0 ? "text-pine" : "text-rust"}`}>
                         {formatRupiah(row.accumulatedDifference)}
                       </p>
                     </div>
                   </div>
-                  {row.assetClass === "prepaid" && (
+                  {isPrepaidOnly(row) && (
                     <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-muted">
                       <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
                       Biaya dibayar di muka tidak punya akun akumulasi sendiri karena amortisasinya langsung mengurangi akun asetnya, jadi selisih akumulasi di atas wajar.

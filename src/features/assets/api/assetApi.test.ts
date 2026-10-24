@@ -115,6 +115,24 @@ describe("schedule and reconciliation", () => {
     const rows = await assetApiHttp.getAssetReconciliation("2026-10-07");
     expect(rows[0].costDifference).toBe(350_000_000);
     expect(getOne).toHaveBeenCalledWith("/assets/reconciliation?as_of=2026-10-07");
+    // An older server names one class and no accounts.
+    expect(rows[0]).toMatchObject({ assetClasses: ["vehicle"], ledgerAccounts: [] });
+  });
+
+  // Regression 2026-10-24 F8: classes sharing an account are one row.
+  it("carries the classes and accounts a grouped row compares", async () => {
+    getOne.mockResolvedValue({
+      as_of: "2026-10-24",
+      rows: [{
+        asset_class: "office_equipment", asset_classes: ["office_equipment", "vehicle"],
+        ledger_accounts: ["1-2200", "1-2300", "1-2900"],
+        register_cost: 1, ledger_asset_balance: 1, cost_difference: 0,
+        register_accumulated: 1, ledger_accumulated_balance: 1, accumulated_difference: 0,
+      }],
+    });
+    const [row] = await assetApiHttp.getAssetReconciliation("2026-10-24");
+    expect(row.assetClasses).toEqual(["office_equipment", "vehicle"]);
+    expect(row.ledgerAccounts).toEqual(["1-2200", "1-2300", "1-2900"]);
   });
 });
 

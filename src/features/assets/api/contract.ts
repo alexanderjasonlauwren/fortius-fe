@@ -108,8 +108,18 @@ export interface AssetScheduleLine {
   accumulatedAfter: number;
 }
 
+/**
+ * One comparison of the register with the ledger. Classes that share a
+ * ledger account (vehicles, buildings and office equipment share 1-2900)
+ * are compared together, since a shared account's balance cannot be split
+ * back into its classes.
+ */
 export interface AssetReconciliationRow {
+  /** The group's first class, alphabetically. */
   assetClass: AssetClass;
+  assetClasses: AssetClass[];
+  /** The account codes compared; empty from a server that predates grouping. */
+  ledgerAccounts: string[];
   registerCost: number;
   ledgerAssetBalance: number;
   costDifference: number;

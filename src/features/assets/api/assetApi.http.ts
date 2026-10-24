@@ -65,6 +65,8 @@ interface ReconciliationResponse {
   as_of: string;
   rows: {
     asset_class: AssetClass;
+    asset_classes?: AssetClass[];
+    ledger_accounts?: string[];
     register_cost: number;
     ledger_asset_balance: number;
     cost_difference: number;
@@ -174,6 +176,8 @@ async function getAssetReconciliation(asOf: string): Promise<AssetReconciliation
   const row = await getOne<ReconciliationResponse>(`/assets/reconciliation?as_of=${asOf}`);
   return row.rows.map((r) => ({
     assetClass: r.asset_class,
+    assetClasses: r.asset_classes ?? [r.asset_class],
+    ledgerAccounts: r.ledger_accounts ?? [],
     registerCost: r.register_cost,
     ledgerAssetBalance: r.ledger_asset_balance,
     costDifference: r.cost_difference,
