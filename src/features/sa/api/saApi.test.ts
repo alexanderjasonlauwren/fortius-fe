@@ -52,6 +52,39 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
+describe("live Penyaluran candidate mapping", () => {
+  const candidate = {
+    id: "11111111-1111-4111-8111-111111111111",
+    period: "2026-10",
+    fetched_at: "2026-10-11T03:00:00Z",
+    status: "parsed",
+    duplicate: false,
+    checksum_sha256: "abc123",
+    outlet_count: 17,
+    applied_to_sa: false,
+    review_reason: "Historical Penyaluran changed",
+  };
+
+  it("keeps the persisted review reason and applied state", async () => {
+    getOne.mockResolvedValue([candidate]);
+    const [mapped] = await saApiHttp.getLivePenyaluranCandidates("2026-10");
+    expect(mapped).toMatchObject({
+      fetchedAt: candidate.fetched_at,
+      checksum: "abc123",
+      outletCount: 17,
+      appliedToSA: false,
+      reviewReason: candidate.review_reason,
+    });
+  });
+
+  it("uses the long bridge timeout for manual sync", async () => {
+    send.mockResolvedValue(candidate);
+    const mapped = await saApiHttp.syncLivePenyaluran("2026-10");
+    expect(send).toHaveBeenCalledWith("post", "/integrations/sim3lon/sa-sync?period=2026-10", undefined, { timeout: 120_000 });
+    expect(mapped.appliedToSA).toBe(false);
+  });
+});
+
 describe("mapping the wire shape onto the domain", () => {
   it("carries the quota numbers across", async () => {
     getList.mockResolvedValue({ items: [wire()], pagination: {} });
@@ -106,11 +139,11 @@ describe("mapping the wire shape onto the domain", () => {
     });
 
     const [sa] = await saApiHttp.getSAList();
-    expect(sa.status).toBe("Draft");
+    expect(sa.status).toBe("Draf");
   });
 
   it.each([
-    ["draft", "Draft"],
+    ["draft", "Draf"],
     ["active", "Aktif"],
     ["completed", "Selesai"],
     // A superseded agreement is finished from the agent's point of view: the
@@ -136,7 +169,7 @@ describe("mapping the wire shape onto the domain", () => {
     });
 
     const [sa] = await saApiHttp.getSAList();
-    expect(sa.status).toBe("Draft");
+    expect(sa.status).toBe("Draf");
   });
 
   // The backend publishes HOW a figure arrived, not who typed it. That is the
@@ -404,6 +437,8 @@ describe("the import summary", () => {
           normal: 70,
           fakultatif: 0,
           sisa: 0,
+          // An older server sends no opening_qty: no cutover, nothing drawn.
+          saldoAwal: 0,
         },
       ],
     });
@@ -525,5 +560,83 @@ describe("SIM3LON reconciliation", () => {
       `/sim3lon-imports/${batchId}/apply`,
       { expected_predecessor_batch_id: null, accepted_plans: [] },
     );
+  });
+});
+
+describe("the planning cutover and SIM3LON variances", () => {
+  it("posts the dry-run flag to the default branch and maps the report", async () => {
+    getList.mockResolvedValue({ items: [{ id: "branch-1", is_default: true }], pagination: {} });
+    send.mockResolvedValue({
+      branch_id: "branch-1",
+      current_planning_start_date: null,
+      planning_start_date: "2026-09-26",
+      dry_run: true,
+      applied: false,
+      scopes: [{
+        batch_id: "batch-1", product_id: "product-1", period_month: "2026-09", quota_total: 20650,
+        allocated_before: 560, allocated_after: 10680, used_before: 0, used_after: 10120,
+        opening_before: 0, opening_after: 10120,
+        outlets: [{ outlet_id: "outlet-1", opening_before: 0, opening_after: 720 }],
+      }],
+      blockers: [{ code: "plan_before_cutover", message: "early", plan_id: "plan-1" }],
+      warnings: [],
+    });
+
+    const report = await saApiHttp.setPlanningCutover("2026-09-26", true);
+
+    expect(send).toHaveBeenCalledWith("post", "/branches/branch-1/planning-cutover",
+      { planning_start_date: "2026-09-26", dry_run: true });
+    expect(report.scopes[0]).toMatchObject({ openingAfter: 10120, allocatedAfter: 10680, usedAfter: 10120 });
+    expect(report.scopes[0].outlets[0]).toEqual({ outletId: "outlet-1", openingBefore: 0, openingAfter: 720 });
+    expect(report.blockers[0]).toMatchObject({ code: "plan_before_cutover", planId: "plan-1" });
+  });
+
+  it("reads variances with product and month as query parameters", async () => {
+    getList.mockResolvedValue({ items: [{ id: "branch-1", is_default: true }], pagination: {} });
+    getOne.mockResolvedValue({
+      batch_id: "batch-1", planning_start_date: "2026-09-26", total_variance: -3,
+      rows: [{
+        outlet_id: "outlet-1", outlet_code: "4507", outlet_name: "Pangkalan A", date: "2026-09-27",
+        sim3lon_qty: 4, committed_qty: 7, delivered_qty: 0, variance: -3, kind: "over",
+      }],
+    });
+
+    const report = await saApiHttp.getSIM3LONVariances("product-1", "2026-09");
+
+    expect(getOne).toHaveBeenCalledWith(
+      "/branches/branch-1/sim3lon-variances?product_id=product-1&month=2026-09");
+    expect(report.rows[0]).toMatchObject({ sim3lonQty: 4, committedQty: 7, variance: -3, kind: "over" });
+  });
+
+  it("carries the opening quantity and cutover context through", async () => {
+    getOne.mockResolvedValueOnce({
+      outlets: [{
+        registration_code: "4507", name: "A", allocation_qty: 800, normal_qty: 510,
+        fakultatif_qty: 0, remaining_qty: 290, opening_qty: 460,
+      }],
+    });
+    const summary = await saApiHttp.getImportSummary("sa-1");
+    expect(summary?.outlets[0].saldoAwal).toBe(460);
+
+    getOne.mockResolvedValueOnce({
+      candidate_batch_id: "b", expected_predecessor_batch_id: null, source_created_at: "2026-09-26T00:00:00Z",
+      review_ready: true, expected_plan_versions: [], blockers: [],
+      changes: [{
+        outlet_id: "o", product_id: "p", operational_date: "2026-09-05", baseline_qty: 10,
+        current_qty: null, proposed_qty: 30, classification: "pre_cutover",
+        non_draft_discrepancy: false, crew_assignment_affected: false,
+      }],
+      planning_start_date: "2026-09-26", opening_balance_delta: 20, variance_count: 2,
+    });
+    const review = await saApiHttp.getSIM3LONReconciliation("b");
+    expect(review).toMatchObject({ planningStartDate: "2026-09-26", openingBalanceDelta: 20, varianceCount: 2 });
+    expect(review.changes[0].classification).toBe("pre_cutover");
+  });
+
+  it("treats an older server without the new fields as no cutover", async () => {
+    getOne.mockResolvedValueOnce({
+      outlets: [{ registration_code: "x", name: "x", allocation_qty: 1, normal_qty: 1, fakultatif_qty: 0, remaining_qty: 0 }],
+    });
+    expect((await saApiHttp.getImportSummary("sa-1"))?.outlets[0].saldoAwal).toBe(0);
   });
 });

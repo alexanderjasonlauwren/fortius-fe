@@ -329,3 +329,30 @@ describe("writing", () => {
     expect(body.longitude).toBe(110.5084);
   });
 });
+
+describe("billing details and branch (parity P3)", () => {
+  it("reads province, postal code, NPWP and email", async () => {
+    getOne.mockResolvedValue(wire({ province: "Jawa Tengah", postal_code: "50711", npwp: "01.234", email: "a@b.test" }));
+    const o = await outletApiHttp.getOutletDetail(ID);
+    expect(o).toMatchObject({ provinsi: "Jawa Tengah", kodePos: "50711", npwp: "01.234", email: "a@b.test" });
+  });
+
+  it("files a new outlet under the given branch and leaves blank billing fields out", async () => {
+    send.mockResolvedValue(wire());
+    await outletApiHttp.createOrUpdateOutlet({ nama: "Baru", kode: "PKL-010", branchId: "br-2", npwp: " ", email: " a@b.test ", kodePos: "" });
+    const body = send.mock.calls[0][2];
+    expect(body.branch_id).toBe("br-2");
+    expect(body.email).toBe("a@b.test");
+    expect("npwp" in body).toBe(false);
+    expect("postal_code" in body).toBe(false);
+  });
+
+  it("clears a billing field on update and never moves the branch", async () => {
+    getOne.mockResolvedValue(wire({ version: 5 }));
+    send.mockResolvedValue(wire());
+    await outletApiHttp.createOrUpdateOutlet({ id: ID, branchId: "br-2", email: "" });
+    const body = send.mock.calls[0][2];
+    expect(body.email).toBe("");
+    expect("branch_id" in body).toBe(false);
+  });
+});

@@ -3,7 +3,7 @@ import { MONTH_NAMES_ID } from "@/utils/constants";
 import type { SAFilterParams, SAStatus } from "../types";
 import { supplierLabel } from "@/lib/lexicon";
 
-const STATUSES: (SAStatus | "Semua")[] = ["Semua", "Draft", "Aktif", "Limit", "Selesai"];
+const STATUSES: (SAStatus | "Semua")[] = ["Semua", "Draf", "Aktif", "Limit", "Selesai"];
 
 export function SAFilterBar({
   filters,

@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
   toast: vi.fn(),
 }));
 
-vi.mock("@/mocks/scope", () => ({ scopeKey: () => state.scope }));
+vi.mock("@/lib/scope", () => ({ scopeKey: () => state.scope }));
 vi.mock("@/hooks/useToast", () => ({ useToast: () => ({ toast: state.toast }) }));
 vi.mock("../api/saApi", () => ({
   applySIM3LON: state.apply,
@@ -28,6 +28,9 @@ const review: SIM3LONReconciliationPreview = {
   expectedPredecessorBatchId: "batch-predecessor",
   sourceCreatedAt: "2026-09-20T01:02:03Z",
   reviewReady: true,
+  planningStartDate: null,
+  openingBalanceDelta: 0,
+  varianceCount: 0,
   expectedPlanVersions: [
     { planId: "draft-changed", version: 7, status: "draft" },
     { planId: "draft-unchanged", version: 3, status: "draft" },
@@ -181,7 +184,7 @@ describe("SIM3LON acceptance review", () => {
     await act(async () => {
       await expect(result.current.reconciliationMutation.mutateAsync({
         batchId: review.candidateBatchId,
-      })).rejects.toThrow(/Tenant berubah/);
+      })).rejects.toThrow(/Perusahaan yang aktif/);
     });
 
     expect(state.reconciliation).not.toHaveBeenCalled();
@@ -204,7 +207,7 @@ describe("SIM3LON acceptance review", () => {
       await expect(result.current.applyMutation.mutateAsync({
         batchId: review.candidateBatchId,
         review: buildSIM3LONApplyReview(review),
-      })).rejects.toThrow(/Tenant berubah/);
+      })).rejects.toThrow(/Perusahaan yang aktif/);
     });
 
     expect(state.apply).not.toHaveBeenCalled();

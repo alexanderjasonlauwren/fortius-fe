@@ -107,8 +107,8 @@ export function TenantFormDialog({
               value={form.jenisUsaha}
               onChange={(e) => set("jenisUsaha", e.target.value)}
             >
-              <option value="lpg_distribution">Distribusi LPG — tabung / pangkalan / SPBE</option>
-              <option value="water_depot">Depot Air Minum — galon / depot / pabrik</option>
+              <option value="lpg_distribution">Distribusi LPG (tabung, pangkalan, SPBE)</option>
+              <option value="water_depot">Depot Air Minum (galon, depot, pabrik)</option>
             </SelectInput>
           </Field>
 

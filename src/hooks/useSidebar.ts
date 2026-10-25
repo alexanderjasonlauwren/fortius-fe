@@ -9,14 +9,41 @@ function readCollapsed(): boolean {
   return localStorage.getItem(COLLAPSED_KEY) === "1";
 }
 
+const KNOWN_GROUPS_KEY = "sidebar:known-groups";
+
+/** The groups the menu had before this list was kept -- what a browser that
+ *  stored open groups but no known groups had seen. */
+const GROUPS_BEFORE_P6 = ["Menu utama", "Operasi harian", "Keuangan", "Data induk"];
+
+/**
+ * The stored open groups plus every group this browser has never seen.
+ *
+ * Only open groups are stored, so a group added to the menu (accounting
+ * parity P6 split Keuangan in two) would otherwise start closed for everyone
+ * who had used the console before -- a menu that hides its new pages. A group
+ * someone closed on purpose stays closed: it is in `known` and not in `open`.
+ */
+export function withNewGroupsOpen(open: string[], known: string[], current: string[]): string[] {
+  const added = current.filter((label) => !known.includes(label) && !open.includes(label));
+  return [...open, ...added];
+}
+
 function readOpenGroups(): string[] {
+  const all = NAV_GROUPS.map((g) => g.label);
   try {
     const raw = localStorage.getItem(OPEN_GROUPS_KEY);
-    if (!raw) return NAV_GROUPS.map((g) => g.label);
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : NAV_GROUPS.map((g) => g.label);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const knownRaw = localStorage.getItem(KNOWN_GROUPS_KEY);
+    const known = knownRaw ? JSON.parse(knownRaw) : GROUPS_BEFORE_P6;
+    if (!Array.isArray(parsed)) return all;
+    const open = withNewGroupsOpen(parsed, Array.isArray(known) ? known : GROUPS_BEFORE_P6, all);
+    // Both together: "known" without the groups it just opened would close
+    // them again on the next load.
+    localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(open));
+    localStorage.setItem(KNOWN_GROUPS_KEY, JSON.stringify(all));
+    return open;
   } catch {
-    return NAV_GROUPS.map((g) => g.label);
+    return all;
   }
 }
 

@@ -28,7 +28,6 @@
  * per notification on a list screen. A notification's title and message
  * carry the content; "Buka" has nowhere to go yet.
  */
-import { assertMockAllowed } from "@/lib/dataSource";
 import { getList, getOne, send } from "@/lib/api";
 import type { Notification, NotificationSettings, ReminderRule, ReminderRuleKey } from "../types";
 import type { NotificationApi } from "./contract";
@@ -183,11 +182,6 @@ async function saveNotificationSettings(settings: NotificationSettings): Promise
   return toSettings(saved);
 }
 
-async function sendTestNotification(channel: "whatsapp" | "email") {
-  assertMockAllowed("notification.sendTestNotification");
-  return { channel, tujuan: "" };
-}
-
 export const notificationApiHttp: NotificationApi = {
   getNotifications,
   getUnreadCount,
@@ -198,5 +192,4 @@ export const notificationApiHttp: NotificationApi = {
   clearReadNotifications,
   getNotificationSettings,
   saveNotificationSettings,
-  sendTestNotification,
 };

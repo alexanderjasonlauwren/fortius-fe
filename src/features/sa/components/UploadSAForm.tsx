@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Upload } from "lucide-react";
 import {
@@ -23,6 +23,7 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors },
@@ -73,11 +74,14 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
           error={errors.periodeMulai?.message}
           required
         >
-          <TextInput
-            id="periodeMulai"
-            type="date"
-            invalid={!!errors.periodeMulai}
-            {...register("periodeMulai")}
+          {/* Controller, not register(): reset() writes the DOM directly, which
+              the themed date picker cannot observe. */}
+          <Controller
+            control={control}
+            name="periodeMulai"
+            render={({ field }) => (
+              <TextInput id="periodeMulai" type="date" invalid={!!errors.periodeMulai} {...field} />
+            )}
           />
         </Field>
         <Field
@@ -86,11 +90,14 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
           error={errors.periodeBerakhir?.message}
           required
         >
-          <TextInput
-            id="periodeBerakhir"
-            type="date"
-            invalid={!!errors.periodeBerakhir}
-            {...register("periodeBerakhir")}
+          {/* Controller, not register(): reset() writes the DOM directly, which
+              the themed date picker cannot observe. */}
+          <Controller
+            control={control}
+            name="periodeBerakhir"
+            render={({ field }) => (
+              <TextInput id="periodeBerakhir" type="date" invalid={!!errors.periodeBerakhir} {...field} />
+            )}
           />
         </Field>
       </div>
@@ -113,7 +120,7 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
         />
       </Field>
 
-      <Field label="Dokumen SA" hint="Disimpan sebagai lampiran pada arsip agreement.">
+      <Field label="Dokumen SA" hint="Disimpan sebagai lampiran di arsip SA.">
         <FileDrop
           file={file}
           onFile={setFile}
@@ -137,10 +144,10 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
         ) : (
           <Upload className="h-4 w-4" />
         )}
-        {isPending ? "Mengunggah…" : "Unggah agreement"}
+        {isPending ? "Mengunggah…" : "Unggah SA"}
       </Button>
       <p className="text-xs leading-relaxed text-ink-muted">
-        Agreement masuk sebagai draf. Kuota baru dapat ditarik rencana distribusi
+        SA masuk sebagai draf. Kuota baru dapat ditarik rencana distribusi
         setelah diaktifkan.
       </p>
     </form>

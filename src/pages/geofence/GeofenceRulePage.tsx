@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MapPin, Pencil, Plus, Trash2 } from "lucide-react";

@@ -1,4 +1,7 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
+import { TransportTariffPanel } from "@/features/products/components/TransportTariffPanel";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -6,13 +9,15 @@ import { ArrowLeft, Loader2, Save } from "lucide-react";
 import {
   createOrUpdateProduct,
   getProductDetail,
+  getUnits,
 } from "@/features/products/api/productApi";
+import { getChartOfAccounts } from "@/features/finance/api/financeApi";
+import { leafAccounts } from "@/features/finance/lib/accounts";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
-import { Field, TextInput, Toggle } from "@/components/common/Field";
+import { Field, SegmentedControl, SelectInput, TextareaInput, TextInput, Toggle } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
-import { usesApi } from "@/lib/dataSource";
 import { formatPercentId, formatRupiah } from "@/lib/format";
 import { useResettableState } from "@/hooks/useResettableState";
 
@@ -25,6 +30,14 @@ interface FormState {
   stok: number;
   stokMinimum: number;
   aktif: boolean;
+  productKind: "commodity" | "accessory" | "container";
+  inventoryAccountCode: string;
+  revenueAccountCode: string;
+  cogsAccountCode: string;
+  unitId: string;
+  deskripsi: string;
+  merek: string;
+  barcode: string;
 }
 
 const EMPTY: FormState = {
@@ -36,6 +49,14 @@ const EMPTY: FormState = {
   stok: 0,
   stokMinimum: 0,
   aktif: true,
+  productKind: "commodity",
+  inventoryAccountCode: "",
+  revenueAccountCode: "",
+  cogsAccountCode: "",
+  unitId: "",
+  deskripsi: "",
+  merek: "",
+  barcode: "",
 };
 
 export function ProductFormPage() {
@@ -50,6 +71,10 @@ export function ProductFormPage() {
     queryFn: () => getProductDetail(id!),
     enabled: isEdit,
   });
+  const accounts = useQuery({ queryKey: [...scopeKey(), "chart-of-accounts"], queryFn: getChartOfAccounts });
+  // Units are global (a kilogram does not vary by agency): no scope key.
+  const units = useQuery({ queryKey: ["product-units"], queryFn: getUnits, staleTime: Infinity });
+  const postableAccounts = leafAccounts(accounts.data ?? []);
 
   // Seeded from the loaded product, or EMPTY while creating one. Computed
   // during render rather than pushed in by an effect, so the form never paints
@@ -66,6 +91,14 @@ export function ProductFormPage() {
       stok: p.stok,
       stokMinimum: p.stokMinimum,
       aktif: p.aktif,
+      productKind: p.productKind,
+      inventoryAccountCode: p.inventoryAccountCode ?? "",
+      revenueAccountCode: p.revenueAccountCode ?? "",
+      cogsAccountCode: p.cogsAccountCode ?? "",
+      unitId: p.unitId ?? "",
+      deskripsi: p.deskripsi ?? "",
+      merek: p.merek ?? "",
+      barcode: p.barcode ?? "",
     };
   });
 
@@ -91,7 +124,7 @@ export function ProductFormPage() {
     if (!form.nama.trim()) next.nama = "Nama produk wajib diisi.";
     if (form.hargaJual <= 0) next.hargaJual = "Harga jual harus lebih dari nol.";
     if (form.hargaBeli > form.hargaJual)
-      next.hargaBeli = "Harga beli melebihi harga jual — margin akan negatif.";
+      next.hargaBeli = "Harga beli melebihi harga jual, jadi marginnya negatif.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     saveMutation.mutate(form);
@@ -116,11 +149,7 @@ export function ProductFormPage() {
       <PageHeader
         eyebrow="Data induk"
         title={isEdit ? `Ubah ${detail.data?.nama ?? "produk"}` : "Tambah produk"}
-        description={
-          usesApi
-            ? "Harga jual dipakai untuk menghitung nilai tagihan. Stok dikelola dari modul gudang terpisah di build ini; stok minimum tetap dapat diubah di sini."
-            : "Harga jual dipakai untuk menghitung nilai tagihan, dan stok minimum memicu peringatan otomatis."
-        }
+        description="Harga jual dipakai untuk menghitung nilai tagihan. Jumlah stok belum dicatat per produk; stok minimum tetap dapat diubah di sini."
       />
 
       <form onSubmit={submit}>
@@ -139,7 +168,7 @@ export function ProductFormPage() {
                   id="nama"
                   value={form.nama}
                   invalid={!!errors.nama}
-                  placeholder="Nama produk"
+                  placeholder="LPG 3 Kg"
                   onChange={(e) => set("nama", e.target.value)}
                 />
               </Field>
@@ -165,6 +194,27 @@ export function ProductFormPage() {
                   placeholder="3 kg"
                   onChange={(e) => set("ukuran", e.target.value)}
                 />
+              </Field>
+
+              <Field label="Satuan" htmlFor="satuan" hint="Satuan hitung: tabung, pcs, kg.">
+                <SelectInput id="satuan" value={form.unitId} onChange={(e) => set("unitId", e.target.value)}>
+                  <option value="">— Belum dipilih —</option>
+                  {(units.data ?? []).map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>
+                  ))}
+                </SelectInput>
+              </Field>
+
+              <Field label="Merek" htmlFor="merek">
+                <TextInput id="merek" maxLength={100} value={form.merek} placeholder="Pertamina" onChange={(e) => set("merek", e.target.value)} />
+              </Field>
+
+              <Field label="Barcode" htmlFor="barcode">
+                <TextInput id="barcode" mono maxLength={100} value={form.barcode} onChange={(e) => set("barcode", e.target.value)} />
+              </Field>
+
+              <Field label="Deskripsi" htmlFor="deskripsi" className="sm:col-span-2">
+                <TextareaInput id="deskripsi" rows={2} maxLength={2000} value={form.deskripsi} onChange={(e) => set("deskripsi", e.target.value)} />
               </Field>
 
               <Field label="Harga beli" htmlFor="beli" error={errors.hargaBeli}>
@@ -211,18 +261,6 @@ export function ProductFormPage() {
             <Panel>
               <PanelHeader title="Stok" />
               <PanelBody className="space-y-4">
-                {!usesApi && (
-                  <Field label="Stok saat ini" htmlFor="stok">
-                    <TextInput
-                      id="stok"
-                      type="number"
-                      min={0}
-                      mono
-                      value={form.stok}
-                      onChange={(e) => set("stok", Number(e.target.value))}
-                    />
-                  </Field>
-                )}
                 <Field
                   label="Stok minimum"
                   htmlFor="min"
@@ -250,6 +288,77 @@ export function ProductFormPage() {
           </div>
         </div>
 
+        <Panel className="mt-4">
+          <PanelHeader
+            title="Jenis & Akun"
+            hint="Opsional. Kosongkan untuk memakai akun bawaan perusahaan."
+          />
+          <PanelBody className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label="Jenis"
+              htmlFor="product-kind"
+              className="sm:col-span-2"
+              hint={isEdit
+                ? "Tidak dapat diubah setelah dibuat."
+                : form.productKind === "container"
+                  ? "Tabung kosong hanya dihitung jumlahnya di stok opname; tidak dibeli, dijual, atau dinilai."
+                  : undefined}
+            >
+              {isEdit ? (
+                <p className="py-1.5 text-sm text-ink">
+                  {form.productKind === "accessory" ? "Perlengkapan" : form.productKind === "container" ? "Tabung kosong" : "Komoditas"}
+                </p>
+              ) : (
+                <SegmentedControl
+                  value={form.productKind}
+                  onChange={(productKind) => set("productKind", productKind)}
+                  options={[
+                    { value: "commodity" as const, label: "Komoditas" },
+                    { value: "accessory" as const, label: "Perlengkapan" },
+                    { value: "container" as const, label: "Tabung kosong" },
+                  ]}
+                />
+              )}
+            </Field>
+            <Field label="Akun persediaan" htmlFor="product-inv-account" hint="Menimpa akun 'persediaan' bawaan.">
+              <SelectInput
+                id="product-inv-account"
+                value={form.inventoryAccountCode}
+                onChange={(e) => set("inventoryAccountCode", e.target.value)}
+              >
+                <option value="">— Gunakan bawaan —</option>
+                {postableAccounts.map((a) => (
+                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} · {a.akun.nama}</option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Akun pendapatan" htmlFor="product-rev-account" hint="Menimpa akun 'pendapatan' bawaan.">
+              <SelectInput
+                id="product-rev-account"
+                value={form.revenueAccountCode}
+                onChange={(e) => set("revenueAccountCode", e.target.value)}
+              >
+                <option value="">— Gunakan bawaan —</option>
+                {postableAccounts.map((a) => (
+                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} · {a.akun.nama}</option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Akun HPP" htmlFor="product-cogs-account" hint="Menimpa akun 'hpp' bawaan.">
+              <SelectInput
+                id="product-cogs-account"
+                value={form.cogsAccountCode}
+                onChange={(e) => set("cogsAccountCode", e.target.value)}
+              >
+                <option value="">— Gunakan bawaan —</option>
+                {postableAccounts.map((a) => (
+                  <option key={a.akun.id} value={a.akun.kode}>{a.akun.kode} · {a.akun.nama}</option>
+                ))}
+              </SelectInput>
+            </Field>
+          </PanelBody>
+        </Panel>
+
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
           <Button asChild variant="outline" type="button">
             <Link to="/products">Batal</Link>
@@ -264,6 +373,11 @@ export function ProductFormPage() {
           </Button>
         </div>
       </form>
+      {isEdit && id && (
+        <CanAccess permission={PERMISSIONS.TRANSPORT_TARIFFS_VIEW}>
+          <TransportTariffPanel productId={id} />
+        </CanAccess>
+      )}
     </div>
   );
 }

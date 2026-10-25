@@ -4,6 +4,7 @@ const getList = vi.fn();
 const send = vi.fn();
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  getOne: vi.fn(),
   send: (...args: unknown[]) => send(...args),
 }));
 
@@ -39,13 +40,43 @@ describe("expenseApiHttp", () => {
 
   it("sends the create and dual-control approval payloads", async () => {
     send.mockResolvedValue(wire);
-    await expenseApiHttp.createExpense({ category: "fuel", amount: 125000, paymentMode: "cash", incurredAt: "2026-09-13" });
-    expect(send).toHaveBeenCalledWith("post", "/expenses", expect.objectContaining({ category: "fuel", payment_mode: "cash" }));
+    await expenseApiHttp.createExpense({
+      lines: [{ category: "fuel", amount: 100000, description: " Solar " }, { category: "toll", amount: 25000 }],
+      paymentMode: "cash", bankAccountId: "kas-1", incurredAt: "2026-09-13",
+      payeeName: " SPBU 44.507 ", receiptNumber: "NT-9",
+    });
+    expect(send).toHaveBeenCalledWith("post", "/expenses", expect.objectContaining({
+      lines: [{ category: "fuel", amount: 100000, description: "Solar" }, { category: "toll", amount: 25000, description: undefined }],
+      payment_mode: "cash", bank_account_id: "kas-1", payee_name: "SPBU 44.507", receipt_number: "NT-9",
+    }));
 
     await expenseApiHttp.approveExpense({ id: wire.id, version: 1, secondApproverId: "22222222-2222-4222-8222-222222222222" });
     expect(send).toHaveBeenLastCalledWith("post", `/expenses/${wire.id}/approve`, {
       version: 1,
       second_approver_id: "22222222-2222-4222-8222-222222222222",
     });
+  });
+});
+
+describe("expense corrections", () => {
+  it("reads lines, payee and void reason", async () => {
+    getList.mockResolvedValue({ items: [{ ...wire, approval_status: "void", void_reason: "nota ganda", payee_name: "Bengkel",
+      lines: [{ category: "fuel", category_name: "BBM", amount: 125000 }] }] });
+    const [row] = await expenseApiHttp.getExpenses({ from: "2026-09-01", to: "2026-09-30" });
+    expect(row).toMatchObject({ approvalStatus: "void", voidReason: "nota ganda", payeeName: "Bengkel" });
+    expect(row.lines[0]).toEqual({ category: "fuel", categoryName: "BBM", description: undefined, amount: 125000 });
+    expect(getList.mock.calls[0][1].filters).toEqual([
+      { field: "date", operator: "gte", value: "2026-09-01" },
+      { field: "date", operator: "lte", value: "2026-09-30" },
+    ]);
+  });
+
+  it("edits and withdraws under the version read", async () => {
+    send.mockResolvedValue(wire);
+    await expenseApiHttp.updateExpense(wire.id, 2, { lines: [{ category: "fuel", amount: 1 }], paymentMode: "bank", incurredAt: "2026-09-13" });
+    await expenseApiHttp.cancelExpense(wire.id, 3, "");
+    expect(send.mock.calls[0][0]).toBe("put");
+    expect(send.mock.calls[0][2]).toMatchObject({ version: 2, payment_mode: "bank", lines: [{ category: "fuel", amount: 1 }] });
+    expect(send.mock.calls[1]).toEqual(["post", `/expenses/${wire.id}/cancel`, { version: 3, reason: undefined }]);
   });
 });

@@ -8,43 +8,43 @@
  * screens built against the mock keep working unchanged against the real
  * service.
  *
- * # Two known gaps, deliberately not papered over
- *
- * **Surat jalan.** `InvoiceResponse` carries `delivery_id`, a UUID, not the
- * delivery's own document number -- resolving it would mean one extra
- * request per row. `suratJalan` reads "—" here rather than the UUID, which
- * is honest about what the list endpoint actually returns.
- *
- * **Which invoices a receipt was applied to.** `PaymentResponse` carries
- * `allocated`, the total applied -- correct, and `belumDialokasikan` uses it
- * directly. But no route returns the allocation *lines* themselves; the
- * only one that touches them is `POST /payments/:id/allocations`, which
- * creates and returns nothing to read back. So `alokasi` cannot name which
- * invoices were paid in this build; it carries one synthetic line summing
- * the allocated amount so `alokasi.length === 0` still means "nothing
- * applied yet" (the one thing PaymentPage actually branches on), rather than
- * showing invoice numbers the API cannot supply. A real fix needs a route
- * such as `GET /payments/:id/allocations`.
+ * An invoice carries its surat jalan number (`delivery_number`) and a
+ * receipt its allocation lines with invoice numbers -- both were gaps this
+ * file used to paper over with "—" and a synthetic line, closed by the
+ * accounting parity plan's P2.
  */
 import { getList, getOne, send } from "@/lib/api";
+import { toApiTimestamp, todayIso } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import type { OutletView } from "@/features/outlet/api/contract";
-import type { AccountBalance } from "@/mocks/ledger";
+import type { AccountBalance } from "@/features/finance/lib/accounts";
+import {
+  profitAndLossFromTrialBalance,
+  type TrialBalanceRow,
+} from "@/features/finance/lib/trialBalance";
 import type { AccountEntity, AccountType, InvoiceStatus } from "@/types/domain";
 import { AGING_BUCKETS } from "./contract";
 import type {
   AgingReport,
   AgingRow,
   AllocationLine,
+  ChartUpgradeResult,
+  CreateAccountInput,
+  CreateManualInvoiceInput,
+  CreateManualJournalInput,
+  CreditNoteFilters,
   CreditNoteInput,
   CreditNoteView,
+  InvoiceDetailView,
   DateRange,
   FinanceApi,
   FundingResult,
   FundStopInput,
   InvoiceFilters,
   InvoiceView,
+  JournalQuery,
   JournalView,
+  PaymentMethodView,
   PaymentView,
   ProfitAndLossView,
   RecordPaymentInput,
@@ -63,7 +63,9 @@ async function outletsById(): Promise<Map<string, OutletView>> {
 /* ── invoices ──────────────────────────────────────────────────────────── */
 
 interface InvoiceLineResponse {
-  product_id: string;
+  product_id?: string;
+  product_name?: string;
+  description?: string;
   quantity: number;
   unit_price: number;
   subtotal: number;
@@ -74,7 +76,17 @@ interface InvoiceResponse {
   id: string;
   invoice_number: string;
   outlet_id: string;
-  delivery_id: string;
+  // Absent for a "registration"/"other" invoice (financial-statements
+  // plan P5 / gap-closing plan Phase C) -- see InvoiceResponse's own doc:
+  // DeliveryID is nil for either.
+  delivery_id?: string;
+  /** The surat jalan number of the delivery this invoice bills. */
+  delivery_number?: string;
+  invoice_type: string;
+  description?: string;
+  reference_number?: string;
+  void_reason?: string;
+  voided_at?: string;
   lines: InvoiceLineResponse[];
   subtotal: number;
   tax_percentage: number;
@@ -113,6 +125,8 @@ function toInvoiceStatus(paymentStatus: string): InvoiceStatus {
       return "Sebagian";
     case "overdue":
       return "Jatuh Tempo";
+    case "void":
+      return "Batal";
     default:
       return "Terbit";
   }
@@ -148,8 +162,10 @@ function toInvoiceView(
     outletId: row.outlet_id,
     outlet: outlet?.nama ?? "—",
     kecamatan: outlet?.kecamatan ?? "—",
-    // See this file's header: not resolvable without a per-row request.
-    suratJalan: "—",
+    suratJalan: row.delivery_number ?? "—",
+    invoiceType: row.invoice_type === "registration" || row.invoice_type === "other"
+      ? row.invoice_type
+      : "delivery",
     tanggal: row.issued_at.slice(0, 10),
     jatuhTempo: dueDate,
     umurHari: Math.floor(
@@ -163,6 +179,27 @@ function toInvoiceView(
     sisa: row.outstanding_amount,
     status: toInvoiceStatus(row.payment_status),
     termin: outlet?.termin ?? 0,
+    referensi: row.reference_number,
+    keterangan: row.description,
+    alasanBatal: row.void_reason,
+    version: row.version,
+  };
+}
+
+async function getInvoice(id: string): Promise<InvoiceDetailView> {
+  const [row, outlets] = await Promise.all([getOne<InvoiceResponse>(`/invoices/${id}`), outletsById()]);
+  const view = toInvoiceView(row, outlets, todayIso());
+  return {
+    ...view,
+    lines: (row.lines ?? []).map((l) => ({
+      uraian: l.product_name ?? l.description ?? "—",
+      qty: l.quantity,
+      harga: l.unit_price,
+      jumlah: l.subtotal,
+    })),
+    subtotal: row.subtotal,
+    persenPajak: row.tax_percentage,
+    pajak: row.tax_amount,
   };
 }
 
@@ -213,6 +250,27 @@ async function getOpenInvoices(outletId: string): Promise<InvoiceView[]> {
     .map((r) => toInvoiceView(r, outlets, today))
     .filter((inv) => inv.status !== "Batal" && inv.sisa > 0)
     .sort((a, b) => a.jatuhTempo.localeCompare(b.jatuhTempo));
+}
+
+async function createManualInvoice(input: CreateManualInvoiceInput): Promise<InvoiceView> {
+  const row = await send<InvoiceResponse>("post", "/invoices/manual", {
+    invoice_type: input.invoiceType,
+    outlet_id: input.outletId,
+    issue_date: input.issueDate,
+    due_date: input.dueDate || undefined,
+    branch_id: input.branchId || undefined,
+    reference_number: input.referenceNumber || undefined,
+    description: input.description,
+    package_id: input.packageId,
+    fee_amount: input.feeAmount,
+    kit_items: input.kitItems?.map((k) => ({ product_id: k.productId, qty: k.qty })),
+    lines: input.lines?.map((l) => ({
+      description: l.description, amount: l.amount, revenue_account_id: l.revenueAccountId,
+    })),
+  });
+  const outlets = await outletsById();
+  const today = new Date().toISOString().slice(0, 10);
+  return toInvoiceView(row, outlets, today);
 }
 
 /* ── ageing ────────────────────────────────────────────────────────────── */
@@ -284,6 +342,8 @@ interface PaymentResponse {
   rejection_reason?: string;
   notes?: string;
   allocated: number;
+  refunded?: number;
+  allocations?: { invoice_id: string; invoice_number: string; amount: number }[];
   version: number;
   created_at: string;
   updated_at: string;
@@ -320,20 +380,21 @@ function toPaymentView(row: PaymentResponse, outlets: Map<string, OutletView>): 
     outlet: outlets.get(row.outlet_id)?.nama ?? "—",
     tanggal: row.payment_date.slice(0, 10),
     jumlah: row.amount,
-    belumDialokasikan: row.amount - row.allocated,
+    belumDialokasikan: row.amount - row.allocated - (row.refunded ?? 0),
+    dikembalikan: row.refunded ?? 0,
     bank: row.bank_name ?? "—",
     // The full account number never leaves the server unencrypted -- see
     // core.payments.bank_account_number_encrypted's own column comment.
     noRekening: row.bank_account_last4 ? `•••• ${row.bank_account_last4}` : "—",
     status: PAYMENT_STATUS_LABEL[row.payment_status] ?? row.payment_status,
-    // See this file's header: which invoices were paid is not resolvable
-    // from any route this build can call, only the total.
-    alokasi:
-      row.allocated > 0
-        ? [{ invoiceId: "", nomor: "(lihat tagihan)", jumlah: row.allocated }]
-        : [],
+    alokasi: (row.allocations ?? []).map((a) => ({
+      invoiceId: a.invoice_id,
+      nomor: a.invoice_number,
+      jumlah: a.amount,
+    })),
     keterangan: row.notes,
     diverifikasiOleh: row.verified_at ? "Terverifikasi" : undefined,
+    version: row.version,
   };
 }
 
@@ -352,31 +413,37 @@ async function getPayments(status?: string, search?: string): Promise<PaymentVie
     .map((r) => toPaymentView(r, outlets));
 }
 
-/** The tenant's payment methods, so a receipt can be recorded without a
- *  method picker the console does not have yet -- see submitPayment. */
-async function resolvePaymentMethodId(): Promise<string> {
+async function getPaymentMethods(): Promise<PaymentMethodView[]> {
   const page = await getList<PaymentMethodResponse>("/payment-methods", { pageSize: PAGE_SIZE });
-  const bankTransfer = page.items.find((m) => m.code === "bank_transfer");
-  const chosen = bankTransfer ?? page.items[0];
+  return page.items
+    .filter((m) => m.status !== "ina")
+    .sort((x, y) => x.sort_order - y.sort_order)
+    .map((m) => ({ id: m.id, kode: m.code, nama: m.name, butuhReferensi: m.requires_reference }));
+}
+
+/** Bank transfer, or the first method -- for a caller that names none. */
+async function defaultPaymentMethodId(): Promise<string> {
+  const methods = await getPaymentMethods();
+  const chosen = methods.find((m) => m.kode === "bank_transfer") ?? methods[0];
   if (!chosen) {
-    throw new Error("Tidak ada metode pembayaran terdaftar untuk tenant ini.");
+    throw new Error("Belum ada metode pembayaran untuk perusahaan ini.");
   }
   return chosen.id;
 }
 
 /**
- * The console's record-receipt form collects a sender bank name and account
- * number, not a payment method or a transaction reference -- there is no
- * method picker yet (payment_methods is Step 1c's addition, still without
- * console UI). Every receipt this build records goes in as `bank_transfer`,
- * and the account number the form already collects doubles as the
- * transaction reference `bank_transfer` requires, since the form has
- * nothing else to send for it. Both are real limitations of the current
- * form, not of the API.
+ * Records a receipt and, when the form allocated it, applies it in the
+ * same step -- the bookkeeper's one action. The two are separate requests
+ * (record, then allocate); a failure applying leaves a recorded,
+ * unallocated receipt, which the list flags and Alokasikan finishes.
+ *
+ * The reference is the bank's transaction number from the slip. A form
+ * that has none falls back to the sender account number, which is what
+ * every receipt carried before the field existed.
  */
 async function submitPayment(input: RecordPaymentInput): Promise<PaymentView> {
   const [paymentMethodId, outlets] = await Promise.all([
-    resolvePaymentMethodId(),
+    input.metodeId ? Promise.resolve(input.metodeId) : defaultPaymentMethodId(),
     outletsById(),
   ]);
   const created = await send<PaymentResponse>("post", "/payments", {
@@ -385,11 +452,14 @@ async function submitPayment(input: RecordPaymentInput): Promise<PaymentView> {
     payment_method_id: paymentMethodId,
     bank_name: input.bank,
     bank_account_number: input.noRekening,
-    bank_reference: input.noRekening,
-    payment_date: input.tanggal,
+    bank_reference: input.referensi?.trim() || input.noRekening,
+    payment_date: toApiTimestamp(input.tanggal),
     notes: input.keterangan,
+    destination_bank_account_id: input.rekeningTujuanId || undefined,
   });
-  return toPaymentView(created, outlets);
+  const lines = (input.alokasi ?? []).filter((a) => a.jumlah > 0);
+  if (lines.length === 0) return toPaymentView(created, outlets);
+  return submitAllocation(created.id, lines);
 }
 
 async function submitAllocation(
@@ -494,6 +564,7 @@ interface CreditNoteResponse {
   credit_note_number: string;
   outlet_id: string;
   invoice_id?: string;
+  invoice_number?: string;
   amount: number;
   reason_code: string;
   reason: string;
@@ -516,28 +587,60 @@ function toCreditNoteView(row: CreditNoteResponse): CreditNoteView {
     nomor: row.credit_note_number,
     outletId: row.outlet_id,
     invoiceId: row.invoice_id ?? null,
+    invoiceNomor: row.invoice_number,
     jumlah: row.amount,
     alasan: row.reason,
+    kodeAlasan: row.reason_code,
     status: CREDIT_NOTE_STATUS[row.credit_note_status] ?? "Terbit",
     tanggal: row.issue_date.slice(0, 10),
+    alasanBatal: row.cancellation_reason,
+    version: row.version,
   };
 }
 
-/**
- * `reason_code` is a required, closed CHECK on the backend
- * (`goods_return | billing_correction | price_adjustment | quality_claim |
- * goodwill`); ReceivablesPage's dialog collects only free-text `alasan`, so
- * this build always sends `billing_correction`, the closest generic code, a
- * console screen with no reason picker yet cannot choose more precisely.
- */
+const CREDIT_NOTE_STATUS_CODE: Record<CreditNoteView["status"], string> = {
+  Terbit: "issued",
+  Terpakai: "applied",
+  Batal: "cancelled",
+};
+
+async function getCreditNotes(filters?: CreditNoteFilters): Promise<CreditNoteView[]> {
+  const wire: { field: string; operator: "eq"; value: string }[] = [];
+  if (filters?.status && filters.status !== "Semua") {
+    wire.push({ field: "credit_note_status", operator: "eq", value: CREDIT_NOTE_STATUS_CODE[filters.status] });
+  }
+  if (filters?.outletId && filters.outletId !== "Semua") {
+    wire.push({ field: "outlet_id", operator: "eq", value: filters.outletId });
+  }
+  const page = await getList<CreditNoteResponse>("/credit-notes", {
+    pageSize: PAGE_SIZE,
+    sort: [{ field: "issue_date", direction: "desc" }],
+    search: filters?.search,
+    filters: wire,
+  });
+  return page.items.map(toCreditNoteView);
+}
+
+async function applyCreditNote(id: string, version: number, invoiceId?: string): Promise<CreditNoteView> {
+  return toCreditNoteView(
+    await send<CreditNoteResponse>("post", `/credit-notes/${id}/apply`, { version, invoice_id: invoiceId }),
+  );
+}
+
+async function cancelCreditNote(id: string, version: number, reason: string): Promise<CreditNoteView> {
+  return toCreditNoteView(
+    await send<CreditNoteResponse>("post", `/credit-notes/${id}/cancel`, { version, reason }),
+  );
+}
+
 async function submitCreditNote(input: CreditNoteInput): Promise<CreditNoteView> {
   const created = await send<CreditNoteResponse>("post", "/credit-notes", {
     outlet_id: input.outletId,
     invoice_id: input.invoiceId ?? undefined,
     amount: input.jumlah,
-    reason_code: "billing_correction",
+    reason_code: input.kodeAlasan,
     reason: input.alasan,
-    issue_date: new Date().toISOString().slice(0, 10),
+    issue_date: toApiTimestamp(input.tanggal),
   });
   return toCreditNoteView(created);
 }
@@ -558,38 +661,113 @@ interface JournalResponse {
   journal_number: string;
   journal_date: string;
   description: string;
+  source_type: string;
   journal_status: string;
   lines: JournalLineResponse[];
+  source_id?: string;
+  source_number?: string;
+  version: number;
+  branch_id?: string;
+  branch_name?: string;
 }
 
+// Mirrors fin.journals.source_type's own CHECK constraint values, renamed
+// to this build's camelCase JournalSourceType. An unrecognised wire value
+// (a source_type added on the backend before this map catches up) falls
+// back to "manual" rather than throwing -- close enough for display, and
+// reverseJournal's own eligibility check treats it the same as a real
+// manual entry would.
+const SOURCE_TYPE: Record<string, JournalView["sourceType"]> = {
+  invoice: "invoice", payment: "payment", credit_note: "creditNote", delivery: "delivery",
+  manual: "manual", purchase: "purchase", cash_voucher: "cashVoucher", depreciation: "depreciation",
+  closing: "closing", opening_balance: "openingBalance", expense: "expense",
+  transportation_claim: "transportationClaim", sim3lon_opening: "sim3lonOpening",
+  purchase_payment: "purchasePayment",
+  asset_acquisition: "assetAcquisition",
+  asset_disposal: "assetDisposal",
+  payment_refund: "paymentRefund",
+};
+
 function toJournalView(row: JournalResponse): JournalView {
+  const lines = row.lines ?? [];
   return {
     id: row.id,
     nomor: row.journal_number,
     tanggal: row.journal_date.slice(0, 10),
     keterangan: row.description,
+    sourceType: SOURCE_TYPE[row.source_type] ?? "manual",
+    sourceId: row.source_id,
+    sourceNumber: row.source_number,
     status: row.journal_status === "reversed" ? "Dibatalkan" : "Diposting",
-    total: row.lines.reduce((s, l) => s + l.debit, 0),
-    lines: row.lines.map((l) => ({
+    total: lines.reduce((s, l) => s + l.debit, 0),
+    lines: lines.map((l) => ({
       akun: { id: l.account_id, kode: l.account_code, nama: l.account_name },
       debit: l.debit,
       kredit: l.credit,
       memo: l.memo,
     })),
+    version: row.version,
+    branchId: row.branch_id,
+    branchName: row.branch_name,
   };
 }
 
-async function getJournals(range?: DateRange): Promise<JournalView[]> {
-  const filters: { field: string; operator: "gte" | "lte"; value: string }[] = [];
+// A range with more than this many journals stops paginating rather than
+// walking forever against a fat-fingered date range -- 20 pages at
+// PAGE_SIZE is 2,000 journals, already more than LedgerPage's own table
+// renders usefully in one screen.
+const MAX_JOURNAL_PAGES = 20;
+
+/**
+ * Every journal in the range, not just the first 100.
+ *
+ * Was capped at one page (PAGE_SIZE), silently dropping anything past it
+ * for a range that crossed that many journals -- the ledger's own trial
+ * balance and P&L are unaffected (they sum server-side), but this list is
+ * what LedgerPage's Jurnal tab and the financial-statements Buku Besar tab
+ * both render directly.
+ */
+async function getJournals(range?: DateRange, query?: JournalQuery): Promise<JournalView[]> {
+  const filters: { field: string; operator: "eq" | "gte" | "lte"; value: string }[] = [];
   if (range?.from) filters.push({ field: "journal_date", operator: "gte", value: range.from });
   if (range?.to) filters.push({ field: "journal_date", operator: "lte", value: range.to });
+  if (query?.accountId) filters.push({ field: "account_id", operator: "eq", value: query.accountId });
 
-  const page = await getList<JournalResponse>("/journals", {
-    pageSize: PAGE_SIZE,
-    sort: [{ field: "journal_date", direction: "desc" }],
-    filters,
+  const items: JournalResponse[] = [];
+  for (let pageNumber = 1; pageNumber <= MAX_JOURNAL_PAGES; pageNumber++) {
+    const page = await getList<JournalResponse>("/journals", {
+      page: pageNumber,
+      pageSize: PAGE_SIZE,
+      sort: [{ field: "journal_date", direction: "desc" }],
+      filters,
+      search: query?.search?.trim() || undefined,
+    });
+    items.push(...page.items);
+    if (!page.pagination.has_next) break;
+  }
+  // The list carries each journal's lines and its source document, so the
+  // range is one request per page -- it used to be one more per journal.
+  return items.map(toJournalView);
+}
+
+async function createManualJournal(input: CreateManualJournalInput): Promise<JournalView> {
+  const row = await send<JournalResponse>("post", "/journals", {
+    branch_id: input.branchId,
+    journal_date: toApiTimestamp(input.journalDate),
+    description: input.description,
+    lines: input.lines.map((l) => ({
+      account_id: l.accountId,
+      debit: l.debit || undefined,
+      credit: l.kredit || undefined,
+      memo: l.memo?.trim() || undefined,
+    })),
   });
-  return page.items.map(toJournalView);
+  return toJournalView(row);
+}
+
+async function reverseJournal(id: string, version: number): Promise<JournalView> {
+  const row = await send<JournalResponse>("post", `/journals/${id}/reverse`, { version });
+  return toJournalView(row);
 }
 
 /* ── accounts / trial balance / P&L ───────────────────────────────────── */
@@ -602,6 +780,7 @@ interface AccountResponse {
   normal_balance: "dr" | "cr";
   is_system: boolean;
   role?: string;
+  parent_id?: string;
 }
 
 const ACCOUNT_TYPE: Record<string, AccountType> = {
@@ -612,13 +791,24 @@ const ACCOUNT_TYPE: Record<string, AccountType> = {
   expense: "Beban",
 };
 
-function toAccountEntity(row: AccountResponse): AccountEntity {
+/**
+ * `idToCode` resolves `parent_id` (a uuid) to the parent's own code --
+ * `induk` stores the code, same as the mock (see mocks/ledger.ts's own
+ * accounts), so `leafAccounts()` can compare it against sibling codes
+ * without caring which adapter produced the row. Omitting this lookup left
+ * every API-mode account's `induk` undefined, which made `leafAccounts()` a
+ * silent no-op against the real backend -- caught live posting a manual
+ * journal to "5-4000 Beban Umum dan Administrasi", a grouping header still
+ * listed as selectable (gap-closing plan, Phase E).
+ */
+function toAccountEntity(row: AccountResponse, idToCode: Map<string, string>): AccountEntity {
   return {
     id: row.id,
     kode: row.code,
     nama: row.name,
     tipe: ACCOUNT_TYPE[row.account_type] ?? "Aset",
     saldoNormal: row.normal_balance === "dr" ? "debit" : "kredit",
+    induk: row.parent_id ? idToCode.get(row.parent_id) : undefined,
     // "payable" (Step 6) has no equivalent in the console's AccountRole
     // union yet, and nothing here reads .role, so an unrecognised role is
     // left undefined rather than widening that type for no consumer.
@@ -628,14 +818,12 @@ function toAccountEntity(row: AccountResponse): AccountEntity {
 }
 
 /**
- * Swallows a 403 rather than letting it fail the trial balance or P&L
- * outright. Only tenant_admin holds `finance.read.accounts` -- confirmed
- * live: signed in as finance_officer, GET /accounts answered 403 while
- * finance_officer legitimately holds `finance.read.journals` and must still
- * see a working trial balance and P&L. `toAccountBalances`/`toPnlRows` fall
- * back to signing by account_type when no account row is available; the
- * chart of accounts itself (which genuinely needs this list) is gated on
- * `PERMISSIONS.ACCOUNTS_VIEW` at the LedgerPage tab, not here.
+ * Swallows a 403 rather than failing its caller outright. Only tenant_admin
+ * holds `finance.read.accounts` -- confirmed live: signed in as
+ * finance_officer, GET /accounts answered 403. The trial balance and P&L no
+ * longer read it at all (each row carries its own type and role); the chart
+ * of accounts, which genuinely needs it, is gated on
+ * `PERMISSIONS.ACCOUNTS_VIEW` at the LedgerPage tab.
  */
 async function fetchAccounts(): Promise<AccountResponse[]> {
   try {
@@ -649,175 +837,191 @@ async function fetchAccounts(): Promise<AccountResponse[]> {
   }
 }
 
-/** asset/expense increase on the debit side, everything else on credit --
- *  mirrors the backend's own normalBalance (internal/usecase/account/services.go),
- *  used only when the account itself could not be read to ask directly. */
-function defaultNormalBalance(accountType: string): "dr" | "cr" {
-  return accountType === "asset" || accountType === "expense" ? "dr" : "cr";
-}
-
 interface TrialBalanceRowResponse {
+  account_id: string;
   account_code: string;
   account_name: string;
   account_type: string;
+  account_role?: string;
+  opening_debit: number;
+  opening_credit: number;
   debit: number;
   credit: number;
+  closing_debit: number;
+  closing_credit: number;
+}
+
+interface TrialBalanceTotalsResponse {
+  opening_debit: number;
+  opening_credit: number;
+  debit: number;
+  credit: number;
+  closing_debit: number;
+  closing_credit: number;
 }
 
 interface TrialBalanceResponse {
-  as_of: string;
   rows: TrialBalanceRowResponse[];
-  total_debit: number;
-  total_credit: number;
+  totals: TrialBalanceTotalsResponse;
+  balanced: boolean;
+}
+
+function toTrialBalanceRow(r: TrialBalanceRowResponse): TrialBalanceRow {
+  const tipe = ACCOUNT_TYPE[r.account_type] ?? "Aset";
+  return {
+    // Enough of the account to render and to split the P&L by; the trial
+    // balance deliberately does not need /accounts, which only tenant_admin
+    // may read (see fetchAccounts).
+    akun: {
+      id: r.account_id,
+      kode: r.account_code,
+      nama: r.account_name,
+      tipe,
+      saldoNormal: tipe === "Aset" || tipe === "Beban" ? "debit" : "kredit",
+      sistem: false,
+      aktif: true,
+    },
+    role: r.account_role || undefined,
+    saldoAwalDebit: r.opening_debit,
+    saldoAwalKredit: r.opening_credit,
+    debit: r.debit,
+    kredit: r.credit,
+    saldoAkhirDebit: r.closing_debit,
+    saldoAkhirKredit: r.closing_credit,
+  };
 }
 
 /**
- * Signs each row by the account's own `normal_balance` when it can be read
- * -- a contra account (sales_returns) shares its account_type with a normal
- * one and only the account itself knows which side it actually increases
- * on. Falls back to `defaultNormalBalance(account_type)` when `/accounts`
- * could not be read at all (see fetchAccounts's own comment) -- wrong only
- * for the rare contra account, and still signed, rather than every row
- * defaulting to debit-normal and every liability/equity/revenue balance
- * coming out negated.
- */
-function toAccountBalances(
-  rows: TrialBalanceRowResponse[],
-  accounts: Map<string, AccountResponse>,
-): AccountBalance[] {
-  return rows.map((r) => {
-    const account = accounts.get(r.account_code);
-    const normalBalance = account?.normal_balance ?? defaultNormalBalance(r.account_type);
-    const saldo = normalBalance === "dr" ? r.debit - r.credit : r.credit - r.debit;
-    return {
-      akun: account
-        ? toAccountEntity(account)
-        : {
-            id: r.account_code,
-            kode: r.account_code,
-            nama: r.account_name,
-            tipe: ACCOUNT_TYPE[r.account_type] ?? "Aset",
-            saldoNormal: normalBalance === "dr" ? "debit" : "kredit",
-            sistem: false,
-            aktif: true,
-          },
-      debit: r.debit,
-      kredit: r.credit,
-      saldo,
-    };
-  });
-}
-
-/**
- * The ledger's own trial balance is lifetime-to-date **as of one date**
- * (`GET /journals/trial-balance?as_of=`), not a movement-within-a-range
- * figure the way the mock's `trialBalance(db, {from, to})` is. LedgerPage
- * shares one date-range control across all four tabs, so on this tab "Dari"
- * has no effect against the real API -- only "Sampai" is sent, as `as_of`.
+ * The Neraca Saldo for a range: opening balance, movement and closing
+ * balance per account, on the same rules as the Neraca (closing journals
+ * excluded; revenue and expense open from 1 January). Replaces the ledger's
+ * own `/journals/trial-balance`, which ignored "Dari" and counted closing
+ * journals, so it disagreed with the Neraca after a year was closed.
  */
 async function getTrialBalance(range: { from: string; to: string }): Promise<TrialBalanceView> {
-  const [response, accountRows] = await Promise.all([
-    getOne<TrialBalanceResponse>(`/journals/trial-balance?as_of=${range.to}`),
-    fetchAccounts(),
-  ]);
-  const accounts = new Map(accountRows.map((a) => [a.code, a]));
-  const rows = toAccountBalances(response.rows, accounts).filter(
-    (r) => r.debit !== 0 || r.kredit !== 0,
+  const response = await getOne<TrialBalanceResponse>(
+    `/financial-statements/trial-balance?date_from=${range.from}&date_to=${range.to}`,
   );
+  const t = response.totals;
   return {
-    rows,
-    totalDebit: response.total_debit,
-    totalKredit: response.total_credit,
+    rows: response.rows.map(toTrialBalanceRow),
+    totals: {
+      saldoAwalDebit: t.opening_debit,
+      saldoAwalKredit: t.opening_credit,
+      debit: t.debit,
+      kredit: t.credit,
+      saldoAkhirDebit: t.closing_debit,
+      saldoAkhirKredit: t.closing_credit,
+    },
+    seimbang: response.balanced,
   };
 }
 
-interface ProfitAndLossRowResponse {
-  account_code: string;
-  account_name: string;
-  amount: number;
-}
-
-interface ProfitAndLossResponse {
-  revenue: ProfitAndLossRowResponse[];
-  total_revenue: number;
-  cogs: ProfitAndLossRowResponse[];
-  total_cogs: number;
-  gross_profit: number;
-  expenses: ProfitAndLossRowResponse[];
-  total_expenses: number;
-  net_income: number;
-}
-
-function toPnlRows(
-  rows: ProfitAndLossRowResponse[],
-  accounts: Map<string, AccountResponse>,
-): AccountBalance[] {
-  return rows.map((r) => {
-    const account = accounts.get(r.account_code);
-    return {
-      akun: account
-        ? toAccountEntity(account)
-        : {
-            id: r.account_code,
-            kode: r.account_code,
-            nama: r.account_name,
-            tipe: "Beban",
-            saldoNormal: "debit",
-            sistem: false,
-            aktif: true,
-          },
-      // The backend already nets revenue and expense rows to one signed
-      // amount per account; debit/credit turnover is not broken out here,
-      // unlike the trial balance's own rows.
-      debit: 0,
-      kredit: 0,
-      saldo: r.amount,
-    };
-  });
-}
-
+/** The laba rugi for a range, from the trial balance's movement -- see
+ *  profitAndLossFromTrialBalance for why there is no second P&L engine. */
 async function getProfitAndLoss(range: { from: string; to: string }): Promise<ProfitAndLossView> {
-  const [response, accountRows] = await Promise.all([
-    getOne<ProfitAndLossResponse>(
-      `/journals/profit-and-loss?date_from=${range.from}&date_to=${range.to}`,
-    ),
-    fetchAccounts(),
-  ]);
-  const accounts = new Map(accountRows.map((a) => [a.code, a]));
-  return {
-    pendapatan: toPnlRows(response.revenue, accounts),
-    beban: toPnlRows([...response.cogs, ...response.expenses], accounts),
-    totalPendapatan: response.total_revenue,
-    totalBeban: response.total_cogs + response.total_expenses,
-    labaKotor: response.gross_profit,
-    labaBersih: response.net_income,
-  };
+  const tb = await getTrialBalance(range);
+  return profitAndLossFromTrialBalance(tb.rows);
+}
+
+/**
+ * Every account in the chart with its current balance: balance-sheet
+ * accounts lifetime, revenue and expense this year -- the trial balance's
+ * closing column from 1 January to today.
+ *
+ * The balances are a courtesy: most callers want the account list for a
+ * picker, and a role that may read the chart but not the statements must
+ * still get it, so a refused trial balance leaves every balance at zero
+ * rather than failing the picker.
+ */
+/** Roles the backend reserves for one module (cashvoucher's
+ *  controlAccountModule, purchase's controlRoles). */
+const CONTROL_ROLES = new Set([
+  "receivable", "registration_receivable", "transport_receivable", "customer_deposit",
+  "payable", "payable_pertamina", "inventory", "output_vat", "retained_earnings", "opening_balance_equity", "cash", "bank",
+]);
+
+/** Ids of accounts that carry a control role or sit under one. */
+function controlAccountIds(rows: AccountResponse[]): Set<string> {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const out = new Set<string>();
+  for (const row of rows) {
+    for (let cur: AccountResponse | undefined = row, depth = 0; cur && depth < 10; depth++) {
+      if (cur.role && CONTROL_ROLES.has(cur.role)) {
+        out.add(row.id);
+        break;
+      }
+      cur = cur.parent_id ? byId.get(cur.parent_id) : undefined;
+    }
+  }
+  return out;
 }
 
 async function getChartOfAccounts(): Promise<AccountBalance[]> {
+  const today = todayIso();
   const [accountRows, tb] = await Promise.all([
     fetchAccounts(),
-    getOne<TrialBalanceResponse>("/journals/trial-balance"),
+    getTrialBalance({ from: `${today.slice(0, 4)}-01-01`, to: today }).catch(() => null),
   ]);
-  const accounts = new Map(accountRows.map((a) => [a.code, a]));
-  const balances = toAccountBalances(tb.rows, accounts);
-  const balanceByCode = new Map(balances.map((b) => [b.akun.kode, b]));
+  const idToCode = new Map(accountRows.map((a) => [a.id, a.code]));
+  const control = controlAccountIds(accountRows);
+  const closingByCode = new Map((tb?.rows ?? []).map((r) => [r.akun.kode, r]));
 
-  // Every account in the chart, not only the ones with lifetime movement --
-  // mocks/ledger.ts's own accountBalances includes untouched accounts too,
-  // and ChartSection is the "every account exists" screen, unlike the trial
-  // balance which only shows ones with a nonzero figure.
   return accountRows
     .filter((a) => !a.code.endsWith("-0000"))
-    .map(
-      (a) =>
-        balanceByCode.get(a.code) ?? {
-          akun: toAccountEntity(a),
-          debit: 0,
-          kredit: 0,
-          saldo: 0,
-        },
-    );
+    .map((a) => {
+      const row = closingByCode.get(a.code);
+      const debit = row?.saldoAkhirDebit ?? 0;
+      const kredit = row?.saldoAkhirKredit ?? 0;
+      return {
+        akun: { ...toAccountEntity(a, idToCode), kontrol: control.has(a.id) },
+        debit,
+        kredit,
+        saldo: a.normal_balance === "dr" ? debit - kredit : kredit - debit,
+      };
+    });
+}
+
+const ACCOUNT_TYPE_REVERSE: Record<CreateAccountInput["tipe"], string> = {
+  Aset: "asset",
+  Kewajiban: "liability",
+  Ekuitas: "equity",
+  Pendapatan: "revenue",
+  Beban: "expense",
+};
+
+async function createAccount(input: CreateAccountInput): Promise<void> {
+  await send("post", "/accounts", {
+    code: input.kode,
+    name: input.nama,
+    account_type: ACCOUNT_TYPE_REVERSE[input.tipe],
+    parent_id: input.indukId,
+    description: input.deskripsi,
+  });
+}
+
+interface ChartUpgradeConflictResponse {
+  code: string;
+  reason: string;
+}
+
+interface ChartUpgradeApiResponse {
+  dry_run: boolean;
+  accounts_added: string[] | null;
+  layouts_added: string[] | null;
+  conflicts: ChartUpgradeConflictResponse[] | null;
+}
+
+async function upgradeChart(dryRun = true): Promise<ChartUpgradeResult> {
+  const result = await send<ChartUpgradeApiResponse>("post", "/accounts/chart-upgrade", {
+    dry_run: dryRun,
+  });
+  return {
+    dryRun: result.dry_run,
+    akunDitambahkan: result.accounts_added ?? [],
+    layoutDitambahkan: result.layouts_added ?? [],
+    konflik: (result.conflicts ?? []).map((c) => ({ kode: c.code, alasan: c.reason })),
+  };
 }
 
 export const financeApiHttp: FinanceApi = {
@@ -825,6 +1029,8 @@ export const financeApiHttp: FinanceApi = {
   getAgingReport,
   getPayments,
   getOpenInvoices,
+  createManualInvoice,
+  getPaymentMethods,
   submitPayment,
   submitAllocation,
   submitPaymentDecision,
@@ -832,8 +1038,16 @@ export const financeApiHttp: FinanceApi = {
   fundDistributionStop,
   releaseDistributionStop,
   submitCreditNote,
+  getCreditNotes,
+  applyCreditNote,
+  cancelCreditNote,
+  getInvoice,
   getJournals,
+  createManualJournal,
+  reverseJournal,
   getTrialBalance,
   getProfitAndLoss,
   getChartOfAccounts,
+  createAccount,
+  upgradeChart,
 };

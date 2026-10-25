@@ -59,13 +59,20 @@ const STATUS_MAP: Record<string, StatusVariant> = {
   Limit: "warning",
   Menunggu: "warning",
   "Menunggu Verifikasi": "warning",
-  "Menunggu Review": "warning",
+  "Menunggu Diperiksa": "warning",
+  // Expenses awaiting sign-off (and bills/receipts the same way).
+  "Menunggu persetujuan": "warning",
   Pending: "warning",
   Baru: "warning",
   Disetujui: "process",
   Dijadwalkan: "process",
   Diserahkan: "process",
   "Sedang Ditinjau": "process",
+  // Kas & Bank (gap-closing phase, Phase B): a posted voucher/journal, and
+  // a bank statement line already linked to one.
+  Diposting: "success",
+  Cocok: "success",
+  "Belum Dicocokkan": "warning",
 
   // blocked
   Tertunda: "danger",
@@ -77,8 +84,12 @@ const STATUS_MAP: Record<string, StatusVariant> = {
   Terlambat: "danger",
 
   // uncommitted
-  Draft: "draft",
+  Draf: "draft",
   Batal: "draft",
+  Dibatalkan: "draft",
+  // An expense withdrawn by whoever filed it, before any decision.
+  Ditarik: "draft",
+  Diabaikan: "draft",
   Standby: "draft",
   Cuti: "draft",
   Diundang: "draft",

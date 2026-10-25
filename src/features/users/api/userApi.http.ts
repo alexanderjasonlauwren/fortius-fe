@@ -9,7 +9,7 @@
  */
 import { getList, getOne, send } from "@/lib/api";
 import type { UserEntity, UserStatusEntity } from "@/types/domain";
-import type { UserFilters, UsersApi } from "./contract";
+import type { GrantableRole, RoleGrant, UserFilters, UsersApi } from "./contract";
 import type { UserRole } from "@/types/auth";
 
 /** What the API returns. Mirrors the backend's UserResponse exactly. */
@@ -136,7 +136,7 @@ export async function getUsersWithAccess(filters?: UserFilters): Promise<UserEnt
 }
 
 export async function createOrUpdateUser(
-  input: Partial<UserEntity> & { id?: string },
+  input: Partial<UserEntity> & { id?: string; password?: string },
 ): Promise<UserEntity> {
   const body = {
     username: input.email?.split("@")[0] ?? input.nama,
@@ -156,7 +156,62 @@ export async function createOrUpdateUser(
     });
     return toDomain(updated);
   }
-  return toDomain(await send<UserResponse>("post", "/users", body));
+  return toDomain(await send<UserResponse>("post", "/users", { ...body, password: input.password }));
+}
+
+interface RoleWire {
+  id: string;
+  code: string;
+  name: string;
+  is_system: boolean;
+}
+
+interface GrantWire {
+  id: string;
+  role_id: string;
+  role_code: string;
+  role_name: string;
+  scope_type: RoleGrant["scope"];
+  branch_id?: string;
+  branch_name?: string;
+  created_at: string;
+}
+
+function grantToDomain(g: GrantWire): RoleGrant {
+  return {
+    id: g.id,
+    roleId: g.role_id,
+    roleCode: g.role_code,
+    roleName: g.role_name,
+    scope: g.scope_type,
+    ...(g.branch_id && { branchId: g.branch_id }),
+    ...(g.branch_name && { branchName: g.branch_name }),
+  };
+}
+
+export async function listGrantableRoles(): Promise<GrantableRole[]> {
+  const rows = await getOne<RoleWire[]>("/roles");
+  return rows.map((r) => ({ id: r.id, code: r.code, name: r.name, isSystem: r.is_system }));
+}
+
+export async function getUserRoles(userId: string): Promise<RoleGrant[]> {
+  return (await getOne<GrantWire[]>(`/users/${userId}/roles`)).map(grantToDomain);
+}
+
+export async function grantRole(
+  userId: string,
+  input: { roleId: string; scope: "tenant" | "branch"; branchId?: string },
+): Promise<RoleGrant> {
+  const body = {
+    role_id: input.roleId,
+    scope_type: input.scope,
+    ...(input.scope === "branch" && { branch_id: input.branchId }),
+  };
+  return grantToDomain(await send<GrantWire>("post", `/users/${userId}/roles`, body));
+}
+
+export async function revokeRole(userId: string, grantId: string): Promise<void> {
+  await send<null>("delete", `/users/${userId}/roles/${grantId}`);
 }
 
 export async function removeUser(id: string): Promise<void> {
@@ -166,5 +221,8 @@ export async function removeUser(id: string): Promise<void> {
 // Compile-time proof that this adapter satisfies the contract. Without it a
 // drifting signature is discovered by a page that fails to build, or worse by
 // one that builds and reads a field that is not there.
-const _contract: UsersApi = { getUsers, getUsersWithAccess, createOrUpdateUser, removeUser };
+const _contract: UsersApi = {
+  getUsers, getUsersWithAccess, createOrUpdateUser, removeUser,
+  listGrantableRoles, getUserRoles, grantRole, revokeRole,
+};
 void _contract;

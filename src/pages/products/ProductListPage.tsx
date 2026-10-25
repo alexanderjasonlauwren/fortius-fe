@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { usesApi } from "@/lib/dataSource";
 import { formatNumber, formatPercentId, formatRupiah, formatRupiahShort } from "@/lib/format";
 import { supplierLabel, unitLabel } from "@/lib/lexicon";
 
@@ -162,7 +161,7 @@ export function ProductListPage() {
           </div>
         ) : (
           <span className="text-2xs text-ink-muted">
-            Belum tersedia dari API — min {formatNumber(row.stokMinimum)}
+            Stok belum tersedia · minimum {formatNumber(row.stokMinimum)}
           </span>
         ),
       sortValue: (row) => row.stok,
@@ -288,11 +287,6 @@ export function ProductListPage() {
                 options={[
                   { value: "Semua" as const, label: "Semua" },
                   { value: "Aktif" as const, label: "Aktif" },
-                  // Stock has no service behind it in this build — see
-                  // productApi.http.ts's own header.
-                  ...(usesApi
-                    ? []
-                    : [{ value: "Stok rendah" as const, label: "Stok rendah" }]),
                 ]}
               />
             </div>

@@ -179,6 +179,20 @@ export function exportJson(filename: string, data: unknown) {
 }
 
 /**
+ * Escapes text for a printDocument body. Everything a user typed --
+ * descriptions, names, references -- goes through this: the print frame
+ * shares this origin, so unescaped markup there would run as the console.
+ */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
  * Opens the browser print dialog against a standalone document, which is how
  * the console produces a PDF (surat jalan, monthly recap) without a server.
  */

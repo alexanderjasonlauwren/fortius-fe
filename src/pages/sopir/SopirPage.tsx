@@ -1,8 +1,8 @@
-import { usesApi } from "@/lib/dataSource";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Camera,
   MapPin,
   Navigation,
   PackageCheck,
@@ -12,15 +12,15 @@ import {
   ShieldQuestion,
   Route,
   TriangleAlert,
-  Truck,
 } from "lucide-react";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useAuthStore } from "@/features/auth/store/authStore";
+import { DELIVERY_PHOTO_ACCEPT } from "@/features/attachments/api/attachmentApi";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import {
   arriveStop,
   completeStop,
   departStop,
-  getDriverOptions,
   getMyRun,
   holdStop,
 } from "@/features/sopir/api/sopirApi";
@@ -32,7 +32,7 @@ import { Panel, PanelBody, Meter, Skeleton } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getStatusVariant, spineFor } from "@/lib/status";
-import { Field, SelectInput, TextInput, TextareaInput, Toggle } from "@/components/common/Field";
+import { Field, TextInput, TextareaInput, Toggle } from "@/components/common/Field";
 import { useGpsStream } from "@/features/sopir/hooks/useGpsStream";
 import {
   Dialog,
@@ -63,15 +63,7 @@ import { outletLabel, unitLabel, unitLabelTitle } from "@/lib/lexicon";
 export function SopirPage() {
   const user = useAuthStore((s) => s.user);
 
-  // An account that is not itself a sopir still needs a run to look at.
-  const [dipilih, setDipilih] = useState<string>("");
-  const driverId = user?.driverId ?? dipilih;
-
-  // Against the service the run comes from the session: `GET /deliveries/mine`
-  // resolves the driver from who is signed in, so there is no id to choose and
-  // nothing to choose it from. Asking anyway left the page on a picker with an
-  // empty list — a dead end the driver could not get out of.
-  const sessionResolvesDriver = usesApi;
+  const driverId = user?.driverId ?? "";
 
   const [completing, setCompleting] = useState<RunStop | null>(null);
   const [holding, setHolding] = useState<RunStop | null>(null);
@@ -79,13 +71,14 @@ export function SopirPage() {
     lines: { productId: string; realisasi: number; kembali: number }[];
     diterimaOleh: string;
     catatan: string;
-  }>({ lines: [], diterimaOleh: "", catatan: "" });
+    foto: File | null;
+  }>({ lines: [], diterimaOleh: "", catatan: "", foto: null });
+  const canAttachPhoto = useAuthStore((s) => s.hasPermission(PERMISSIONS.DELIVERY_PROOFS_CREATE));
   const [alasan, setAlasan] = useState("");
 
   const run = useQuery({
     queryKey: [...scopeKey(), "sopir-run", driverId],
     queryFn: () => getMyRun(driverId),
-    enabled: sessionResolvesDriver || !!driverId,
     // The desk moves drops too, and a stale card invites a double delivery.
     refetchInterval: 30_000,
   });
@@ -95,19 +88,12 @@ export function SopirPage() {
   // the agency's own switch, resolved server-side because this account has no
   // permission to read tenant settings directly.
   const trackingOffered =
-    usesApi &&
     !!run.data?.rekamLokasi &&
     (run.data?.stops.some((s) => s.status !== "Selesai" && s.status !== "Tertunda") ?? false);
   const tripKey = run.data?.driver
     ? `${run.data.driver.id}:${run.data.tanggal}`
     : null;
   const gpsStream = useGpsStream({ enabled: trackingOffered, tripKey });
-
-  const options = useQuery({
-    queryKey: [...scopeKey(), "sopir-driver-options"],
-    queryFn: getDriverOptions,
-    enabled: !sessionResolvesDriver && !user?.driverId,
-  });
 
   const departMutation = useDeskMutation({
     mutationFn: (deliveryId: string) => departStop(deliveryId),
@@ -130,10 +116,17 @@ export function SopirPage() {
   const completeMutation = useDeskMutation({
     mutationFn: completeStop,
     errorTitle: "Gagal menutup surat jalan",
-    success: (d) => ({
-      title: `${d.kode} selesai`,
-      description: `${formatNumber(d.realisasi)} ${unitLabel()} tercatat diterima. Tagihan terbit otomatis.`,
-    }),
+    success: (d) =>
+      d.fotoGagal
+        ? {
+            tone: "warning",
+            title: `${d.kode} selesai, foto belum terkirim`,
+            description: `${formatNumber(d.realisasi)} ${unitLabel()} tercatat diterima. Foto: ${d.fotoGagal}`,
+          }
+        : {
+            title: `${d.kode} selesai`,
+            description: `${formatNumber(d.realisasi)} ${unitLabel()} tercatat diterima. Tagihan terbit otomatis.`,
+          },
     onDone: () => setCompleting(null),
   });
 
@@ -163,6 +156,7 @@ export function SopirPage() {
       })),
       diterimaOleh: stop.penanggungJawab,
       catatan: "",
+      foto: null,
     });
     setCompleting(stop);
   };
@@ -178,41 +172,7 @@ export function SopirPage() {
         description={formatDateLong(new Date())}
       />
 
-      {/* Whose run is this */}
-      {!sessionResolvesDriver && !user?.driverId && (
-        <Panel spine="text-signal">
-          <PanelBody>
-            <Field
-              label="Armada"
-              htmlFor="pilih-armada"
-              hint="Akun Anda bukan akun sopir, jadi pilih armada yang ingin dilihat."
-            >
-              <SelectInput
-                id="pilih-armada"
-                value={dipilih}
-                onChange={(e) => setDipilih(e.target.value)}
-              >
-                <option value="">Pilih armada</option>
-                {(options.data ?? []).map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label} — {o.sublabel}
-                  </option>
-                ))}
-              </SelectInput>
-            </Field>
-          </PanelBody>
-        </Panel>
-      )}
-
-      {!sessionResolvesDriver && !driverId ? (
-        <Panel>
-          <EmptyState
-            icon={Truck}
-            title="Belum ada armada dipilih"
-            description="Pilih armada di atas untuk melihat rute hari ini."
-          />
-        </Panel>
-      ) : run.isLoading ? (
+      {run.isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-28 w-full" />
           {Array.from({ length: 4 }).map((_, i) => (
@@ -400,6 +360,34 @@ export function SopirPage() {
                 onChange={(e) => setForm({ ...form, catatan: e.target.value })}
               />
             </Field>
+
+            {canAttachPhoto && (
+              <Field
+                label="Foto bukti"
+                htmlFor="s-foto"
+                hint="Opsional. Tabung yang diturunkan, atau surat jalan yang sudah ditandatangani."
+              >
+                {/* capture opens the rear camera on a phone; on a desktop it
+                    falls back to choosing a file. */}
+                <label
+                  htmlFor="s-foto"
+                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-dashed border-line-strong px-3 py-2 text-sm text-ink transition-colors hover:bg-panel-sunk focus-within:ring-2 focus-within:ring-signal"
+                >
+                  <Camera className="h-4 w-4 shrink-0 text-ink-muted" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {form.foto ? form.foto.name : "Ambil foto"}
+                  </span>
+                  <input
+                    id="s-foto"
+                    type="file"
+                    accept={DELIVERY_PHOTO_ACCEPT}
+                    capture="environment"
+                    className="sr-only"
+                    onChange={(e) => setForm({ ...form, foto: e.target.files?.[0] ?? null })}
+                  />
+                </label>
+              </Field>
+            )}
           </div>
 
           <DialogFooter>
@@ -424,6 +412,7 @@ export function SopirPage() {
                   lines: form.lines,
                   diterimaOleh: form.diterimaOleh,
                   catatan: form.catatan,
+                  foto: form.foto ?? undefined,
                 })
               }
             >
@@ -656,7 +645,7 @@ function StopCard({
           ) : (
             <Button size="lg" className="w-full" disabled={isPending} onClick={onComplete}>
               <PackageCheck className="h-4 w-4" />
-              Selesai — catat penerimaan
+              Selesai: catat penerimaan
             </Button>
           )}
 

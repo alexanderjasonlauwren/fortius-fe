@@ -7,9 +7,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  */
 
 const getList = vi.fn();
+const getOne = vi.fn();
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
-  getOne: vi.fn(),
+  getOne: (...args: unknown[]) => getOne(...args),
   send: vi.fn(),
   upload: vi.fn(),
 }));
@@ -20,6 +21,9 @@ vi.mock("@/features/outlet/api/outletApi", () => ({
 }));
 
 const getVehicles = vi.fn();
+const holds = vi.fn<(permission: string) => boolean>(() => true);
+vi.mock("@/features/rbac/holds", () => ({ holds: (p: string) => holds(p) }));
+
 vi.mock("@/features/vehicles/api/vehicleApi", () => ({
   getVehicles: (...args: unknown[]) => getVehicles(...args),
 }));
@@ -61,6 +65,8 @@ function delivery(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   getList.mockReset();
+  // No branch has a planning start date unless a test says so.
+  getOne.mockReset().mockResolvedValue({ days: [], qty: 0, total: 0 });
   getOutletList.mockReset().mockResolvedValue([
     { id: OUTLET_ID, nama: "Pangkalan Ahmad", kecamatan: "Sidorejo" },
   ]);
@@ -248,6 +254,20 @@ describe("getDriverPerformance", () => {
     expect(row.tertunda).toBe(1);
     expect(row.ketepatan).toBe(50);
   });
+
+  // Regression 2026-10-24 F16: the finance officer may open the reports but
+  // not read vehicles; the plate rides on the delivery row anyway.
+  it("does not ask for vehicles the user may not read", async () => {
+    getVehicles.mockClear();
+    holds.mockImplementation((p) => p !== "masterdata.read.vehicles");
+    mockLists({ deliveries: [delivery({ delivery_status: "delivered" })], payments: [], invoices: [] });
+    const [row] = await reportApiHttp.getDriverPerformance("7h");
+    holds.mockImplementation(() => true);
+
+    expect(getVehicles).not.toHaveBeenCalled();
+    expect(row.plat).toBe("H 1234 AB");
+    expect(row.armada).toBe("—");
+  });
 });
 
 describe("exportReport and printReport", () => {
@@ -264,5 +284,32 @@ describe("exportReport and printReport", () => {
     expect(printDocument).toHaveBeenCalledOnce();
     const [, html] = printDocument.mock.calls[0];
     expect(html).toContain("—");
+  });
+});
+
+describe("pre-go-live SIM3LON revenue", () => {
+  it("is reported beside verified payments, never folded into them", async () => {
+    const window = resolveRange("30h");
+    mockLists({
+      payments: [
+        { outlet_id: OUTLET_ID, amount: 500_000, payment_date: window.to, payment_status: "verified" },
+      ],
+    });
+    getOne.mockResolvedValue({
+      days: [{ date: window.from, qty: 10, total: 155_200 }],
+      qty: 10,
+      total: 155_200,
+    });
+
+    const summary = await reportApiHttp.getReportSummary("30h");
+    const series = await reportApiHttp.getDailySeries("30h");
+
+    expect(getOne).toHaveBeenCalledWith(`/sim3lon-opening-revenue?from=${window.from}&to=${window.to}`);
+    expect(summary.pendapatan).toBe(500_000);
+    expect(summary.pendapatanSebelumGoLive).toBe(155_200);
+    expect(summary.unitSebelumGoLive).toBe(10);
+    const first = series.find((point) => point.tanggal === window.from)!;
+    expect(first.pendapatanSebelumGoLive).toBe(155_200);
+    expect(first.pendapatan).toBe(0);
   });
 });

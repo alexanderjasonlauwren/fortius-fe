@@ -1,49 +1,66 @@
-/**
- * The finance adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here and
- * a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
 import { exportExcel, timestampSuffix, type ExcelColumn } from "@/lib/export";
 import { outletLabelTitle } from "@/lib/lexicon";
-import { financeApiMock } from "./financeApi.mock";
 import { financeApiHttp } from "./financeApi.http";
 import type { AgingRow, FinanceApi } from "./contract";
 
 export type {
   AgingReport,
   AgingRow,
+  ChartUpgradeConflict,
+  ChartUpgradeResult,
+  CreateAccountInput,
+  CreateManualInvoiceInput,
+  CreateManualJournalInput,
+  CreditNoteFilters,
   CreditNoteInput,
+  CreditNoteReason,
   CreditNoteView,
+  InvoiceDetailView,
+  InvoiceLineView,
   FundingResult,
   FundStopInput,
   InvoiceFilters,
+  InvoiceType,
   InvoiceView,
   JournalView,
+  ManualJournalLineInput,
+  ManualInvoiceKitItemInput,
+  ManualInvoiceLineInput,
+  PaymentMethodView,
   PaymentView,
   ProfitAndLossView,
   RecordPaymentInput,
   TrialBalanceView,
 } from "./contract";
 
-const api: FinanceApi = pick(financeApiMock, financeApiHttp);
+const api: FinanceApi = financeApiHttp;
 
 export const getInvoices = api.getInvoices.bind(api);
 export const getAgingReport = api.getAgingReport.bind(api);
 export const getPayments = api.getPayments.bind(api);
 export const getOpenInvoices = api.getOpenInvoices.bind(api);
+export const createManualInvoice = api.createManualInvoice.bind(api);
 export const submitPayment = api.submitPayment.bind(api);
+export const getPaymentMethods = api.getPaymentMethods.bind(api);
 export const submitAllocation = api.submitAllocation.bind(api);
 export const submitPaymentDecision = api.submitPaymentDecision.bind(api);
 export const getOutletReceipts = api.getOutletReceipts.bind(api);
 export const fundDistributionStop = api.fundDistributionStop.bind(api);
 export const releaseDistributionStop = api.releaseDistributionStop.bind(api);
 export const submitCreditNote = api.submitCreditNote.bind(api);
+export const getCreditNotes = api.getCreditNotes.bind(api);
+export const applyCreditNote = api.applyCreditNote.bind(api);
+export const cancelCreditNote = api.cancelCreditNote.bind(api);
+export const getInvoice = api.getInvoice.bind(api);
+export { CREDIT_NOTE_REASONS } from "./contract";
 export const getJournals = api.getJournals.bind(api);
+export const createManualJournal = api.createManualJournal.bind(api);
+export const reverseJournal = api.reverseJournal.bind(api);
 export const getTrialBalance = api.getTrialBalance.bind(api);
 export const getProfitAndLoss = api.getProfitAndLoss.bind(api);
 export const getChartOfAccounts = api.getChartOfAccounts.bind(api);
+export const createAccount = api.createAccount.bind(api);
+export const upgradeChart = api.upgradeChart.bind(api);
 
 export async function exportAging(): Promise<number> {
   const report = await getAgingReport();

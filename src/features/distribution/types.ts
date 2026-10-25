@@ -1,4 +1,4 @@
-export type PlanStatus = "Draft" | "Terkonfirmasi" | "Selesai" | "Batal";
+export type PlanStatus = "Draf" | "Terkonfirmasi" | "Selesai" | "Batal";
 
 export interface DistributionPlan {
   branchId?: string;

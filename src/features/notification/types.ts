@@ -3,7 +3,7 @@ import type {
   NotificationSettings,
   ReminderRule,
   ReminderRuleKey,
-} from "@/mocks/types";
+} from "@/types/domain";
 import { outletLabel } from "@/lib/lexicon";
 
 export type { NotifChannel, NotificationSettings, ReminderRule, ReminderRuleKey };
@@ -39,7 +39,7 @@ export interface RuleMeta {
 export const RULE_META: RuleMeta[] = [
   {
     key: "saExpiry",
-    label: "Agreement mendekati kedaluwarsa",
+    label: "SA mendekati kedaluwarsa",
     description:
       "Kuota yang tidak dijadwalkan akan hangus saat periode SA berakhir.",
     ambangLabel: "Peringatkan sebelum berakhir",

@@ -132,7 +132,7 @@ export function LoginPage() {
                 Papan berangkat
               </span>
               <span className="data text-[0.625rem] text-[#9AA093]">
-                06:00 — 18:00
+                06:00 s.d. 18:00
               </span>
             </div>
 

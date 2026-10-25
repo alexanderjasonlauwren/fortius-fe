@@ -45,6 +45,8 @@ export interface FilingLocation {
 export interface MonitoringRow {
   id: string;
   kode: string;
+  /** The stop's surat jalan, one per product. Proof photos hang off these. */
+  suratJalan: { id: string; kode: string }[];
   outletId: string;
   outlet: string;
   alamat: string;

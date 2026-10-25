@@ -1,17 +1,9 @@
-/**
- * The schedule agreement adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here and
- * a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
 import { printDocument } from "@/lib/export";
 import { supplierLabelTitle, unitLabelTitle } from "@/lib/lexicon";
 import { saApiHttp } from "./saApi.http";
-import { saApiMock } from "./saApi.mock";
 import type { ScheduleAgreementApi } from "./contract";
 
-const api: ScheduleAgreementApi = pick(saApiMock, saApiHttp);
+const api: ScheduleAgreementApi = saApiHttp;
 
 export const getSAList = api.getSAList.bind(api);
 export const getSADetail = api.getSADetail.bind(api);
@@ -25,6 +17,13 @@ export const applyImport = api.applyImport.bind(api);
 export const previewSIM3LON = api.previewSIM3LON.bind(api);
 export const getSIM3LONReconciliation = api.getSIM3LONReconciliation.bind(api);
 export const applySIM3LON = api.applySIM3LON.bind(api);
+export const syncLivePenyaluran = api.syncLivePenyaluran.bind(api);
+export const getLivePenyaluranCandidates = api.getLivePenyaluranCandidates.bind(api);
+export const setPlanningCutover = api.setPlanningCutover.bind(api);
+export const getSIM3LONVariances = api.getSIM3LONVariances.bind(api);
+export const getQuotaSummary = api.getQuotaSummary.bind(api);
+export const getSIM3LONDefaultProduct = api.getSIM3LONDefaultProduct.bind(api);
+export const setSIM3LONDefaultProduct = api.setSIM3LONDefaultProduct.bind(api);
 
 /**
  * Printing is a browser concern, not a data source.
@@ -50,7 +49,7 @@ export async function printSA(id: string): Promise<void> {
     });
 
   printDocument(
-    `${sa.nomorSA} — Ringkasan Kuota`,
+    `${sa.nomorSA} · Ringkasan Kuota`,
     `
     <h1>Ringkasan Kuota Schedule Agreement</h1>
     <hr class="rule" />

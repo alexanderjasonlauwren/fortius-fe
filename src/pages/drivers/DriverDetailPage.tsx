@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, IdCard, Phone, Route, Truck } from "lucide-react";
@@ -94,7 +94,7 @@ export function DriverDetailPage() {
       <Panel>
         <EmptyState
           icon={Truck}
-          title="Driver tidak ditemukan"
+          title="Sopir tidak ditemukan"
           description="Data mungkin sudah dihapus. Kembali ke daftar armada untuk memilih yang lain."
           action={
             <Button asChild size="sm">
@@ -160,7 +160,7 @@ export function DriverDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Panel>
-          <PanelHeader title="Data pengemudi" />
+          <PanelHeader title="Data sopir" />
           <PanelBody className="space-y-3 text-sm">
             {/*
               The panel used to name a truck. There is no truck to name: a

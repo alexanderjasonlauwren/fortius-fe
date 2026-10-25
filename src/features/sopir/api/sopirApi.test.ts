@@ -21,6 +21,13 @@ vi.mock("@/lib/api", () => ({
   upload: vi.fn(),
 }));
 
+const uploadAttachment = vi.fn();
+vi.mock("@/features/attachments/api/attachmentApi", () => ({
+  uploadAttachment: (...args: unknown[]) => uploadAttachment(...args),
+}));
+// jsdom has no canvas; the photo goes up as given.
+vi.mock("@/lib/image", () => ({ downscaleImage: async (file: File) => file }));
+
 vi.mock("@/lib/geo", () => ({
   capturePosition: async () => ({ lat: -6.9932, lng: 110.3453, status: "ok" }),
   geoVerdict: () => "sesuai",
@@ -430,6 +437,48 @@ describe("filing against a stop", () => {
     expect(send.mock.calls.map((c) => c[1])).toEqual([
       `/deliveries/${D12}/complete`,
     ]);
+  });
+
+  it("attaches the photo to the stop's first surat jalan after closing it", async () => {
+    const r = await load();
+    const calls: string[] = [];
+    send.mockImplementation(async (_m: string, path: string) => calls.push(path));
+    uploadAttachment.mockReset().mockImplementation(async (type: string, id: string) => {
+      calls.push(`upload ${type} ${id}`);
+    });
+    const foto = new File(["x"], "drop.jpg", { type: "image/jpeg" });
+
+    const receipt = await sopirApiHttp.completeStop({
+      deliveryId: r.stops[0].id,
+      lines: [{ productId: P3, realisasi: 50 }],
+      diterimaOleh: "Bu Sri",
+      foto,
+    });
+
+    // After the completions: a photo is evidence of the drop, and must not be
+    // the step that decides whether the drop is recorded.
+    expect(calls).toEqual([
+      `/deliveries/${D3}/complete`,
+      `/deliveries/${D12}/complete`,
+      `upload delivery ${D3}`,
+    ]);
+    expect(receipt.fotoGagal).toBeUndefined();
+  });
+
+  it("still closes the stop when the photo upload fails, and says so", async () => {
+    const r = await load();
+    send.mockResolvedValue(undefined);
+    uploadAttachment.mockReset().mockRejectedValue(new Error("Foto bukti pengiriman harus berupa gambar"));
+
+    const receipt = await sopirApiHttp.completeStop({
+      deliveryId: r.stops[0].id,
+      lines: [{ productId: P3, realisasi: 50 }],
+      diterimaOleh: "Bu Sri",
+      foto: new File(["x"], "drop.heic", { type: "image/heic" }),
+    });
+
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(receipt.fotoGagal).toMatch(/harus berupa gambar/);
   });
 
   it("refuses to file against a stop it never loaded", async () => {

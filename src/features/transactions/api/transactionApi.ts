@@ -1,11 +1,3 @@
-/**
- * The transactions adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here
- * and a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import { transactionApiMock } from "./transactionApi.mock";
 import { transactionApiHttp } from "./transactionApi.http";
 import type { TransactionsApi } from "./contract";
 
@@ -17,7 +9,7 @@ export type {
   TransactionSummary,
 } from "./contract";
 
-const api: TransactionsApi = pick(transactionApiMock, transactionApiHttp);
+const api: TransactionsApi = transactionApiHttp;
 
 export const getTransactions = api.getTransactions.bind(api);
 export const getTransactionSummary = api.getTransactionSummary.bind(api);

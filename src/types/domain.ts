@@ -95,6 +95,11 @@ export interface BranchEntity {
   /** The branch loaded at login when none is specified. */
   utama: boolean;
   aktif: boolean;
+  /**
+   * core.branches.planning_start_date: the first date this branch plans in
+   * the system. Earlier SIM3LON days are the Base quota's opening balance.
+   */
+  planningStartDate?: string;
 }
 
 /** The four authorisation levels the backend defines on iam.user_roles. */
@@ -115,6 +120,12 @@ export interface OutletEntity extends Scoped {
   alamat: string;
   kecamatan: string;
   kota: string;
+  /** Billing details for the pangkalan as a customer (accounting parity P3):
+   *  printed on its invoices and statements. */
+  provinsi?: string;
+  kodePos?: string;
+  npwp?: string;
+  email?: string;
   lat: number;
   lng: number;
   penanggungJawab: string;
@@ -254,7 +265,7 @@ export interface GeofenceAlertEntity extends Scoped {
   version: number;
 }
 
-export type SAStatusEntity = "Draft" | "Aktif" | "Limit" | "Selesai";
+export type SAStatusEntity = "Draf" | "Aktif" | "Limit" | "Selesai";
 
 export interface SAEntity extends Scoped {
   id: ID;
@@ -277,6 +288,12 @@ export interface SAEntity extends Scoped {
   // until one is imported or added.
   productId?: ID;
   productName?: string;
+  /**
+   * Mock parity for core.sa_quota_opening_balances: outlet -> units delivered
+   * before the branch's planning start date. Folded into `dialokasikan` and
+   * `terpakai` the way the backend folds it into allocated and used.
+   */
+  saldoAwal?: Record<ID, number>;
 }
 
 /**
@@ -349,7 +366,7 @@ export interface SIM3LONPlanSourceEntity extends Scoped {
   operationalDate: string;
 }
 
-export type PlanStatusEntity = "Draft" | "Terkonfirmasi" | "Selesai" | "Batal";
+export type PlanStatusEntity = "Draf" | "Terkonfirmasi" | "Selesai" | "Batal";
 
 export interface PlanEntity extends Scoped {
   id: ID;
@@ -444,7 +461,14 @@ export interface DeliveryLine {
  * documents.
  */
 export interface InvoiceLine {
-  productId: ID;
+  /**
+   * Null for a product-less manual line (financial-statements plan P5 /
+   * gap-closing plan Phase C) -- a registration fee line or a free-form
+   * "other" charge, neither of which names a catalogue product. `nama`
+   * carries the line's own description either way, mirroring the real
+   * backend's Line.ProductID/Description split.
+   */
+  productId: ID | null;
   nama: string;
   satuan: string;
   jumlah: number;
@@ -560,6 +584,8 @@ export interface TransportationClaimEntity extends Scoped {
   /** Settlement facts -- present only once claimStatus is "paid". */
   settledAt?: string;
   settledAmount?: number;
+  /** Tax Pertamina deducted before paying; with settledAmount it settles the claim. */
+  taxWithheld?: number;
   settlementMode?: "cash" | "bank";
   /** Which deliveries this claim's generated lines actually cover. */
   deliveryIds: ID[];
@@ -604,6 +630,13 @@ export interface InvoiceEntity extends Scoped {
   nomor: string;
   outletId: ID;
   deliveryId: ID | null;
+  /**
+   * "registration"/"other" (financial-statements plan P5 / gap-closing
+   * plan Phase C) raise an invoice by hand, with no delivery behind it --
+   * deliveryId is null for both. Mirrors the real backend's own
+   * InvoiceResponse.InvoiceType verbatim.
+   */
+  invoiceType: "delivery" | "registration" | "other";
   tanggal: string;
   /** Derived from the outlet's payment terms at the time of issue. */
   jatuhTempo: string;
@@ -691,7 +724,33 @@ export type AccountRole =
   | "returPenjualan"
   | "hpp"
   | "ppnKeluaran"
-  | "labaDitahan";
+  | "labaDitahan"
+  // Chart v2 (financial-statements plan, phase P1) -- mirrors
+  // fortius-backend's own new fin.accounts roles one for one; see
+  // tenantprovisioning/chart.go for the backend names these translate.
+  | "piutangPendaftaran"
+  | "hutangTitipan"
+  | "uangMuka"
+  | "saldoAwalEkuitas"
+  | "pendapatanPendaftaran"
+  | "jasaGiro"
+  | "pendapatanLain"
+  | "selisihPersediaan"
+  | "administrasiBank"
+  | "pajakJasaGiro"
+  // Pre-existing backend accounts (fortius-backend's own tenantprovisioning/
+  // chart.go 1-1250/4-2000) the mock chart never carried until the
+  // financial-statements plan's ported layouts (phase P2) needed them.
+  | "piutangTransportFee"
+  | "pendapatanTransportFee"
+  | "bebanBahanBakar"
+  | "bebanTol"
+  | "bebanPemeliharaan"
+  | "bebanOperasionalLainnya"
+  // Mirrors fortius-backend's own "payable" role (tenantprovisioning/
+  // chart.go, 2-1000 Utang Usaha) -- gap-closing plan, Phase F, the first
+  // mock posting rule to need it (a general purchase's own credit side).
+  | "hutangUsaha";
 
 export interface AccountEntity {
   id: ID;
@@ -705,6 +764,12 @@ export interface AccountEntity {
   role?: AccountRole;
   /** Accounts the posting rules depend on cannot be deleted. */
   sistem: boolean;
+  /**
+   * A control account, or under one: receivable, payable, inventory, cash,
+   * bank... -- moved only by its own module. The backend refuses it on a
+   * voucher or bill line; pickers hide it. Set by getChartOfAccounts.
+   */
+  kontrol?: boolean;
   aktif: boolean;
 }
 
@@ -720,7 +785,38 @@ export type JournalSourceType =
   | "payment"
   | "creditNote"
   | "delivery"
-  | "manual";
+  | "manual"
+  // Mirrors fortius-backend's own fin.journals.source_type CHECK (no mock
+  // posting rule uses it yet): the financial-statements engine's own
+  // inventory-purchases cross-check (financial-statements plan, phase P2)
+  // needs to tell a real purchase journal apart from a hand-entered one.
+  | "purchase"
+  // Kas & Bank vouchers (financial-statements plan's gap-closing phase,
+  // Phase B) -- mirrors the backend's "cash_voucher" source_type.
+  | "cashVoucher"
+  // Monthly depreciation/amortisation runs (gap-closing plan, Phase D) --
+  // mirrors the backend's "depreciation" source_type.
+  | "depreciation"
+  // Fiscal-year close/reopen and the one-time opening-balance commit
+  // (gap-closing plan, Phase E) -- mirror the backend's "closing" and
+  // "opening_balance" source_types. Both are the two source_types
+  // ReverseJournalRequest itself names as reversible, alongside "manual".
+  | "closing"
+  | "openingBalance"
+  // The rest of the backend's CHECK: expense and transport-fee claim
+  // postings, and the SIM3LON cutover's opening revenue. Mapped to "manual"
+  // until the ledger showed each journal's source (accounting parity P2).
+  | "expense"
+  | "transportationClaim"
+  | "sim3lonOpening"
+  // One instalment paid on a vendor bill (accounting parity P3).
+  | "purchasePayment"
+  // A fixed asset's purchase ("dikreditkan dari") and its sale or write-off
+  // (accounting parity P3).
+  | "assetAcquisition"
+  | "assetDisposal"
+  // The refund of an overpaid receipt (client answer 5); links to the receipt.
+  | "paymentRefund";
 
 /**
  * A posted journal is immutable. Corrections are made by posting a reversal,
@@ -738,9 +834,14 @@ export interface JournalEntity extends Scoped {
   reversalDari?: ID;
   dibuatOleh: string;
   dibuatPada: string;
+  /** Bumped when this entry is itself reversed -- the version guard
+   *  reverseJournal's own caller echoes back (gap-closing plan, Phase E).
+   *  A journal is otherwise immutable, so this exists for exactly one
+   *  transition. */
+  version: number;
 }
 
-export type ReceiptStatus = "Menunggu Review" | "Tervalidasi" | "Ditolak";
+export type ReceiptStatus = "Menunggu Diperiksa" | "Tervalidasi" | "Ditolak";
 
 /**
  * One item read off a scanned receipt.
@@ -868,6 +969,39 @@ export interface ProductEntity {
   stok: number;
   stokMinimum: number;
   aktif: boolean;
+  /**
+   * Separates a weighed LPG commodity from a kit accessory (financial-
+   * statements plan P3.3) -- an accessory has no weight of its own and is
+   * what a registration invoice's kit items pick from. Read-only in this
+   * build: no product form writes it yet (that is the gap-closing plan's
+   * own Phase F) -- Phase C's "Buat tagihan" kit-item picker is this
+   * field's only consumer today.
+   */
+  /**
+   * Gap-closing plan, Phase F: now writable at create (immutable after --
+   * mirrors the backend's own UpdateProductRequest carrying no ProductKind
+   * field at all).
+   */
+  /** "container" is an empty cylinder: counted by quantity only, never
+   *  bought or sold (client answer 2). */
+  productKind: "commodity" | "accessory" | "container";
+  /** The measurement unit (core.units): tabung, kg, pcs... -- what `satuan`
+   *  reads from. Accounting parity P3. */
+  unitId?: string;
+  deskripsi?: string;
+  merek?: string;
+  barcode?: string;
+  /**
+   * Overrides the tenant's own inventory/revenue/cogs role account for this
+   * product specifically (financial-statements plan P3.3) -- absent means
+   * "use the role", the mock chart's own `accountByRole`. Stored as the
+   * account's own code, not id, matching the real backend's response shape
+   * (ProductResponse carries `*_account_code`, never an id) -- the HTTP
+   * adapter resolves code to id only at the create/update boundary.
+   */
+  inventoryAccountCode?: string;
+  revenueAccountCode?: string;
+  cogsAccountCode?: string;
 }
 
 export type OrderStatus =
@@ -917,6 +1051,290 @@ export interface BankAccountEntity {
   /** The account printed on invoices by default. */
   utama: boolean;
   aktif: boolean;
+  /**
+   * Which ledger sub-account this account posts to: "bank" under 1-1100
+   * (receiving accounts), "cash" under 1-1000 (petty cash, a till with no
+   * bank of its own). Immutable after creation -- backend's own
+   * BankAccountResponse.Kind. Kas & Bank console (gap-closing phase, Phase
+   * B) is the first feature that needs a "cash" one to exist at all; every
+   * account created before this field existed is "bank".
+   */
+  kind: "bank" | "cash";
+  /** The fin.accounts leaf this account posts to -- read-only, set by the
+   *  backend at creation. */
+  ledgerAccountCode: string;
+}
+
+/* ── Kas & Bank (financial-statements plan's gap-closing phase, Phase B) ─ */
+
+export type CashVoucherType = "receipt" | "disbursement" | "transfer";
+export type CashVoucherStatus = "draft" | "posted" | "void";
+
+/** One classified leg of a receipt/disbursement voucher -- mirrors
+ *  fortius-backend's cashvoucher.LineRequest/LineResponse. */
+export interface CashVoucherLineEntity {
+  accountId: ID;
+  amount: number;
+  memo?: string;
+}
+
+/** Mirrors fortius-backend's internal/entities/cashvoucher.CashVoucherResponse. */
+export interface CashVoucherEntity extends Scoped {
+  id: ID;
+  voucherNumber: string;
+  voucherType: CashVoucherType;
+  voucherDate: string;
+  counterparty?: string;
+  description?: string;
+  bankAccountId: ID;
+  counterBankAccountId?: ID;
+  totalAmount: number;
+  status: CashVoucherStatus;
+  lines: CashVoucherLineEntity[];
+  /** Set once posted -- the journal this voucher's post wrote, so a void
+   *  can reverse exactly that entry via reverseJournal. */
+  journalId?: ID;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BankStatementLineStatus = "unmatched" | "matched" | "posted" | "ignored";
+
+/** One transaction line of an imported rekening koran -- mirrors
+ *  fortius-backend's bankstatement.LineResponse. */
+export interface BankStatementLineEntity {
+  id: ID;
+  lineNo: number;
+  lineDate: string;
+  description: string;
+  reference: string;
+  debit: number;
+  credit: number;
+  balance?: number;
+  status: BankStatementLineStatus;
+  matchedSourceType?: string;
+  cashVoucherId?: ID;
+  /**
+   * Mock-only: which journal this line was derived from at import time (see
+   * bankStatementApi.mock.ts's own doc for why) -- autoMatch reads this to
+   * resolve the line to an already-posted document without re-searching
+   * the ledger by amount/date. Never serialised to a client; the real
+   * backend's own LineResponse has no equivalent, because there the line's
+   * own stored row already knows nothing about its origin until matched.
+   */
+  sourceJournalId?: ID;
+}
+
+/** Mirrors fortius-backend's internal/entities/bankstatement.ImportResponse. */
+export interface BankStatementImportEntity extends Scoped {
+  id: ID;
+  bankAccountId: ID;
+  periodFrom: string;
+  periodTo: string;
+  openingBalance: number;
+  closingBalance: number;
+  fileName: string;
+  lines: BankStatementLineEntity[];
+  createdAt: string;
+}
+
+/** An auto-classification rule -- mirrors bankstatement.RuleResponse. */
+export interface BankStatementRuleEntity extends Scoped {
+  id: ID;
+  pattern: string;
+  direction: "in" | "out";
+  accountId: ID;
+  sortOrder: number;
+  isActive: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ── registration packages (gap-closing plan, Phase C) ──────────────────── */
+
+/** One kit item a registration package issues. */
+export interface RegistrationPackageItemEntity {
+  productId: ID;
+  qty: number;
+}
+
+/** A reusable Pendaftaran Pangkalan template -- mirrors
+ *  registrationpackage.PackageResponse. */
+export interface RegistrationPackageEntity extends Scoped {
+  id: ID;
+  name: string;
+  feeAmount: number;
+  isDefault: boolean;
+  isActive: boolean;
+  items: RegistrationPackageItemEntity[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ── asset register & depreciation runs (gap-closing plan, Phase D) ─────── */
+
+export type AssetClass = "building" | "vehicle" | "office_equipment" | "intangible" | "prepaid";
+export type AssetStatus = "active" | "fully_depreciated" | "disposed";
+
+/** A depreciable or amortisable register row -- mirrors asset.AssetResponse.
+ *  `monthlyAmount`/`accumulatedToDate` are computed on read, never stored,
+ *  the same way the real backend's own toResponse attaches them. */
+export interface AssetEntity extends Scoped {
+  id: ID;
+  assetCode: string;
+  name: string;
+  assetClass: AssetClass;
+  acquisitionDate: string;
+  depreciationStartDate: string;
+  cost: number;
+  residualValue: number;
+  usefulLifeMonths: number;
+  method: "straight_line";
+  openingAccumulated: number;
+  openingAsOf?: string;
+  assetAccountId: ID;
+  accumulatedAccountId?: ID;
+  expenseAccountId: ID;
+  vehicleId?: ID;
+  status: AssetStatus;
+  disposedAt?: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DepreciationRunStatus = "posted" | "void";
+
+/** One asset's charge within a run -- mirrors depreciationrun.LineResponse. */
+export interface DepreciationRunLineEntity {
+  assetId: ID;
+  amount: number;
+}
+
+/** One monthly depreciation run -- mirrors depreciationrun.
+ *  DepreciationRunResponse. No draft state: a run computes its lines and
+ *  posts the one balanced journal in the same write, the same reasoning
+ *  the backend's own services.go header gives. */
+export interface DepreciationRunEntity extends Scoped {
+  id: ID;
+  period: string;
+  status: DepreciationRunStatus;
+  lines: DepreciationRunLineEntity[];
+  /** Set once posted -- the journal this run's post wrote, so a void can
+   *  reverse exactly that entry via reverseJournal. */
+  journalId?: ID;
+  version: number;
+  createdAt: string;
+}
+
+/* ── fiscal years & opening balance (gap-closing plan, Phase E) ─────────── */
+
+export type FiscalYearStatus = "open" | "closed";
+
+/** A fiscal year that has been closed (and possibly reopened) -- mirrors
+ *  fiscalyear.FiscalYearResponse. A year that has never been closed has
+ *  no row here at all; see FiscalYearSection's own doc for what that
+ *  means for a "which years can I close" list. */
+export interface FiscalYearEntity extends Scoped {
+  year: number;
+  status: FiscalYearStatus;
+  closedAt?: string;
+  closingJournalId?: ID;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Whether the one-time opening-balance commit has already run for this
+ *  tenant -- mirrors the real backend's own refusal ("An opening balance
+ *  already exists") on a second POST /opening-balance/commit. The mock
+ *  cannot read an uploaded workbook's content (same documented gap
+ *  externalstatements/bankstatements already carry), so this is the one
+ *  piece of real state it keeps: not what was committed, only that
+ *  something was. */
+export interface OpeningBalanceEntity extends Scoped {
+  asOf: string;
+  journalId: ID;
+  committedAt: string;
+}
+
+/* ── sub-ledger admin (gap-closing plan, Phase F) ────────────────────────── */
+
+/** A tenant-defined expense category -- mirrors expensecategory.
+ *  ExpenseCategoryResponse. `core.expenses.category` is a composite FK into
+ *  this table's own `code`, not a fixed CHECK list, so the create form's
+ *  category picker and this screen's own filter both have to read it live
+ *  rather than from a hardcoded enum. */
+export interface ExpenseCategoryEntity extends Scoped {
+  id: ID;
+  code: string;
+  name: string;
+  accountId: ID;
+  groupLabel: string;
+  sortOrder: number;
+  status: "atv" | "ina";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A local vendor a general purchase (no Schedule Agreement behind it) pays
+ *  -- mirrors supplier.SupplierResponse. Deliberately NOT the same concept
+ *  SupplierEntity/SupplierSection names: that one is a free-text name off
+ *  `core.schedule_agreements.supplier_name`, read through the tenant's own
+ *  configurable "Pemasok" lexicon term (SPBE/distributor) with no real
+ *  master table behind it at all. This is a real `core.suppliers` row, for
+ *  Pembelian Umum only -- the two share no row even when they happen to
+ *  read the same word in Indonesian. */
+export interface VendorEntity extends Scoped {
+  id: ID;
+  code: string;
+  name: string;
+  npwp?: string;
+  address?: string;
+  phone?: string;
+  status: "atv" | "ina";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseLine {
+  productId: ID;
+  quantity: number;
+  unitCost: number;
+  subtotal: number;
+}
+
+export type PurchasePaymentStatus = "unpaid" | "paid";
+
+/** A purchase -- mirrors purchase.PurchaseResponse. `scheduleAgreementId`
+ *  is set only for an SA-redeemed ("tebus") purchase, a creation path this
+ *  console still has no UI for (see PurchasesPage's own header); every
+ *  purchase this console creates is a general one, `supplierId` always set
+ *  to a VendorEntity row. */
+export interface PurchaseEntity extends Scoped {
+  id: ID;
+  purchaseNumber: string;
+  scheduleAgreementId?: ID;
+  supplierId: ID;
+  lines: PurchaseLine[];
+  redeemedAt: string;
+  subtotal: number;
+  taxPercentage: number;
+  taxAmount: number;
+  totalAmount: number;
+  totalQty: number;
+  paymentStatus: PurchasePaymentStatus;
+  paidAt?: string;
+  bankReference?: string;
+  notes?: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Document prefixes. Visible on every table row and printout. */
@@ -1141,6 +1559,17 @@ export interface Database {
   bankAccounts: BankAccountEntity[];
   accounts: AccountEntity[];
   journals: JournalEntity[];
+  cashVouchers: CashVoucherEntity[];
+  bankStatementImports: BankStatementImportEntity[];
+  bankStatementRules: BankStatementRuleEntity[];
+  registrationPackages: RegistrationPackageEntity[];
+  assets: AssetEntity[];
+  depreciationRuns: DepreciationRunEntity[];
+  fiscalYears: FiscalYearEntity[];
+  openingBalances: OpeningBalanceEntity[];
+  expenseCategories: ExpenseCategoryEntity[];
+  vendors: VendorEntity[];
+  purchases: PurchaseEntity[];
   invoices: InvoiceEntity[];
   creditNotes: CreditNoteEntity[];
   /**
@@ -1154,4 +1583,13 @@ export interface Database {
   settings: SettingsEntity;
   /** Per-tenant overrides. The stored truth; `settings` above is derived. */
   settingsByTenant: TenantSettingsEntity[];
+  /**
+   * The SIM3LON Penyaluran Harian import dialog's preselected product, per
+   * tenant, inheriting up the tree the same way `settingsByTenant` does.
+   * Kept separate from `settingsByTenant` rather than folded into
+   * `SettingsEntity`: it is this one dialog's own preference, not a field any
+   * settings screen edits, and the backend holds it on a column the generic
+   * tenant-settings endpoint deliberately does not expose either.
+   */
+  sim3lonDefaultProductByTenant: { tenantId: ID; code: string | null }[];
 }

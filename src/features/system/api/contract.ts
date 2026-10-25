@@ -7,7 +7,7 @@
  * table -- see `systemApi.http.ts`'s own header) and the numbering/
  * operations settings this tenant runs under.
  */
-import type { NumberingEntity, OperationsEntity, SupplierEntity } from "@/mocks/types";
+import type { NumberingEntity, OperationsEntity, SupplierEntity } from "@/types/domain";
 
 export interface SupplierView extends SupplierEntity {
   /** Agreements issued by this supplier, so it is clear what deleting would orphan. */
@@ -17,9 +17,6 @@ export interface SupplierView extends SupplierEntity {
 
 export interface SystemApi {
   getSupplierList(): Promise<SupplierView[]>;
-  saveSupplier(input: Partial<SupplierEntity> & { id?: string }): Promise<SupplierEntity>;
-  deleteSupplier(id: string): Promise<void>;
   getSystemConfig(): Promise<{ penomoran: NumberingEntity; operasi: OperationsEntity }>;
-  saveNumbering(penomoran: NumberingEntity): Promise<NumberingEntity>;
   saveOperations(operasi: OperationsEntity): Promise<OperationsEntity>;
 }

@@ -19,9 +19,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getProducts } from "@/features/products/api/productApi";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { formatNumber } from "@/lib/format";
 import { supplierLabel, unitLabel } from "@/lib/lexicon";
+import { getSIM3LONDefaultProduct } from "../api/saApi";
 import { buildSIM3LONApplyReview, useSIM3LONImport } from "../hooks/useSIM3LONImport";
 import type {
   SIM3LONChangeClassification,
@@ -36,12 +37,35 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [supplierName, setSupplierName] = useState("");
-  const [productId, setProductId] = useState("");
+  // null = the user has not touched this field yet, so the tenant's
+  // configured default (below) still applies. Once they pick anything --
+  // including "Pilih produk" again -- it becomes a concrete string and the
+  // default no longer overrides it.
+  const [productIdChoice, setProductIdChoice] = useState<string | null>(null);
   const products = useQuery({
     queryKey: [...scopeKey(), "sim3lon-product-options"],
     queryFn: () => getProducts({ onlyActive: true }),
     enabled: open,
   });
+  // SIM3LON is a subsidy-monitoring feed about LPG cylinders. The kit
+  // accessories a registration package issues (APAR, Timbangan, Papan
+  // Pangkalan -- financial-statements plan P3.3) are products too, but have
+  // no business in this list, and nothing told them apart from "LPG 3 Kg"
+  // until productKind did.
+  const lpgProducts = (products.data ?? []).filter((product) => product.productKind === "commodity");
+  const defaultProduct = useQuery({
+    queryKey: [...scopeKey(), "sim3lon-default-product"],
+    queryFn: getSIM3LONDefaultProduct,
+    enabled: open,
+  });
+  // Preselects the tenant's configured default (set once via the API) so
+  // finance does not choose "LPG 3 Kg" by hand on every import. Derived at
+  // render rather than pushed into state by an effect: the field is still
+  // "untouched" until the user picks something, and the default itself may
+  // keep resolving (the query can still be loading) on the first render.
+  const autoDefaultId = lpgProducts.find((product) => product.kode === defaultProduct.data)?.id;
+  const productId = productIdChoice ?? autoDefaultId ?? "";
+  const setProductId = setProductIdChoice;
   const {
     preview,
     reconciliation,
@@ -55,7 +79,7 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
   const close = () => {
     setFile(null);
     setSupplierName("");
-    setProductId("");
+    setProductIdChoice(null);
     discard();
     onClose();
   };
@@ -66,7 +90,7 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
         <DialogHeader>
           <DialogTitle>Impor Penyaluran Harian SIM3LON</DialogTitle>
           <DialogDescription>
-            Unggah ekspor XLSX bulanan, periksa perubahan dan pangkalan yang belum di-seed,
+            Unggah berkas Excel bulanan dari SIM3LON. Periksa perubahan dan pangkalan yang belum terdaftar,
             lalu terapkan sebagai sumber kebenaran bulan tersebut.
           </DialogDescription>
         </DialogHeader>
@@ -104,11 +128,10 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
             <Field label="Produk" required hint="Pilih LPG 3 kg untuk contoh Penyaluran Harian ini.">
               <SelectInput value={productId} onChange={(event) => setProductId(event.target.value)}>
                 <option value="">Pilih produk</option>
-                {/* SIM3LON is a subsidy-monitoring feed that only ever concerns
-                    the 3kg cylinder -- sorted lightest-first so that option
-                    lands on top rather than wherever alphabetical order (which
-                    puts "Bright Gas" before "LPG") happens to leave it. */}
-                {[...(products.data ?? [])]
+                {/* Sorted lightest-first so LPG 3 Kg lands on top rather than
+                    wherever alphabetical order (which puts "Bright Gas"
+                    before "LPG") happens to leave it. */}
+                {[...lpgProducts]
                   .sort((a, b) => parseFloat(a.ukuran) - parseFloat(b.ukuran))
                   .map((product) => (
                     <option key={product.id} value={product.id}>{product.nama} · {product.ukuran}</option>
@@ -122,8 +145,7 @@ export function SIM3LONImportDialog({ open, onClose, supplierOptions = [] }: {
                 hint="XLSX SIM3LON, maksimal 4 MB" disabled={previewMutation.isPending} />
             </Field>
             <p className="text-xs leading-relaxed text-ink-muted">
-              Id Registrasi dicocokkan ke kode pangkalan. Sistem tidak membuat pangkalan dari nama
-              atau mengarang nomor telepon, lokasi, maupun cabang yang tidak ada di berkas.
+              Pangkalan dicocokkan lewat Id Registrasi. Pangkalan yang belum terdaftar ditandai di pratinjau dan tidak dibuat otomatis.
             </p>
             <Button className="w-full" disabled={!file || !supplierName.trim() || !productId || previewMutation.isPending}
               onClick={() => file && previewMutation.mutate({ file, supplierName, productId })}>
@@ -187,10 +209,10 @@ function Review({
           </p>
           <ul className="mt-2 space-y-1 text-2xs text-ink">
             {preview.missingOutlets.map((outlet) => (
-              <li key={outlet.registrationCode}><span className="data">{outlet.registrationCode}</span> · {outlet.name} — {outlet.reason}</li>
+              <li key={outlet.registrationCode}><span className="data">{outlet.registrationCode}</span> · {outlet.name} · {outlet.reason}</li>
             ))}
             {preview.issues.map((issue, index) => (
-              <li key={`${issue.line}-${index}`}>Baris {issue.line}{issue.column ? ` · ${issue.column}` : ""} — {issue.reason}</li>
+              <li key={`${issue.line}-${index}`}>Baris {issue.line}{issue.column ? ` · ${issue.column}` : ""} · {issue.reason}</li>
             ))}
           </ul>
         </div>
@@ -239,6 +261,7 @@ const classificationLabel: Record<SIM3LONChangeClassification, string> = {
   removed: "Dihapus sumber",
   unchanged: "Tetap",
   local_conflict: "Konflik lokal",
+  pre_cutover: "Saldo awal",
 };
 
 function ReconciliationLedger({ review }: { review: SIM3LONReconciliationPreview }) {
@@ -261,6 +284,28 @@ function ReconciliationLedger({ review }: { review: SIM3LONReconciliationPreview
         </span>
       </div>
 
+      {(review.planningStartDate || review.varianceCount > 0) && (
+        <div className="space-y-1 rounded-sm border border-line bg-panel-sunk px-3 py-2.5 text-2xs text-ink-muted">
+          {review.planningStartDate && (
+            <p>
+              Tanggal sebelum <span className="data text-ink">{review.planningStartDate}</span> sudah
+              disalurkan di luar sistem. Perubahannya menggeser saldo awal kuota Base sebesar{" "}
+              <span className="data font-semibold text-ink">
+                {review.openingBalanceDelta > 0 ? "+" : ""}{formatNumber(review.openingBalanceDelta)}
+              </span>{" "}
+              {unitLabel()}, tanpa membuat rencana.
+            </p>
+          )}
+          {review.varianceCount > 0 && (
+            <p>
+              <span className="data font-semibold text-ink">{formatNumber(review.varianceCount)}</span>{" "}
+              tanggal yang sudah dikonfirmasi atau dikirim kini berbeda dari SIM3LON. Rencana itu tidak
+              diubah; selisihnya tampil di halaman SA, bagian Selisih SIM3LON.
+            </p>
+          )}
+        </div>
+      )}
+
       {review.blockers.length > 0 && (
         <aside className="border-l-2 border-rust bg-rust-soft px-3 py-2.5">
           <p className="flex items-center gap-2 text-xs font-semibold text-rust-ink">
@@ -279,7 +324,7 @@ function ReconciliationLedger({ review }: { review: SIM3LONReconciliationPreview
 
       {rows.length === 0 ? (
         <div className="rounded-sm border border-line bg-panel-sunk px-3 py-4 text-center text-xs text-ink-muted">
-          Impor pertama tidak memiliki rencana lama untuk direkonsiliasi.
+          Ini impor pertama, jadi belum ada rencana lama untuk dibandingkan.
         </div>
       ) : (
         <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
@@ -298,7 +343,10 @@ function ReconciliationLedger({ review }: { review: SIM3LONReconciliationPreview
               <div className="mt-2 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 text-center">
                 <LedgerValue label="Sumber sebelumnya" value={change.baselineQty} />
                 <ArrowRight className="h-3.5 w-3.5 text-ink-faint" />
-                <LedgerValue label="Draf saat ini" value={change.currentQty} />
+                <LedgerValue
+                  label={change.classification === "pre_cutover" ? "Di luar sistem" : "Draf saat ini"}
+                  value={change.currentQty}
+                />
                 <ArrowRight className="h-3.5 w-3.5 text-ink-faint" />
                 <LedgerValue label="Usulan" value={change.proposedQty} />
               </div>

@@ -15,8 +15,7 @@ export function ErrorBoundary() {
             Halaman gagal dimuat
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-            Konsol berhenti sebelum halaman ini selesai ditampilkan. Data Anda
-            tersimpan — muat ulang biasanya cukup.
+            Konsol berhenti sebelum halaman ini selesai ditampilkan. Data Anda tetap tersimpan. Biasanya cukup dengan memuat ulang halaman.
           </p>
 
           {error?.message && (

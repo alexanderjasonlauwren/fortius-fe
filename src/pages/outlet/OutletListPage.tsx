@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -21,7 +21,7 @@ import { Field, SearchInput, SelectInput } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatNumber, formatPercentId, formatRupiahShort } from "@/lib/format";
-import type { OutletStatus } from "@/mocks/types";
+import type { OutletStatus } from "@/types/domain";
 import { outletLabel, outletLabelTitle } from "@/lib/lexicon";
 
 const STATUSES: (OutletStatus | "Semua")[] = [

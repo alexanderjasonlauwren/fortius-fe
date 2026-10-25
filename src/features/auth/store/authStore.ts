@@ -36,6 +36,12 @@ interface AuthState {
    */
   restore: () => Promise<void>;
   setUser: (user: User, token: string) => void;
+  /**
+   * Re-issues the session in another tenant. Resolves once the new user,
+   * tenant and permissions are in the store; throws, leaving the session as it
+   * was, when the server refuses.
+   */
+  switchTenant: (tenantId: string) => Promise<void>;
   hasPermission: (permission: string) => boolean;
 }
 
@@ -87,6 +93,11 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user: User, token: string) => {
         set({ user, token, isAuthenticated: true });
         localStorage.setItem("auth_token", token);
+      },
+
+      switchTenant: async (tenantId: string) => {
+        const { user, tenant, token } = await authApi.switchTenant(tenantId);
+        set({ user, tenant, token, isAuthenticated: true });
       },
 
       hasPermission: (permission: string) =>

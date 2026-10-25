@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -19,8 +19,9 @@ import {
   Toggle,
 } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
-import type { BankNameEntity, OutletStatus } from "@/mocks/types";
+import type { BankNameEntity, OutletStatus } from "@/types/domain";
 import { outletLabel, outletLabelTitle, unitLabel } from "@/lib/lexicon";
+import { useScope } from "@/features/tenancy/useScope";
 import { useResettableState } from "@/hooks/useResettableState";
 import { LocationPicker } from "@/features/outlet/components/LocationPicker";
 import { isWithinIndonesia, parseCoordinatePaste } from "@/features/outlet/lib/parseCoordinates";
@@ -37,6 +38,10 @@ interface FormState {
   alamat: string;
   kecamatan: string;
   kota: string;
+  provinsi: string;
+  kodePos: string;
+  npwp: string;
+  email: string;
   status: OutletStatus;
   kuotaBulanan: number;
   termin: number;
@@ -56,6 +61,10 @@ const EMPTY: FormState = {
   alamat: "",
   kecamatan: "",
   kota: "Kota Salatiga",
+  provinsi: "Jawa Tengah",
+  kodePos: "",
+  npwp: "",
+  email: "",
   status: "Aktif",
   kuotaBulanan: 600,
   termin: 7,
@@ -76,6 +85,7 @@ export function OutletFormPage() {
   const isEdit = !!id;
 
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+  const { branchId } = useScope();
   const [coordPaste, setCoordPaste] = useState("");
   const [coordPasteError, setCoordPasteError] = useState<string | undefined>();
 
@@ -106,6 +116,10 @@ export function OutletFormPage() {
       alamat: p.alamat,
       kecamatan: p.kecamatan,
       kota: p.kota,
+      provinsi: p.provinsi ?? "",
+      kodePos: p.kodePos ?? "",
+      npwp: p.npwp ?? "",
+      email: p.email ?? "",
       status: p.status,
       kuotaBulanan: p.kuotaBulanan,
       termin: p.termin ?? 7,
@@ -123,7 +137,8 @@ export function OutletFormPage() {
       // OutletEntity.bank is BankNameEntity | undefined, so the empty option
       // is normalised to absent here rather than sent as a literal string.
       const payload = { ...values, bank: values.bank || undefined };
-      return createOrUpdateOutlet(isEdit ? { ...payload, id } : payload);
+      // A new outlet is filed under the branch the console is scoped to.
+      return createOrUpdateOutlet(isEdit ? { ...payload, id } : { ...payload, branchId: branchId ?? undefined });
     },
     errorTitle: isEdit ? "Perubahan tidak tersimpan" : `${outletLabelTitle()} tidak terdaftar`,
     success: (p) => ({
@@ -153,7 +168,7 @@ export function OutletFormPage() {
       return;
     }
     if (!isWithinIndonesia(parsed.lat, parsed.lng)) {
-      setCoordPasteError("Koordinat ini berada di luar Indonesia -- periksa urutan lintang/bujur.");
+      setCoordPasteError("Koordinat ini berada di luar Indonesia. Periksa urutan lintang dan bujur.");
       return;
     }
     set("lat", parsed.lat);
@@ -172,6 +187,7 @@ export function OutletFormPage() {
     if (!form.kode.trim()) next.kode = "Kode wajib diisi.";
     if (!form.kecamatan.trim()) next.kecamatan = "Kecamatan wajib dipilih.";
     if (!form.telepon.trim()) next.telepon = "Nomor telepon wajib diisi agar dapat dihubungi kurir.";
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) next.email = "Format email tidak valid.";
     if (form.kuotaBulanan <= 0) next.kuotaBulanan = "Kuota bulanan harus lebih dari nol.";
 
     setErrors(next);
@@ -255,9 +271,9 @@ export function OutletFormPage() {
                   value={form.status}
                   onChange={(e) => set("status", e.target.value as OutletStatus)}
                 >
-                  <option value="Aktif">Aktif — dapat menerima pengiriman</option>
-                  <option value="Nonaktif">Nonaktif — tidak dilayani sementara</option>
-                  <option value="Ditangguhkan">Ditangguhkan — bermasalah</option>
+                  <option value="Aktif">Aktif (dapat menerima pengiriman)</option>
+                  <option value="Nonaktif">Nonaktif (tidak dilayani sementara)</option>
+                  <option value="Ditangguhkan">Ditangguhkan (bermasalah)</option>
                 </SelectInput>
               </Field>
 
@@ -436,6 +452,22 @@ export function OutletFormPage() {
                 />
               </Field>
 
+              <Field label="Provinsi" htmlFor="provinsi">
+                <TextInput id="provinsi" maxLength={100} value={form.provinsi} onChange={(e) => set("provinsi", e.target.value)} />
+              </Field>
+
+              <Field label="Kode pos" htmlFor="kodepos">
+                <TextInput id="kodepos" mono maxLength={20} value={form.kodePos} onChange={(e) => set("kodePos", e.target.value)} />
+              </Field>
+
+              <Field label="NPWP" htmlFor="npwp" hint="Untuk tagihan dan laporan pelanggan.">
+                <TextInput id="npwp" mono maxLength={30} value={form.npwp} onChange={(e) => set("npwp", e.target.value)} />
+              </Field>
+
+              <Field label="Email penagihan" htmlFor="email" error={errors.email}>
+                <TextInput id="email" type="email" maxLength={255} value={form.email} invalid={!!errors.email} onChange={(e) => set("email", e.target.value)} />
+              </Field>
+
               {/*
                 0 in either field means "no pin yet" (see EMPTY above and
                 outletApi.http.ts's write path), so it is shown as an empty
@@ -445,7 +477,7 @@ export function OutletFormPage() {
               <Field
                 label="Lintang"
                 htmlFor="lat"
-                hint={form.lat === 0 && form.lng === 0 ? "Belum dipetakan — pangkalan ini tidak bisa masuk rute otomatis." : undefined}
+                hint={form.lat === 0 && form.lng === 0 ? "Belum dipetakan, jadi pangkalan ini tidak bisa masuk rute otomatis." : undefined}
               >
                 <TextInput
                   id="lat"

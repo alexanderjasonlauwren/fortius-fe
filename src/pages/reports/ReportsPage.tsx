@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useSearchParams } from "react-router-dom";
 import { reportRangeFromParam } from "@/features/reports/api/contract";
 import { useQuery } from "@tanstack/react-query";
@@ -106,6 +106,7 @@ export function ReportsPage() {
   });
 
   const s = summary.data;
+  const hasOpeningRevenue = (series.data ?? []).some((p) => p.pendapatanSebelumGoLive > 0);
   const chartData = (series.data ?? []).map((p) => ({
     ...p,
     label: formatDateId(p.tanggal).replace(/ \d{4}$/, ""),
@@ -153,7 +154,7 @@ export function ReportsPage() {
   const driverColumns: Column<DriverRow>[] = [
     {
       key: "nama",
-      header: "Driver",
+      header: "Sopir",
       render: (row) => (
         <>
           <span className="block font-medium text-ink">{row.nama}</span>
@@ -213,7 +214,7 @@ export function ReportsPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Keuangan"
-        title="Laporan Keuangan"
+        title="Rekap Operasional"
         description="Rekapitulasi distribusi dan pendapatan untuk periode yang dipilih, siap diunduh atau dicetak untuk arsip."
         actions={
           <>
@@ -271,7 +272,7 @@ export function ReportsPage() {
         <Stat
           label="Pendapatan terverifikasi"
           value={formatRupiahShort(s?.pendapatan ?? 0)}
-          hint="Kas yang sudah diverifikasi, bukan akrual — untuk laba rugi akrual lihat Buku Besar"
+          hint="Kas yang sudah diverifikasi, bukan akrual. Untuk laba rugi akrual, lihat Buku Besar"
           isLoading={summary.isLoading}
           tone="pine"
         />
@@ -282,6 +283,14 @@ export function ReportsPage() {
           isLoading={summary.isLoading}
           tone={s && s.piutang > 0 ? "signal" : undefined}
         />
+        {s && s.pendapatanSebelumGoLive > 0 && (
+          <Stat
+            label="Pendapatan sebelum go-live"
+            value={formatRupiahShort(s.pendapatanSebelumGoLive)}
+            hint={`${formatNumber(s.unitSebelumGoLive)} ${unitLabel()} menurut SIM3LON, disalurkan dan dibayar di luar sistem sebelum tanggal mulai`}
+            isLoading={summary.isLoading}
+          />
+        )}
         <Stat
           label="Rata-rata harian"
           value={formatNumber(s?.rerataPerHari ?? 0)}
@@ -344,7 +353,9 @@ export function ReportsPage() {
         <Panel>
           <PanelHeader
             title="Pendapatan harian"
-            hint="Nilai pembayaran yang diverifikasi pada hari itu"
+            hint={hasOpeningRevenue
+              ? "Pembayaran terverifikasi, ditambah penyaluran SIM3LON sebelum go-live"
+              : "Nilai pembayaran yang diverifikasi pada hari itu"}
           />
           <PanelBody>
             {series.isLoading ? (
@@ -381,6 +392,19 @@ export function ReportsPage() {
                     dot={false}
                     activeDot={{ r: 4, strokeWidth: 2, stroke: t.surface }}
                   />
+                  {hasOpeningRevenue && (
+                    <Area
+                      type="monotone"
+                      dataKey="pendapatanSebelumGoLive"
+                      name="Sebelum go-live (SIM3LON)"
+                      stroke={seriesColor(2, isDark)}
+                      strokeWidth={2}
+                      strokeDasharray="4 3"
+                      fill="none"
+                      dot={false}
+                      activeDot={{ r: 4, strokeWidth: 2, stroke: t.surface }}
+                    />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -407,7 +431,7 @@ export function ReportsPage() {
         </Panel>
 
         <Panel>
-          <PanelHeader title="Kinerja armada" hint="Surat jalan diselesaikan per driver" />
+          <PanelHeader title="Kinerja armada" hint="Surat jalan diselesaikan per sopir" />
           <DataTable
             columns={driverColumns}
             data={drivers.data ?? []}

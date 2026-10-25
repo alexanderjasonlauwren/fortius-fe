@@ -20,6 +20,8 @@
  * before the request, so a slow GPS delays the submission rather than losing
  * it — same order as the mock, for the same reason.
  */
+import { uploadAttachment } from "@/features/attachments/api/attachmentApi";
+import { downscaleImage } from "@/lib/image";
 import { getOne, send } from "@/lib/api";
 import { capturePosition } from "@/lib/geo";
 import { unitLabel } from "@/lib/lexicon";
@@ -333,7 +335,20 @@ async function completeStop(input: CompleteStopInput): Promise<StopReceipt> {
       ...at,
     });
   }
-  return receipt(rows, realisasi);
+  const closed = receipt(rows, realisasi);
+
+  // After the completion, not before: the photo is evidence of the drop, and
+  // a failed upload on a weak signal must not leave the delivery itself
+  // unrecorded. One photo per stop, on its first surat jalan; the office
+  // reads every surat jalan of the stop.
+  if (input.foto) {
+    try {
+      await uploadAttachment("delivery", rows[0].id, await downscaleImage(input.foto));
+    } catch (error) {
+      closed.fotoGagal = error instanceof Error ? error.message : "Foto gagal diunggah";
+    }
+  }
+  return closed;
 }
 
 async function holdStop(input: { deliveryId: string; catatan: string }): Promise<StopReceipt> {

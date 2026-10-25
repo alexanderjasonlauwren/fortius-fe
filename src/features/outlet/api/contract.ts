@@ -9,7 +9,7 @@
  * adapter — mapping there is what keeps every component unaware of which source
  * it is running against.
  */
-import type { OutletEntity, OutletStatus } from "@/mocks/types";
+import type { OutletEntity, OutletStatus } from "@/types/domain";
 
 /**
  * An outlet with the figures the screens put beside it.

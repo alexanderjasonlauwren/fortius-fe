@@ -37,8 +37,9 @@ import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getVehicles } from "@/features/vehicles/api/vehicleApi";
 import { getAgingReport, getPayments } from "@/features/finance/api/financeApi";
 import { getOrderTotals } from "@/features/orders/api/orderApi";
-import { getSAList } from "@/features/sa/api/saApi";
-import { addDays, isoDate, startOfToday } from "@/mocks/seed";
+import { getQuotaSummary } from "@/features/sa/api/saApi";
+import { currentJakartaMonth } from "@/features/sa/lib/period";
+import { addDays, isoDate, startOfToday } from "@/lib/date";
 import type { DispatchLane, DispatchRail, DispatchStop, KpiSummary, MonthlyChartPoint, OutletShare, RecentActivity } from "../types";
 import type { DashboardApi } from "./contract";
 
@@ -104,28 +105,26 @@ async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
   const today = toIso(startOfToday());
   const yesterday = toIso(new Date(startOfToday().getTime() - 86_400_000));
 
-  const [todayRows, yesterdayRows, outlets, agreements, pending, aging, orderTotals] =
+  const [todayRows, yesterdayRows, outlets, quota, pending, aging, orderTotals] =
     await Promise.all([
       fetchDeliveries(today, today),
       fetchDeliveries(yesterday, yesterday),
       getOutletList(),
-      getSAList(),
+      getQuotaSummary(currentJakartaMonth()),
       getPayments("Menunggu Verifikasi"),
       getAgingReport(),
       includeManualOrders ? getOrderTotals() : Promise.resolve({ baru: 0 }),
     ]);
 
-  // Mirrors mocks/selectors.ts's own monthlyQuota(): live agreements are
-  // whatever covers today and isn't still a draft.
-  const liveAgreements = agreements.filter(
-    (sa) => sa.status !== "Draft" && sa.periodeMulai <= today && sa.periodeBerakhir >= today,
-  );
-
   return {
     dailyDistributed: todayRows.reduce((s, d) => s + d.delivered_qty, 0),
     dailyTarget: todayRows.reduce((s, d) => s + d.dispatched_qty, 0),
-    monthlyQuotaTotal: liveAgreements.reduce((s, sa) => s + sa.totalKuota, 0),
-    monthlyQuotaRemaining: liveAgreements.reduce((s, sa) => s + sa.sisaKuota, 0),
+    // The same figures as the SA page's Kuota cabang card. SIM3LON Penyaluran
+    // is the record of what was distributed, so "used" is what it says went
+    // out -- not what plans drew from the agreements, which while plans are
+    // not used read as 0 of the whole allocation.
+    monthlyQuotaTotal: quota.allocationQty,
+    monthlyQuotaRemaining: quota.remainingQty,
     activeOutlet: outlets.filter((o) => o.status === "Aktif").length,
     totalOutlet: outlets.length,
     pendingPayments: pending.length,

@@ -8,7 +8,7 @@
  * arithmetic with no data source of its own, the same reason
  * `reports/contract.ts` holds `resolveRange`.
  */
-import { isoDate, startOfToday } from "@/mocks/seed";
+import { isoDate, startOfToday } from "@/lib/date";
 import type { DeliveryStatus, InvoiceStatus } from "@/types/domain";
 
 /**

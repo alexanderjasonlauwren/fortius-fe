@@ -58,7 +58,25 @@ let refreshInFlight: Promise<string> | null = null;
 
 /** Requests that already retried once, so a persistent 401 cannot loop. */
 const RETRIED = Symbol("retried");
-type RetriableConfig = AxiosRequestConfig & { [RETRIED]?: boolean };
+/** Reads that already waited out one 429, so a sustained limit cannot loop. */
+const RATE_RETRIED = Symbol("rateRetried");
+type RetriableConfig = AxiosRequestConfig & { [RETRIED]?: boolean; [RATE_RETRIED]?: boolean };
+
+/** The longest a read waits on Retry-After before giving up on it. */
+const MAX_RATE_WAIT_MS = 10_000;
+
+/**
+ * Whether a failed refresh means the session is over. Only the server
+ * refusing the refresh token does: a rate limit, a 5xx or a dropped
+ * connection says nothing about the session, and logging out on one sent a
+ * user to the login page in the middle of their work (regression
+ * 2026-10-24 F16: a 429 during a fast page sweep).
+ */
+function sessionRefused(error: unknown): boolean {
+  if (!(error instanceof AxiosError)) return true; // no refresh token at all
+  const status = error.response?.status;
+  return status === 401 || status === 403;
+}
 
 /**
  * Called when the session cannot be recovered. Assigned by the auth store so
@@ -90,10 +108,83 @@ async function refreshSession(): Promise<string> {
   return tokens.token;
 }
 
+/**
+ * Exchanges the refresh token at `path` for a new session and stores it.
+ * Returns the new access token.
+ *
+ * For exchanges other than a plain refresh, such as POST /auth/switch-tenant.
+ * It runs under the same single-flight slot as the silent refresh, for the
+ * same reason: both spend the refresh token, and two exchanges presenting one
+ * token look to the server like a stolen token being replayed. A refresh
+ * already running is waited out first so this presents the token it produced;
+ * requests that 401 meanwhile wait on this exchange instead of starting one.
+ *
+ * A bare axios call, like `refreshSession`: through apiClient, a 401 would
+ * re-enter the interceptor, which would wait on this very exchange.
+ */
+export async function exchangeSession<T extends SessionTokens>(
+  path: string,
+  body: (refreshToken: string) => Record<string, unknown>,
+): Promise<string> {
+  if (refreshInFlight) await refreshInFlight.catch(() => undefined);
+
+  const post = (accessToken: string | null) => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) throw new Error("no refresh token");
+    return axios.post<Envelope<T>>(`${apiClient.defaults.baseURL}${path}`, body(refreshToken), {
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+    });
+  };
+
+  const run = (async () => {
+    let response;
+    try {
+      response = await post(getAccessToken());
+    } catch (error) {
+      // The exchange route itself needs a live access token. An expired one
+      // is renewed once here, inside the slot, and the exchange retried with
+      // the rotated refresh token.
+      if (!(error instanceof AxiosError) || error.response?.status !== 401) throw error;
+      response = await post(await refreshSession());
+    }
+    const tokens = response.data.data;
+    setSessionTokens(tokens);
+    return tokens.token;
+  })();
+
+  refreshInFlight = run;
+  try {
+    return await run;
+  } catch (error) {
+    throw toApiError(error);
+  } finally {
+    if (refreshInFlight === run) refreshInFlight = null;
+  }
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const original = error.config as RetriableConfig | undefined;
+
+    // A rate-limited read waits out Retry-After once and tries again. A
+    // write is never repeated behind the caller's back: it is refused, and
+    // the person decides whether to send it again.
+    if (
+      error.response?.status === 429 &&
+      original !== undefined &&
+      (original.method ?? "get").toLowerCase() === "get" &&
+      !original[RATE_RETRIED]
+    ) {
+      original[RATE_RETRIED] = true;
+      const seconds = Number(error.response.headers?.["retry-after"]);
+      const waitMs = Math.min(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000, MAX_RATE_WAIT_MS);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      return apiClient.request(original);
+    }
 
     const recoverable =
       error.response?.status === 401 &&
@@ -116,9 +207,9 @@ apiClient.interceptors.response.use(
       original.headers = { ...original.headers, Authorization: `Bearer ${token}` };
       return apiClient.request(original);
     } catch (refreshError) {
-      // The refresh itself failed: expired, revoked, or a replay the server
-      // refused. Nothing left to try.
-      onSessionExpired();
+      // The refresh itself failed. Expired, revoked, or a replay the server
+      // refused ends the session; anything else leaves it for the next try.
+      if (sessionRefused(refreshError)) onSessionExpired();
       return Promise.reject(refreshError);
     } finally {
       // Cleared in finally, not on success: leaving a rejected promise cached
@@ -312,9 +403,19 @@ export async function send<T>(
   method: "post" | "put" | "patch" | "delete",
   path: string,
   body?: unknown,
+  // Per-call timeout override. Omitted, the instance default (10s) applies.
+  // A few endpoints legitimately run long -- e.g. a SIM3LON sync drives a
+  // headless browser through a login and several page loads -- and must not be
+  // aborted at the default that suits an ordinary write.
+  options?: { timeout?: number },
 ): Promise<T> {
   try {
-    const response = await apiClient.request<Envelope<T>>({ method, url: path, data: body });
+    const response = await apiClient.request<Envelope<T>>({
+      method,
+      url: path,
+      data: body,
+      timeout: options?.timeout,
+    });
     return response.data.data;
   } catch (error) {
     throw toApiError(error);

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import {
   applySIM3LON,
   getSIM3LONReconciliation,
@@ -71,7 +71,7 @@ export function useSIM3LONImport() {
       const requestScope = scopeKey();
       return previewSIM3LON(file, supplierName, productId).then((result) => {
         if (!sameScope(scopeKey(), requestScope)) {
-          throw new ScopeMismatchError("Tenant berubah saat pratinjau dimuat. Unggah ulang berkas pada tenant yang sesuai.");
+          throw new ScopeMismatchError("Perusahaan yang aktif berganti saat pratinjau dimuat. Unggah ulang berkasnya dari perusahaan yang benar.");
         }
         return { result, originScope: requestScope };
       });
@@ -95,14 +95,14 @@ export function useSIM3LONImport() {
     }) => {
       const requestScope = originScope;
       if (!requestScope || preview?.id !== batchId || !sameScope(scopeKey(), requestScope)) {
-        throw new ScopeMismatchError("Tenant berubah. Unggah ulang impor pada tenant yang sesuai.");
+        throw new ScopeMismatchError("Perusahaan yang aktif sudah berganti. Unggah ulang berkasnya dari perusahaan yang benar.");
       }
       const result = await getSIM3LONReconciliation(batchId);
       if (!sameScope(scopeKey(), requestScope)) {
-        throw new ScopeMismatchError("Tenant berubah saat rekonsiliasi dimuat. Unggah ulang impor pada tenant yang sesuai.");
+        throw new ScopeMismatchError("Perusahaan yang aktif berganti saat perbandingan dimuat. Unggah ulang berkasnya dari perusahaan yang benar.");
       }
       if (result.candidateBatchId !== batchId) {
-        throw new Error("Server mengembalikan rekonsiliasi untuk impor yang berbeda.");
+        throw new Error("Hasil perbandingan yang diterima bukan untuk berkas ini. Muat ulang, lalu coba lagi.");
       }
       return { result, originScope: requestScope };
     },
@@ -125,11 +125,11 @@ export function useSIM3LONImport() {
       const requestScope = originScope;
       if (!requestScope || preview?.id !== batchId || reconciliation?.candidateBatchId !== batchId ||
         !sameScope(scopeKey(), requestScope)) {
-        throw new ScopeMismatchError("Tenant berubah. Unggah ulang impor dan tinjau rekonsiliasi pada tenant yang sesuai.");
+        throw new ScopeMismatchError("Perusahaan yang aktif sudah berganti. Unggah ulang berkasnya dari perusahaan yang benar, lalu periksa lagi perbandingannya.");
       }
       const result = await applySIM3LON(batchId, review);
       if (!sameScope(scopeKey(), requestScope)) {
-        throw new ScopeMismatchError("Tenant berubah saat impor diterapkan. Buka tenant semula untuk memeriksa hasilnya.");
+        throw new ScopeMismatchError("Perusahaan yang aktif berganti saat impor diterapkan. Pindah kembali ke perusahaan semula untuk memeriksa hasilnya.");
       }
       return { result, originScope: requestScope };
     },
@@ -160,7 +160,7 @@ export function useSIM3LONImport() {
       setReviewNotice(
         originScope && sameScope(scopeKey(), originScope)
           ? "Sumber atau rencana berubah setelah ditinjau. Muat ulang rekonsiliasi, periksa perubahan terbaru, lalu terima kembali."
-          : "Tenant berubah setelah peninjauan. Kembali ke tenant semula lalu muat ulang rekonsiliasi.",
+          : "Perusahaan yang aktif berganti setelah diperiksa. Pindah kembali ke perusahaan semula, lalu muat ulang perbandingannya.",
       );
     },
     invalidate: [],

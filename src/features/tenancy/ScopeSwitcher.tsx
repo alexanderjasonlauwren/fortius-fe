@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Building2, Check, ChevronDown, Layers, Network } from "lucide-react";
+import { Building2, Check, ChevronDown, Layers, Loader2, Network } from "lucide-react";
 import { useScope } from "./useScope";
+import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { businessTypeLabel } from "./businessType";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/features/auth/store/authStore";
@@ -26,6 +27,10 @@ export function ScopeSwitcher() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const permissions = useAuthStore((s) => s.user?.permissions);
+  const switching = useDeskMutation({
+    mutationFn: setTenant,
+    errorTitle: "Gagal berpindah perusahaan",
+  });
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -52,9 +57,15 @@ export function ScopeSwitcher() {
   // job is a single run, not a switch to Bimbo Holdings' own books.
   if ((branches.length <= 1 && !canSeeAll && !canSwitchTenant) || usesDriverConsole(permissions)) {
     return (
-      <span className="hidden items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-ink-muted sm:flex">
-        <Building2 className="h-3.5 w-3.5" />
-        {branch?.nama ?? "—"}
+      <span className="hidden max-w-[22rem] items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-ink-muted sm:flex">
+        <Building2 className="h-3.5 w-3.5 shrink-0" />
+        {tenant && (
+          <>
+            <span className="truncate text-ink">{tenant.nama}</span>
+            <span aria-hidden>·</span>
+          </>
+        )}
+        <span className="shrink-0">{branch?.nama ?? "—"}</span>
       </span>
     );
   }
@@ -64,7 +75,7 @@ export function ScopeSwitcher() {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-label={canSwitchTenant ? "Ganti tenant atau cabang" : "Ganti cabang"}
+        aria-label={canSwitchTenant ? "Ganti perusahaan atau cabang" : "Ganti cabang"}
         className={cn(
           "flex shrink-0 items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
           isConsolidated
@@ -83,11 +94,11 @@ export function ScopeSwitcher() {
         <span className="sm:hidden">
           {isConsolidated ? "Semua" : (branch?.kode ?? "—")}
         </span>
-        <span className="hidden max-w-[12rem] truncate sm:inline">
-          {/* Tenant first, because it is the coarser mistake. Only shown when
-              there is more than one — a single-tenant install should not carry
-              a permanent reminder of a hierarchy it does not have. */}
-          {canSwitchTenant && tenant ? `${tenant.nama} · ` : ""}
+        <span className="hidden max-w-[22rem] truncate sm:inline">
+          {/* Tenant first, because it is the coarser mistake -- and named even
+              when it is the only one: the company is whose books every page
+              shows, and a user with one membership still needs to see which. */}
+          {tenant ? `${tenant.nama} · ` : ""}
           {isConsolidated ? "Semua cabang" : (branch?.nama ?? "Pilih cabang")}
         </span>
         <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
@@ -98,20 +109,22 @@ export function ScopeSwitcher() {
           {canSwitchTenant && (
             <>
               <div className="flex items-end justify-between border-b border-line px-4 py-2.5">
-                <p className="label text-2xs text-ink-muted">Struktur tenant</p>
+                <p className="label text-2xs text-ink-muted">Struktur perusahaan</p>
                 <p className="data text-[0.625rem] text-ink-muted">01 = tertinggi</p>
               </div>
               <ul className="max-h-56 overflow-y-auto border-b border-line">
                 {orderedTenants.map((t) => {
                   const active = t.id === tenant?.id;
+                  const pending = switching.isPending && switching.variables === t.id;
                   const displayLevel = t.level + 1;
                   return (
                     <li key={t.id}>
                       <button
                         onClick={() => {
-                          setTenant(t.id);
                           setOpen(false);
+                          if (!active) switching.mutate(t.id);
                         }}
+                        disabled={switching.isPending}
                         className={cn(
                           "flex w-full items-center gap-3 border-l-2 border-transparent px-3 py-2.5 text-left transition-colors hover:bg-panel-sunk",
                           active && "border-signal bg-panel-sunk",
@@ -138,13 +151,22 @@ export function ScopeSwitcher() {
                           )}
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium text-ink">
-                              {t.nama}
+                              {t.name}
                             </span>
                             <span className="block truncate text-2xs text-ink-muted">
-                              Tingkat {displayLevel} · {t.jenis === "grup" ? "Grup induk" : businessTypeLabel(t.jenisUsaha)}
+                              Tingkat {displayLevel}
+                              {t.jenis === "grup"
+                                ? " · Grup induk"
+                                : t.jenisUsaha
+                                  ? ` · ${businessTypeLabel(t.jenisUsaha)}`
+                                  : ""}
+                              {/* Reached only by a grant from a group above:
+                                  acting here borrows the group's authority. */}
+                              {!t.viaMembership && " · lewat grup"}
                             </span>
                           </span>
                         </span>
+                        {pending && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ink-muted" />}
                         {active && <Check className="h-3.5 w-3.5 shrink-0 text-ink" />}
                       </button>
                     </li>
@@ -152,6 +174,16 @@ export function ScopeSwitcher() {
                 })}
               </ul>
             </>
+          )}
+
+          {!canSwitchTenant && tenant && (
+            <div className="flex items-center gap-2.5 border-b border-line px-4 py-2.5">
+              <Building2 className="h-4 w-4 shrink-0 text-ink-muted" />
+              <span className="min-w-0 flex-1">
+                <span className="label block text-2xs text-ink-muted">Perusahaan</span>
+                <span className="block truncate text-sm font-medium text-ink">{tenant.nama}</span>
+              </span>
+            </div>
           )}
 
           <p className="label border-b border-line px-4 py-2 text-2xs text-ink-muted">

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getList, getOne } = vi.hoisted(() => ({ getList: vi.fn(), getOne: vi.fn() }));
-vi.mock("@/lib/api", () => ({ getList, getOne }));
+vi.mock("@/lib/api", () => ({ getList, getOne, send: vi.fn() }));
 import { financeSummaryHttp } from "./financeSummary.http";
 import { reportRangeFromParam, resolveRange } from "@/features/reports/api/contract";
 
@@ -49,10 +49,23 @@ describe("dashboard financial totals", () => {
     expect(await financeSummaryHttp.getVerifiedCash(window)).toEqual({ complete: true, amount: 0 });
   });
 
-  it("reads ledger gross margin without requesting the account catalogue", async () => {
-    getOne.mockResolvedValue({ gross_profit: -100 });
+  it("reads gross margin off the trial balance without requesting the account catalogue", async () => {
+    const row = (code: string, type: string, debit: number, credit: number, role?: string) => ({
+      account_id: code, account_code: code, account_name: code, account_type: type, account_role: role,
+      opening_debit: 0, opening_credit: 0, debit, credit, closing_debit: 0, closing_credit: 0,
+    });
+    getOne.mockResolvedValue({
+      rows: [
+        row("4-1000", "revenue", 0, 1_000),
+        row("5-1000", "expense", 1_100, 0, "cogs"),
+        // Operating expense: lowers net income, not gross margin.
+        row("5-3100", "expense", 300, 0),
+      ],
+      totals: { opening_debit: 0, opening_credit: 0, debit: 0, credit: 0, closing_debit: 0, closing_credit: 0 },
+      balanced: true,
+    });
     expect(await financeSummaryHttp.getGrossMargin(window)).toEqual({ complete: true, amount: -100 });
-    expect(getOne).toHaveBeenCalledWith("/journals/profit-and-loss?date_from=2026-09-01&date_to=2026-09-18");
+    expect(getOne).toHaveBeenCalledWith("/financial-statements/trial-balance?date_from=2026-09-01&date_to=2026-09-18");
     expect(getList).not.toHaveBeenCalled();
   });
 

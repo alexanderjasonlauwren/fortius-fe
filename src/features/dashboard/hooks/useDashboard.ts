@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useQuery } from "@tanstack/react-query";
 import { useIntakePolicy } from "@/features/distribution/hooks/useIntakePolicy";
 import { useAuthStore } from "@/features/auth/store/authStore";

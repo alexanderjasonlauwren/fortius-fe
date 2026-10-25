@@ -1,4 +1,5 @@
-import { scopeKey, visibleBranches } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
+import { useScope } from "@/features/tenancy/useScope";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BarChart3, Download, Printer } from "lucide-react";
@@ -9,6 +10,7 @@ import { Panel, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { Field, SelectInput, TextInput } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
+import { ActionTooltip } from "@/components/common/ActionTooltip";
 import { formatRupiah } from "@/lib/format";
 import { exportExcel, printDocument } from "@/lib/export";
 
@@ -109,7 +111,7 @@ export function TransportationRecapPage() {
       { replace: true },
     );
 
-  const branches = visibleBranches();
+  const { branches } = useScope();
 
   const recap = useQuery({
     queryKey: [...scopeKey(), "transportation-recap", from, to, branchId],
@@ -218,14 +220,18 @@ export function TransportationRecapPage() {
         description="Nilai klaim, yang sudah lunas, dan yang masih tertagih ke prinsipal, per bulan."
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={printRecap} disabled={!totals}>
-              <Printer className="h-3.5 w-3.5" />
-              Cetak
-            </Button>
-            <Button variant="outline" onClick={exportRows} disabled={rows.length === 0}>
-              <Download className="h-3.5 w-3.5" />
-              Unduh Excel
-            </Button>
+            <ActionTooltip label="Cetak rekap periode ini (atau simpan sebagai PDF dari dialog cetak)" disabled={!totals}>
+              <Button variant="outline" onClick={printRecap} disabled={!totals}>
+                <Printer className="h-3.5 w-3.5" />
+                Cetak
+              </Button>
+            </ActionTooltip>
+            <ActionTooltip label="Unduh baris rekap sebagai berkas Excel" disabled={rows.length === 0}>
+              <Button variant="outline" onClick={exportRows} disabled={rows.length === 0}>
+                <Download className="h-3.5 w-3.5" />
+                Unduh Excel
+              </Button>
+            </ActionTooltip>
           </div>
         }
       />

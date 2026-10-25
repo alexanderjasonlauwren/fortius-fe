@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import {
   getGeofenceAlerts,
   setGeofenceAlertStatus,

@@ -40,6 +40,18 @@ function outlet(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function journalWire(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "j-0001",
+    journal_number: "JV-0001",
+    journal_date: "2026-09-01T00:00:00Z",
+    description: "fixture",
+    journal_status: "posted",
+    lines: [],
+    ...overrides,
+  };
+}
+
 function invoiceWire(overrides: Record<string, unknown> = {}) {
   const today = new Date();
   return {
@@ -87,6 +99,58 @@ describe("invoice status", () => {
     });
     const [inv] = await financeApiHttp.getInvoices();
     expect(inv.status).toBe("Lunas");
+  });
+
+  it("shows the surat jalan number a delivery invoice bills, and a dash otherwise", async () => {
+    getList.mockResolvedValue({
+      items: [
+        invoiceWire({ delivery_number: "SJ-SLT-20261001-0004" }),
+        invoiceWire({ delivery_id: undefined, invoice_type: "other" }),
+      ],
+      pagination: {},
+    });
+    const [delivery, other] = await financeApiHttp.getInvoices();
+    expect(delivery.suratJalan).toBe("SJ-SLT-20261001-0004");
+    expect(other.suratJalan).toBe("—");
+  });
+
+  it("reads a void invoice as Batal, keeping why it was voided", async () => {
+    getList.mockResolvedValue({
+      items: [invoiceWire({ payment_status: "void", void_reason: "salah outlet", outstanding_amount: 100_000 })],
+      pagination: {},
+    });
+    const [inv] = await financeApiHttp.getInvoices({ status: "Semua" });
+    expect(inv.status).toBe("Batal");
+    expect(inv.alasanBatal).toBe("salah outlet");
+    // A void invoice is never open, whatever its outstanding column says.
+    expect(await financeApiHttp.getInvoices({ status: "Belum lunas" })).toEqual([]);
+  });
+
+  it("sends a manual invoice's due date, branch and reference, and leaves blanks to the backend", async () => {
+    send.mockResolvedValue(invoiceWire({ invoice_type: "other" }));
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    await financeApiHttp.createManualInvoice({
+      invoiceType: "other", outletId: OUTLET_ID, issueDate: "2026-10-14", dueDate: "2026-10-28",
+      branchId: "b-1", referenceNumber: "PO-7", lines: [{ description: "Sewa", amount: 1, revenueAccountId: "a" }],
+    });
+    await financeApiHttp.createManualInvoice({
+      invoiceType: "other", outletId: OUTLET_ID, issueDate: "2026-10-14", dueDate: "", referenceNumber: "",
+      lines: [{ description: "Sewa", amount: 1, revenueAccountId: "a" }],
+    });
+    expect(send.mock.calls[0][2]).toMatchObject({ due_date: "2026-10-28", branch_id: "b-1", reference_number: "PO-7" });
+    expect(send.mock.calls[1][2]).toMatchObject({ due_date: undefined, branch_id: undefined, reference_number: undefined });
+  });
+
+  it("prints a product line by its product's name and a manual line by its text", async () => {
+    getOne.mockResolvedValue(invoiceWire({
+      lines: [
+        { product_id: "p-1", product_name: "LPG 3 Kg", quantity: 80, unit_price: 15_000, subtotal: 1_200_000 },
+        { description: "Sewa tabung", quantity: 1, unit_price: 50_000, subtotal: 50_000 },
+      ],
+    }));
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    const detail = await financeApiHttp.getInvoice(INVOICE_ID);
+    expect(detail.lines.map((l) => l.uraian)).toEqual(["LPG 3 Kg", "Sewa tabung"]);
   });
 
   it("maps overdue and partial to their own console statuses", async () => {
@@ -177,24 +241,39 @@ describe("payments", () => {
     expect(p.belumDialokasikan).toBe(60_000);
   });
 
-  /**
-   * No route returns which invoices a receipt was applied to (see
-   * financeApi.http.ts's own header) -- alokasi carries one synthetic line
-   * so `.length === 0` still means "nothing applied", the one thing
-   * PaymentPage actually branches on, without inventing invoice numbers.
-   */
-  it("keeps alokasi empty only when nothing has been applied yet", async () => {
+  /** A refund being paid back holds its share too (client answer 5). */
+  it("leaves out what is being refunded from what is left", async () => {
     getList.mockResolvedValue({
-      items: [paymentWire({ allocated: 0 })],
+      items: [paymentWire({ amount: 1_000_000, allocated: 500_000, refunded: 300_000 })],
       pagination: {},
     });
-    expect((await financeApiHttp.getPayments())[0].alokasi).toEqual([]);
+    const [p] = await financeApiHttp.getPayments();
+    expect(p.belumDialokasikan).toBe(200_000);
+    expect(p.dikembalikan).toBe(300_000);
+  });
 
+  /** The receipts list names the invoices each receipt paid, from the
+   *  allocation lines the list now returns. */
+  it("names the invoices a receipt was applied to, and none when unapplied", async () => {
     getList.mockResolvedValue({
-      items: [paymentWire({ allocated: 30_000 })],
+      items: [
+        paymentWire({
+          allocated: 70_000,
+          allocations: [
+            { id: "x1", invoice_id: "inv-1", invoice_number: "INV-SLT-0001", amount: 50_000 },
+            { id: "x2", invoice_id: "inv-2", invoice_number: "INV-SLT-0002", amount: 20_000 },
+          ],
+        }),
+        paymentWire({ allocated: 0 }),
+      ],
       pagination: {},
     });
-    expect((await financeApiHttp.getPayments())[0].alokasi).toHaveLength(1);
+    const [applied, unapplied] = await financeApiHttp.getPayments();
+    expect(applied.alokasi).toEqual([
+      { invoiceId: "inv-1", nomor: "INV-SLT-0001", jumlah: 50_000 },
+      { invoiceId: "inv-2", nomor: "INV-SLT-0002", jumlah: 20_000 },
+    ]);
+    expect(unapplied.alokasi).toEqual([]);
   });
 
   /**
@@ -274,49 +353,394 @@ describe("payments", () => {
       expect(body.bank_account_number).toBe("1234567890");
       expect(body.bank_reference).toBe("1234567890");
     });
+
+    it("sends the chosen method, the slip's reference and the deposit account", async () => {
+      send.mockResolvedValue(paymentWire());
+      getList.mockResolvedValue({ items: [], pagination: {} });
+      await financeApiHttp.submitPayment({
+        outletId: OUTLET_ID, jumlah: 100_000, tanggal: "2026-09-01", bank: "BCA", noRekening: "1234567890",
+        metodeId: "m-giro", referensi: " TRX-889 ", rekeningTujuanId: "ba-1",
+      });
+      const [, , body] = send.mock.calls[0];
+      expect(body).toMatchObject({
+        payment_method_id: "m-giro", bank_reference: "TRX-889", destination_bank_account_id: "ba-1",
+      });
+      // A chosen method needs no lookup.
+      expect(getList.mock.calls.some(([path]) => path === "/payment-methods")).toBe(false);
+    });
+
+    it("applies the receipt to the invoices chosen in the same form, skipping empty lines", async () => {
+      send.mockResolvedValueOnce(paymentWire({ id: "pay-9" })).mockResolvedValueOnce(paymentWire({ id: "pay-9", allocated: 60_000 }));
+      getList.mockResolvedValue({ items: [], pagination: {} });
+      await financeApiHttp.submitPayment({
+        outletId: OUTLET_ID, jumlah: 100_000, tanggal: "2026-09-01", bank: "BCA", noRekening: "1",
+        metodeId: "m-transfer",
+        alokasi: [{ invoiceId: "inv-1", jumlah: 60_000 }, { invoiceId: "inv-2", jumlah: 0 }],
+      });
+      expect(send.mock.calls[1]).toEqual(["post", "/payments/pay-9/allocations", {
+        lines: [{ invoice_id: "inv-1", amount: 60_000 }],
+      }]);
+    });
+
+    // RecordPaymentRequest.PaymentDate is a Go time.Time: a bare date was
+    // refused live as "Request body is not valid JSON", so no receipt could
+    // be recorded at all.
+    it("sends payment_date as an RFC 3339 timestamp, not a bare date", async () => {
+      getList.mockResolvedValue({ items: [{ id: "m-transfer", code: "bank_transfer" }], pagination: {} });
+      send.mockResolvedValue(paymentWire());
+
+      await financeApiHttp.submitPayment({
+        outletId: OUTLET_ID,
+        jumlah: 100_000,
+        tanggal: "2026-10-12",
+        bank: "BCA",
+        noRekening: "1234567890",
+      });
+
+      const [, , body] = send.mock.calls[0];
+      expect(body.payment_date).toBe("2026-10-12T00:00:00Z");
+    });
+  });
+});
+
+describe("credit notes", () => {
+  // IssueRequest.IssueDate is a Go time.Time — same live failure as payments.
+  it("sends the chosen reason code and the form's date as an RFC 3339 timestamp", async () => {
+    send.mockResolvedValue({
+      id: "cn-1",
+      credit_note_number: "CN-0001",
+      outlet_id: OUTLET_ID,
+      amount: 50_000,
+      issue_date: "2026-10-03T00:00:00Z",
+      credit_note_status: "issued",
+      reason_code: "goods_return",
+      reason: "Segel rusak",
+      version: 1,
+    });
+
+    await financeApiHttp.submitCreditNote({
+      outletId: OUTLET_ID,
+      invoiceId: INVOICE_ID,
+      jumlah: 50_000,
+      alasan: "Segel rusak",
+      kodeAlasan: "goods_return",
+      tanggal: "2026-10-03",
+    });
+
+    const [, path, body] = send.mock.calls[0];
+    expect(path).toBe("/credit-notes");
+    expect(body.reason_code).toBe("goods_return");
+    expect(body.issue_date).toBe("2026-10-03T00:00:00Z");
+  });
+
+  it("filters the list by the wire status and names each note's invoice", async () => {
+    getList.mockResolvedValue({
+      items: [{
+        id: "cn-1", credit_note_number: "CN-0001", outlet_id: OUTLET_ID, invoice_id: INVOICE_ID,
+        invoice_number: "INV-0009", amount: 10_000, issue_date: "2026-10-03T00:00:00Z",
+        credit_note_status: "applied", reason_code: "goodwill", reason: "x", version: 2,
+      }],
+      pagination: {},
+    });
+    const [note] = await financeApiHttp.getCreditNotes({ status: "Terpakai" });
+    expect(getList.mock.calls[0][1].filters).toEqual([
+      { field: "credit_note_status", operator: "eq", value: "applied" },
+    ]);
+    expect(note).toMatchObject({ invoiceNomor: "INV-0009", status: "Terpakai", kodeAlasan: "goodwill", version: 2 });
+  });
+
+  it("applies and cancels under the version the caller read", async () => {
+    send.mockResolvedValue({
+      id: "cn-1", credit_note_number: "CN-0001", outlet_id: OUTLET_ID, amount: 1,
+      issue_date: "2026-10-03T00:00:00Z", credit_note_status: "cancelled", reason_code: "goodwill", reason: "x", version: 3,
+    });
+    await financeApiHttp.applyCreditNote("cn-1", 2);
+    await financeApiHttp.cancelCreditNote("cn-1", 2, "salah input");
+    expect(send.mock.calls[0]).toEqual(["post", "/credit-notes/cn-1/apply", { version: 2, invoice_id: undefined }]);
+    expect(send.mock.calls[1]).toEqual(["post", "/credit-notes/cn-1/cancel", { version: 2, reason: "salah input" }]);
+  });
+});
+
+describe("journals", () => {
+  it("walks every page rather than stopping at the first 100", async () => {
+    getList
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 100 }, (_, i) => journalWire({ id: `p1-${i}` })),
+        pagination: { page: 1, page_size: 100, has_next: true, has_prev: false },
+      })
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 30 }, (_, i) => journalWire({ id: `p2-${i}` })),
+        pagination: { page: 2, page_size: 100, has_next: false, has_prev: true },
+      });
+    getOne.mockImplementation((path: string) => journalWire({ id: path.split("/").pop() }));
+
+    const journals = await financeApiHttp.getJournals();
+
+    expect(journals).toHaveLength(130);
+    expect(getList).toHaveBeenCalledTimes(2);
+    expect(getList.mock.calls[0][1]).toMatchObject({ page: 1 });
+    expect(getList.mock.calls[1][1]).toMatchObject({ page: 2 });
+  });
+
+  it("stops after one page when the server says there is no next", async () => {
+    getList.mockResolvedValueOnce({
+      items: [journalWire()],
+      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+    });
+    getOne.mockResolvedValueOnce(journalWire());
+
+    const journals = await financeApiHttp.getJournals();
+
+    expect(journals).toHaveLength(1);
+    expect(getList).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads each journal's lines and source off the list, with no request per journal", async () => {
+    getList.mockResolvedValueOnce({
+      items: [
+        journalWire({
+          id: "j-0001",
+          source_type: "purchase",
+          source_id: "p-1",
+          source_number: "PB-0007",
+          lines: [
+            { account_id: "a-1", account_code: "1-1311", account_name: "Persediaan", debit: 150_000, credit: 0 },
+            { account_id: "a-2", account_code: "2-1000", account_name: "Utang Usaha", debit: 0, credit: 150_000 },
+          ],
+        }),
+      ],
+      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+    });
+
+    const [journal] = await financeApiHttp.getJournals();
+
+    expect(getOne).not.toHaveBeenCalled();
+    expect(journal.lines).toHaveLength(2);
+    expect(journal.total).toBe(150_000);
+    expect(journal).toMatchObject({ sourceType: "purchase", sourceId: "p-1", sourceNumber: "PB-0007" });
+  });
+
+  it("keeps an expense or transport claim journal apart from a manual one", async () => {
+    getList.mockResolvedValueOnce({
+      items: [
+        journalWire({ id: "j-1", source_type: "expense" }),
+        journalWire({ id: "j-2", source_type: "transportation_claim" }),
+        journalWire({ id: "j-3", source_type: "asset_acquisition" }),
+        journalWire({ id: "j-4", source_type: "asset_disposal" }),
+      ],
+      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+    });
+    const journals = await financeApiHttp.getJournals();
+    // Read as "manual" these were offered the reverse action, which the
+    // backend then refused.
+    expect(journals.map((j) => j.sourceType)).toEqual(["expense", "transportationClaim", "assetAcquisition", "assetDisposal"]);
+  });
+
+  it("narrows the list by account and search, and names each journal's branch", async () => {
+    getList.mockResolvedValueOnce({
+      items: [journalWire({ branch_id: "br-1", branch_name: "Pool Salatiga" })],
+      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+    });
+    const [journal] = await financeApiHttp.getJournals({ from: "2026-10-01", to: "2026-10-31" }, { search: " JV-0018 ", accountId: "a-9" });
+    const params = getList.mock.calls[0][1];
+    expect(params.search).toBe("JV-0018");
+    expect(params.filters).toContainEqual({ field: "account_id", operator: "eq", value: "a-9" });
+    expect(journal).toMatchObject({ branchId: "br-1", branchName: "Pool Salatiga" });
+  });
+
+  describe("manual entry", () => {
+    // Caught live: CreateManualJournalRequest.JournalDate is a real Go
+    // time.Time, unlike every other date field this adapter sends (asset
+    // and depreciation-run requests both declare theirs as a plain
+    // validated string) -- a bare "YYYY-MM-DD" fails time.Time's own JSON
+    // unmarshal, which the binding layer reports as the generic "Request
+    // body is not valid JSON" rather than a field-level error.
+    it("sends journal_date as a full RFC3339 timestamp, not a bare date", async () => {
+      send.mockResolvedValue(journalWire());
+      await financeApiHttp.createManualJournal({
+        journalDate: "2026-10-08",
+        description: "Koreksi",
+        lines: [
+          { accountId: "a-1", debit: 50_000, kredit: 0 },
+          { accountId: "a-2", debit: 0, kredit: 50_000 },
+        ],
+      });
+      const [, , body] = send.mock.calls[0];
+      expect(body.journal_date).toBe("2026-10-08T00:00:00Z");
+    });
+
+    it("sends the branch and each line's memo, trimmed, blank memos dropped", async () => {
+      send.mockResolvedValue(journalWire());
+      await financeApiHttp.createManualJournal({
+        branchId: "br-1",
+        journalDate: "2026-10-08",
+        description: "Akrual sewa",
+        lines: [
+          { accountId: "a-1", debit: 50_000, kredit: 0, memo: " sewa Oktober " },
+          { accountId: "a-2", debit: 0, kredit: 50_000, memo: "  " },
+        ],
+      });
+      const [, , body] = send.mock.calls[0];
+      expect(body.branch_id).toBe("br-1");
+      expect(body.lines.map((l: { memo?: string }) => l.memo)).toEqual(["sewa Oktober", undefined]);
+    });
+
+    it("sends the version to reverse a journal", async () => {
+      send.mockResolvedValue(journalWire());
+      await financeApiHttp.reverseJournal("j-0001", 2);
+      const [method, path, body] = send.mock.calls[0];
+      expect(method).toBe("post");
+      expect(path).toBe("/journals/j-0001/reverse");
+      expect(body).toEqual({ version: 2 });
+    });
   });
 });
 
 describe("trial balance", () => {
-  /**
-   * A contra account (sales_returns) shares its account_type with a normal
-   * revenue account but increases on the opposite side -- signing every row
-   * by account_type alone would show a return as negative revenue reducing
-   * the total twice. Reading normal_balance off /accounts is what this
-   * exists to get right instead.
-   */
-  it("signs a contra account's balance using its own normal_balance, not its type", async () => {
+  const row = (code: string, type: string, debit: number, credit: number, role?: string) => ({
+    account_id: `id-${code}`, account_code: code, account_name: code, account_type: type, account_role: role,
+    opening_debit: 0, opening_credit: 0, debit, credit, closing_debit: debit, closing_credit: credit,
+  });
+  const totals = { opening_debit: 0, opening_credit: 0, debit: 0, credit: 0, closing_debit: 0, closing_credit: 0 };
+
+  it("asks the statement engine for the whole range, not a point in time", async () => {
+    getOne.mockResolvedValue({ rows: [], totals, balanced: true });
+    await financeApiHttp.getTrialBalance({ from: "2026-09-01", to: "2026-09-30" });
+    expect(getOne.mock.calls[0][0]).toBe(
+      "/financial-statements/trial-balance?date_from=2026-09-01&date_to=2026-09-30",
+    );
+    // The trial balance no longer needs /accounts, which finance_officer
+    // cannot read.
+    expect(getList).not.toHaveBeenCalled();
+  });
+
+  it("keeps opening, movement and closing on their own sides", async () => {
+    getOne.mockResolvedValue({
+      rows: [{ ...row("1-1000", "asset", 200, 50), opening_debit: 1_000, closing_debit: 1_150, closing_credit: 0 }],
+      totals: { ...totals, opening_debit: 1_000, closing_debit: 1_150 },
+      balanced: false,
+    });
+    const tb = await financeApiHttp.getTrialBalance({ from: "2026-09-01", to: "2026-09-30" });
+    expect(tb.rows[0]).toMatchObject({
+      saldoAwalDebit: 1_000, saldoAwalKredit: 0, debit: 200, kredit: 50,
+      saldoAkhirDebit: 1_150, saldoAkhirKredit: 0,
+    });
+    expect(tb.totals.saldoAkhirDebit).toBe(1_150);
+    expect(tb.seimbang).toBe(false);
+  });
+});
+
+describe("profit and loss from the trial balance", () => {
+  const row = (code: string, type: string, debit: number, credit: number, role?: string) => ({
+    account_id: `id-${code}`, account_code: code, account_name: code, account_type: type, account_role: role,
+    opening_debit: 0, opening_credit: 0, debit, credit, closing_debit: 0, closing_credit: 0,
+  });
+
+  it("nets a sales return against revenue and takes only HPP out of gross profit", async () => {
+    getOne.mockResolvedValue({
+      rows: [
+        row("1-1000", "asset", 1_000_000, 0),
+        row("4-1000", "revenue", 0, 1_000_000, "revenue"),
+        row("4-2000", "revenue", 50_000, 0, "sales_returns"),
+        row("5-1000", "expense", 600_000, 0, "cogs"),
+        row("5-3100", "expense", 100_000, 0),
+      ],
+      totals: {}, balanced: true,
+    });
+    const pl = await financeApiHttp.getProfitAndLoss({ from: "2026-09-01", to: "2026-09-30" });
+    expect(pl.totalPendapatan).toBe(950_000);
+    expect(pl.pendapatan.find((r) => r.akun.kode === "4-2000")!.saldo).toBe(-50_000);
+    expect(pl.labaKotor).toBe(350_000);
+    expect(pl.totalBeban).toBe(700_000);
+    expect(pl.labaBersih).toBe(250_000);
+    // Balance-sheet accounts are not part of the laba rugi.
+    expect([...pl.pendapatan, ...pl.beban].some((r) => r.akun.kode === "1-1000")).toBe(false);
+  });
+});
+
+describe("chart of accounts: create + upgrade (phase P1)", () => {
+  it("maps a create-account input to the backend's wire shape", async () => {
+    send.mockResolvedValue({
+      id: "a9", code: "1-9000", name: "Akun Kustom", account_type: "asset",
+      normal_balance: "dr", is_system: false,
+    });
+
+    await financeApiHttp.createAccount({
+      kode: "1-9000",
+      nama: "Akun Kustom",
+      tipe: "Aset",
+      indukId: "PARENT_ID",
+      deskripsi: "Ditambahkan manual",
+    });
+
+    expect(send).toHaveBeenCalledWith("post", "/accounts", {
+      code: "1-9000",
+      name: "Akun Kustom",
+      account_type: "asset",
+      parent_id: "PARENT_ID",
+      description: "Ditambahkan manual",
+    });
+  });
+
+  it("sends dry_run and maps the upgrade response, defaulting null arrays to empty", async () => {
+    send.mockResolvedValue({
+      dry_run: true,
+      accounts_added: ["1-2100", "1-2900"],
+      layouts_added: null,
+      conflicts: [{ code: "1-2100", reason: "exists as liability, seed expects asset" }],
+    });
+
+    const result = await financeApiHttp.upgradeChart(true);
+
+    expect(send).toHaveBeenCalledWith("post", "/accounts/chart-upgrade", { dry_run: true });
+    expect(result).toEqual({
+      dryRun: true,
+      akunDitambahkan: ["1-2100", "1-2900"],
+      layoutDitambahkan: [],
+      konflik: [{ kode: "1-2100", alasan: "exists as liability, seed expects asset" }],
+    });
+  });
+
+  it("defaults dryRun to true when the caller passes nothing", async () => {
+    send.mockResolvedValue({ dry_run: true, accounts_added: [], layouts_added: [], conflicts: [] });
+
+    await financeApiHttp.upgradeChart();
+
+    expect(send).toHaveBeenCalledWith("post", "/accounts/chart-upgrade", { dry_run: true });
+  });
+
+  // Caught live posting a manual journal to "5-4000 Beban Umum dan
+  // Administrasi", a grouping header still selectable because `induk` was
+  // never resolved from the wire's `parent_id` (gap-closing plan, Phase E) --
+  // leafAccounts() silently excluded nothing against the real API.
+  it("resolves induk from the parent's own code, not left undefined", async () => {
     getList.mockResolvedValue({
       items: [
-        { id: "a1", code: "4-1000", name: "Penjualan", account_type: "revenue", normal_balance: "cr", is_system: true },
-        { id: "a2", code: "4-2000", name: "Retur Penjualan", account_type: "revenue", normal_balance: "dr", is_system: true },
+        { id: "p1", code: "5-4000", name: "Beban Umum dan Administrasi", account_type: "expense", normal_balance: "dr", is_system: true },
+        { id: "c1", code: "5-4100", name: "Gaji Pokok Staff", account_type: "expense", normal_balance: "dr", is_system: true, parent_id: "p1" },
       ],
       pagination: {},
     });
-    getOne.mockResolvedValue({
-      as_of: "2026-09-01",
-      rows: [
-        { account_code: "4-1000", account_name: "Penjualan", account_type: "revenue", debit: 0, credit: 1_000_000 },
-        { account_code: "4-2000", account_name: "Retur Penjualan", account_type: "revenue", debit: 50_000, credit: 0 },
-      ],
-      total_debit: 50_000,
-      total_credit: 1_000_000,
-    });
+    getOne.mockResolvedValue({ as_of: "2026-10-08", rows: [], total_debit: 0, total_credit: 0 });
 
-    const tb = await financeApiHttp.getTrialBalance({ from: "2026-09-01", to: "2026-09-30" });
-    const retur = tb.rows.find((r) => r.akun.kode === "4-2000")!;
-    // Debit-normal: saldo is debit - credit, positive when it is really a
-    // debit balance, not negated the way a naive "revenue is credit-normal"
-    // rule would compute it.
-    expect(retur.saldo).toBe(50_000);
+    const rows = await financeApiHttp.getChartOfAccounts();
+
+    expect(rows.find((r) => r.akun.kode === "5-4000")?.akun.induk).toBeUndefined();
+    expect(rows.find((r) => r.akun.kode === "5-4100")?.akun.induk).toBe("5-4000");
   });
 
-  it("sends the range's end date as as_of, since the ledger's trial balance is a point in time", async () => {
-    getList.mockResolvedValue({ items: [], pagination: {} });
-    getOne.mockResolvedValue({ as_of: "2026-09-30", rows: [], total_debit: 0, total_credit: 0 });
-
-    await financeApiHttp.getTrialBalance({ from: "2026-09-01", to: "2026-09-30" });
-
-    expect(getOne.mock.calls[0][0]).toBe("/journals/trial-balance?as_of=2026-09-30");
+  it("flags a control account and everything under it, and nothing else", async () => {
+    getList.mockResolvedValue({
+      items: [
+        { id: "b", code: "1-1100", name: "Bank", account_type: "asset", normal_balance: "dr", is_system: true, role: "bank" },
+        { id: "b1", code: "1-1101", name: "Bank BCA", account_type: "asset", normal_balance: "dr", is_system: false, parent_id: "b" },
+        { id: "e", code: "5-3300", name: "Beban Pemeliharaan", account_type: "expense", normal_balance: "dr", is_system: false },
+      ],
+      pagination: {},
+    });
+    getOne.mockResolvedValue({ rows: [], totals: {}, balanced: true });
+    const rows = await financeApiHttp.getChartOfAccounts();
+    const flag = (code: string) => rows.find((r) => r.akun.kode === code)?.akun.kontrol;
+    expect([flag("1-1100"), flag("1-1101"), flag("5-3300")]).toEqual([true, true, false]);
   });
 });

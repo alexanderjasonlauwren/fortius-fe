@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
 /**
  * The HTTP adapter's mapping for the system screen's remainder, following
@@ -83,34 +83,6 @@ describe("getSupplierList", () => {
   });
 });
 
-/**
- * assertMockAllowed only throws when `usesApi` is true, which is a
- * module-level constant `@/lib/dataSource` computes once from
- * VITE_DATA_SOURCE at import time -- this file's own top-level import ran
- * under the test environment's default (unset, so "mock"), which is why
- * these two guards need their own fresh, stubbed-env import rather than
- * reusing `systemApiHttp` above. Same dance `dataSource.test.ts` itself
- * uses to test the same constant.
- */
-async function loadInApiMode() {
-  vi.resetModules();
-  vi.stubEnv("VITE_DATA_SOURCE", "api");
-  return import("./systemApi.http");
-}
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.resetModules();
-});
-
-describe("saveSupplier and deleteSupplier", () => {
-  it("both refuse -- there is no master table to write to", async () => {
-    const { systemApiHttp: api } = await loadInApiMode();
-    await expect(api.saveSupplier({ nama: "Test" })).rejects.toThrow(/no HTTP adapter/);
-    await expect(api.deleteSupplier("x")).rejects.toThrow(/no HTTP adapter/);
-  });
-});
-
 describe("getSystemConfig", () => {
   it("returns the fixed document prefixes and the real operations settings", async () => {
     getSettings.mockResolvedValue({
@@ -127,21 +99,6 @@ describe("getSystemConfig", () => {
       sertakanTanggal: true,
     });
     expect(config.operasi.durasiSinggahMenit).toBe(20);
-  });
-});
-
-describe("saveNumbering", () => {
-  it("refuses -- document prefixes are fixed at provisioning time, not a tenant setting", async () => {
-    const { systemApiHttp: api } = await loadInApiMode();
-    await expect(
-      api.saveNumbering({
-        suratJalan: "X",
-        invoice: "Y",
-        rencana: "Z",
-        pesanan: "W",
-        sertakanTanggal: true,
-      }),
-    ).rejects.toThrow(/no HTTP adapter/);
   });
 });
 

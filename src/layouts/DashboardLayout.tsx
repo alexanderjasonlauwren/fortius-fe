@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import { useAuthStore } from "@/features/auth/store/authStore";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
-import { useOpsClock } from "@/hooks/useOpsClock";
 import { useSidebarShortcut, useSidebarStore } from "@/hooks/useSidebar";
 import { useScope } from "@/features/tenancy/useScope";
-import { getTenants } from "@/features/tenancy/api/tenancyApi";
-import { setTenantRegistry } from "@/features/tenancy/tenantRegistry";
+import { LinkTenantBanner } from "@/features/tenancy/LinkTenantBanner";
+import { getBranches, getTenants } from "@/features/tenancy/api/tenancyApi";
+import { setBranchRegistry, setTenantRegistry } from "@/features/tenancy/tenantRegistry";
 import { getSettings } from "@/features/settings/api/settingsApi";
 import { hydrateLexicon, setLexicon } from "@/lib/lexicon";
-import { scopeKey } from "@/mocks/scope";
+import { getActingTenant, scopeKey } from "@/lib/scope";
 import { cn } from "@/lib/utils";
 
 export function DashboardLayout() {
@@ -29,6 +31,20 @@ export function DashboardLayout() {
   });
   if (tenantList.data) setTenantRegistry(tenantList.data);
 
+  // Same pattern for branches. A tenant switch empties the registry and clears
+  // the cache, so this refetches for the new tenant.
+  // Only for a role that may read branches: the finance officer may not,
+  // and every page it opened fired a 403 here (regression 2026-10-24 F16).
+  // Without the list there is simply no branch to pick.
+  const canReadBranches = useAuthStore((s) => s.hasPermission(PERMISSIONS.BRANCHES_VIEW));
+  const branchList = useQuery({
+    queryKey: ["branches", "registry"],
+    queryFn: () => getBranches(getActingTenant()),
+    staleTime: 5 * 60_000,
+    enabled: canReadBranches,
+  });
+  if (branchList.data) setBranchRegistry(branchList.data);
+
   const scope = useScope();
   const { branchId } = scope;
 
@@ -45,8 +61,6 @@ export function DashboardLayout() {
   hydrateLexicon(scope.tenant?.id ?? "");
   if (settings.data) setLexicon(settings.data.istilah, scope.tenant?.id ?? "");
 
-  // Keeps today's run moving while the console is open.
-  useOpsClock();
   useSidebarShortcut();
 
   // Lock the page behind the mobile drawer. (The drawer closes itself: every
@@ -99,14 +113,16 @@ export function DashboardLayout() {
 
       <div className="flex min-h-screen min-w-0 flex-col">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        {/* Keyed on the branch: pages do not read the URL themselves, so without
+        {/* Keyed on the scope: pages do not read the URL themselves, so without
             a remount their query keys would keep the scope they were last
-            rendered with and quietly show the previous branch's data. */}
+            rendered with and quietly show the previous tenant's or branch's
+            data. */}
         <main
           id="konten"
-          key={branchId ?? "semua"}
+          key={`${scope.tenant?.id ?? ""}:${branchId ?? "semua"}`}
           className="flex-1 px-4 pb-14 pt-6 sm:px-6 lg:px-7"
         >
+          <LinkTenantBanner />
           <Outlet />
         </main>
       </div>

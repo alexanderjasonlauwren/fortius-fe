@@ -35,6 +35,12 @@ export interface ProductView extends ProductEntity {
   stokTersedia: boolean;
 }
 
+export interface UnitOption {
+  id: string;
+  name: string;
+  abbreviation: string;
+}
+
 export interface ProductFilters {
   search?: string;
   onlyLowStock?: boolean;
@@ -60,5 +66,31 @@ export interface ProductApi {
   /** Mock-only in this build — see `productApi.http.ts`'s own note. */
   changeStock(id: string, delta: number, alasan: string): Promise<ProductView>;
   getStockSummary(): Promise<StockSummary>;
+  /** The global measurement units a product's unit names. */
+  getUnits(): Promise<UnitOption[]>;
+  /** A product's transport-fee rates, newest period first. */
+  getTariffs(productId: string): Promise<TransportTariff[]>;
+  /** Sets a new rate from a date; the open one is closed the day before. */
+  createTariff(productId: string, input: NewTransportTariff): Promise<TransportTariff>;
   exportProducts(): Promise<number>;
+}
+
+/**
+ * A transport-fee rate for a product and period. Priced per tabung
+ * (`per_unit`, the default since client decision G5) or per kg.
+ */
+export interface TransportTariff {
+  id: string;
+  rateBasis: "per_unit" | "per_kg";
+  rate: number;
+  principalReference?: string;
+  effectiveFrom: string;
+  effectiveUntil?: string;
+}
+
+export interface NewTransportTariff {
+  rateBasis: "per_unit" | "per_kg";
+  rate: number;
+  effectiveFrom: string;
+  principalReference?: string;
 }

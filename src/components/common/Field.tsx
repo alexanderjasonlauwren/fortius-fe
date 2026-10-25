@@ -1,6 +1,10 @@
 import { forwardRef, useId, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, FileText, Upload, X } from "lucide-react";
+import { FileText, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CONTROL } from "./controlStyles";
+import { DateInput, MonthInput } from "./DateInput";
+
+export { SelectInput } from "./SelectInput";
 
 /**
  * Form controls for the console.
@@ -9,9 +13,6 @@ import { cn } from "@/lib/utils";
  * does exactly one job. Inputs are underlined on a sunk surface rather than
  * boxed, so a dense form reads as a filled-in sheet.
  */
-
-const CONTROL =
-  "w-full rounded-sm border-b-2 border-line-strong bg-panel-sunk px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-muted hover:border-ink-muted focus:border-signal disabled:cursor-not-allowed disabled:opacity-55";
 
 export function Field({
   label,
@@ -54,19 +55,28 @@ export function Field({
 export const TextInput = forwardRef<
   HTMLInputElement,
   React.ComponentProps<"input"> & { invalid?: boolean; mono?: boolean }
->(({ className, invalid, mono, ...props }, ref) => (
-  <input
-    ref={ref}
-    aria-invalid={invalid || undefined}
-    className={cn(
-      CONTROL,
-      mono && "data",
-      invalid && "border-rust focus:border-rust",
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, invalid, mono, type, ...props }, ref) => {
+  // The browser's date and month popups ignore the theme; these types get the
+  // console's own calendar with the same value format and onChange contract.
+  if (type === "date" || type === "month") {
+    const Picker = type === "date" ? DateInput : MonthInput;
+    return <Picker ref={ref} className={className} invalid={invalid} mono={mono} {...props} />;
+  }
+  return (
+    <input
+      ref={ref}
+      type={type}
+      aria-invalid={invalid || undefined}
+      className={cn(
+        CONTROL,
+        mono && "data",
+        invalid && "border-rust focus:border-rust",
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 TextInput.displayName = "TextInput";
 
 export const TextareaInput = forwardRef<
@@ -86,32 +96,6 @@ export const TextareaInput = forwardRef<
   />
 ));
 TextareaInput.displayName = "TextareaInput";
-
-export const SelectInput = forwardRef<
-  HTMLSelectElement,
-  React.ComponentProps<"select"> & { invalid?: boolean }
->(({ className, invalid, children, ...props }, ref) => (
-  <div className="relative">
-    <select
-      ref={ref}
-      aria-invalid={invalid || undefined}
-      className={cn(
-        CONTROL,
-        "appearance-none pr-9",
-        invalid && "border-rust focus:border-rust",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </select>
-    <ChevronDown
-      className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted"
-      aria-hidden
-    />
-  </div>
-));
-SelectInput.displayName = "SelectInput";
 
 /** On/off with the reason for it stated next to the control. */
 export function Toggle({
@@ -291,6 +275,9 @@ export function SegmentedControl<T extends string>({
         return (
           <button
             key={option.value}
+            // Not a submit button: segmented choices sit inside forms, where
+            // a typeless button submits the form on every click.
+            type="button"
             role="tab"
             aria-selected={active}
             onClick={() => onChange(option.value)}
@@ -339,7 +326,10 @@ export function SearchInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className={cn(CONTROL, "pr-8")}
+        // A hint wider than its box is cut mid-word and reads as a typo
+        // ("penerir"); an ellipsis says there is more, and the title shows it.
+        title={placeholder}
+        className={cn(CONTROL, "pr-8 text-ellipsis")}
       />
       {value && (
         <button

@@ -22,8 +22,10 @@
  */
 import { getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
+import { financeApiHttp } from "@/features/finance/api/financeApi.http";
+import { leafAccounts } from "@/features/finance/lib/accounts";
 import type { ProductEntity } from "@/types/domain";
-import type { ProductApi, ProductFilters, ProductView, StockSummary } from "./contract";
+import type { NewTransportTariff, ProductApi, ProductFilters, ProductView, StockSummary, TransportTariff, UnitOption } from "./contract";
 
 const PAGE_SIZE = 100;
 
@@ -47,6 +49,10 @@ interface ProductResponse {
   margin?: number;
   margin_percent?: number;
   status: string;
+  product_kind: string;
+  inventory_account_code?: string;
+  revenue_account_code?: string;
+  cogs_account_code?: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -63,7 +69,7 @@ async function resolveDefaultCategory(): Promise<string> {
   const first = categories[0];
   if (!first) {
     throw new Error(
-      "Tenant ini belum memiliki kategori produk terdaftar, jadi produk baru tidak dapat dibuat.",
+      "Perusahaan ini belum punya kategori produk, jadi produk baru belum bisa dibuat.",
     );
   }
   return first.code;
@@ -88,7 +94,7 @@ function parseWeightKg(ukuran: string): number {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(
       `"${ukuran}" tidak mengandung angka berat yang valid (contoh: "12 kg"). ` +
-        "Bangun ini menyimpan ukuran sebagai berat produk di build API.",
+        "Ukuran disimpan sebagai berat produk dalam kg.",
     );
   }
   return value;
@@ -108,6 +114,14 @@ function toView(row: ProductResponse): ProductView {
     stok: 0,
     stokMinimum: row.min_stock,
     aktif: row.status === "atv",
+    productKind: row.product_kind === "accessory" || row.product_kind === "container" ? row.product_kind : "commodity",
+    unitId: row.unit_id,
+    deskripsi: row.description,
+    merek: row.brand,
+    barcode: row.barcode,
+    inventoryAccountCode: row.inventory_account_code,
+    revenueAccountCode: row.revenue_account_code,
+    cogsAccountCode: row.cogs_account_code,
     // Absent (either price not yet set) reads the same as 0 here — ProductView
     // has no separate "unknown" state, unlike the response DTO it comes from.
     margin: row.margin ?? 0,
@@ -186,19 +200,81 @@ function generateCode(name: string): string {
   return `${slug}-${Date.now().toString(36).toUpperCase().slice(-6)}`;
 }
 
+/**
+ * Resolves an override's own account code to the id `*_account_id` wants --
+ * ProductEntity carries the code (what ProductResponse hands back), never
+ * the id. Refuses a parent/grouping account the same way every other
+ * account picker in this console does since the live-caught gap-closing
+ * plan Phase E bug (ledger.Post's own leaf-only posting guard).
+ */
+async function resolveAccountId(code: string | undefined): Promise<string | undefined> {
+  if (!code) return undefined;
+  const accounts = leafAccounts(await financeApiHttp.getChartOfAccounts());
+  const match = accounts.find((a) => a.akun.kode === code);
+  if (!match) {
+    throw new Error(`Akun "${code}" tidak ditemukan, atau merupakan akun induk. Pilih akun turunannya.`);
+  }
+  return match.akun.id;
+}
+
+/**
+ * Unit, description, brand and barcode, trimmed. A blank field is left out
+ * when creating, and sent as "" when editing: the backend reads an absent
+ * field as "unchanged", so leaving it out would keep the old value.
+ */
+function descriptiveFields(input: Partial<ProductEntity>, editing: boolean) {
+  const text = (v: string | undefined) => {
+    if (v === undefined) return undefined;
+    const t = v.trim();
+    return t || (editing ? "" : undefined);
+  };
+  return {
+    unit_id: input.unitId || undefined,
+    description: text(input.deskripsi),
+    brand: text(input.merek),
+    barcode: text(input.barcode),
+  };
+}
+
+async function getUnits(): Promise<UnitOption[]> {
+  const rows = await getOne<{ id: string; name: string; abbreviation: string }[]>("/products/units");
+  return (rows ?? []).map((u) => ({ id: u.id, name: u.name, abbreviation: u.abbreviation }));
+}
+
 async function createOrUpdateProduct(
   input: Partial<ProductEntity> & { id?: string },
 ): Promise<ProductView> {
-  const weightKg = input.ukuran !== undefined ? parseWeightKg(input.ukuran) : undefined;
+  // An accessory has no weight of its own (CreateProductRequest.WeightKg's
+  // own doc) -- never parsed, not even when ukuran round-trips back as
+  // toUkuran(0) === "0 kg" (a truthy string) on every subsequent edit.
+  // Caught live, in two stages: creating an accessory with Ukuran left
+  // blank threw "tidak mengandung angka berat yang valid" (fixed by
+  // skipping an empty ukuran); re-saving that SAME accessory afterward
+  // threw again, since its own detail reads back "0 kg", not "" -- skipping
+  // by product kind, not by string emptiness, is what actually closes this.
+  const weightKg =
+    input.productKind === "accessory" || input.productKind === "container"
+      ? undefined
+      : input.ukuran ? parseWeightKg(input.ukuran) : undefined;
 
   if (!input.id) {
     const category = await resolveDefaultCategory();
+    const [inventoryAccountId, revenueAccountId, cogsAccountId] = await Promise.all([
+      resolveAccountId(input.inventoryAccountCode),
+      resolveAccountId(input.revenueAccountCode),
+      resolveAccountId(input.cogsAccountCode),
+    ]);
     const created = await send<ProductResponse>("post", "/products", {
       code: input.kode?.trim() || generateCode(input.nama ?? ""),
       name: input.nama,
       category,
       weight_kg: weightKg,
       min_stock: input.stokMinimum,
+      product_kind: input.productKind,
+      ...descriptiveFields(input, false),
+      inventory_account_id: inventoryAccountId,
+      revenue_account_id: revenueAccountId,
+      cogs_account_id: cogsAccountId,
     });
     const pricedCost = !!input.hargaBeli;
     const pricedSell = !!input.hargaJual;
@@ -212,13 +288,22 @@ async function createOrUpdateProduct(
   }
 
   const current = await getOne<ProductResponse>(`/products/${input.id}`);
+  const [inventoryAccountId, revenueAccountId, cogsAccountId] = await Promise.all([
+    resolveAccountId(input.inventoryAccountCode),
+    resolveAccountId(input.revenueAccountCode),
+    resolveAccountId(input.cogsAccountCode),
+  ]);
   const updated = await send<ProductResponse>("put", `/products/${input.id}`, {
     version: current.version,
     code: input.kode,
     name: input.nama,
     weight_kg: weightKg,
     min_stock: input.stokMinimum,
+    ...descriptiveFields(input, true),
     status: input.aktif !== undefined ? (input.aktif ? "atv" : "ina") : undefined,
+    inventory_account_id: inventoryAccountId,
+    revenue_account_id: revenueAccountId,
+    cogs_account_id: cogsAccountId,
   });
   if (input.hargaBeli !== undefined) {
     await syncPricing(input.id, "cost", input.hargaBeli, current.current_cost_price ?? 0);
@@ -245,7 +330,7 @@ async function removeProduct(id: string): Promise<void> {
  * not a normal path.
  */
 async function changeStock(): Promise<ProductView> {
-  throw new Error("Penyesuaian stok belum tersedia dari API di build ini.");
+  throw new Error("Penyesuaian stok belum tersedia di sini. Koreksi stok lewat stok opname di menu Persediaan.");
 }
 
 async function getStockSummary(): Promise<StockSummary> {
@@ -271,6 +356,39 @@ async function exportProducts(): Promise<number> {
   return rows.length;
 }
 
+interface TariffResponse {
+  id: string;
+  rate_basis: "per_unit" | "per_kg";
+  rate: number;
+  principal_reference?: string;
+  effective_from: string;
+  effective_until?: string;
+}
+
+function toTariff(r: TariffResponse): TransportTariff {
+  return {
+    id: r.id,
+    rateBasis: r.rate_basis,
+    rate: r.rate,
+    principalReference: r.principal_reference,
+    effectiveFrom: r.effective_from,
+    effectiveUntil: r.effective_until,
+  };
+}
+
+async function getTariffs(productId: string): Promise<TransportTariff[]> {
+  return ((await getOne<TariffResponse[]>(`/products/${productId}/transport-fee-tariffs`)) ?? []).map(toTariff);
+}
+
+async function createTariff(productId: string, input: NewTransportTariff): Promise<TransportTariff> {
+  return toTariff(await send<TariffResponse>("post", `/products/${productId}/transport-fee-tariffs`, {
+    rate_basis: input.rateBasis,
+    rate: input.rate,
+    effective_from: input.effectiveFrom,
+    principal_reference: input.principalReference || undefined,
+  }));
+}
+
 export const productApiHttp: ProductApi = {
   getProducts,
   getProductDetail,
@@ -279,4 +397,7 @@ export const productApiHttp: ProductApi = {
   changeStock,
   getStockSummary,
   exportProducts,
+  getUnits,
+  getTariffs,
+  createTariff,
 };

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ manual: false, pending: false, error: false, plans: vi.fn(), outlets: vi.fn(), orders: vi.fn() }));
-vi.mock("@/mocks/scope", () => ({ scopeKey: () => ["tenant", "branch"] }));
+vi.mock("@/lib/scope", () => ({ scopeKey: () => ["tenant", "branch"] }));
 vi.mock("@/hooks/useToast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/features/distribution/hooks/useIntakePolicy", () => ({ useIntakePolicy: () => ({ allowsManualIntake: state.manual, isPending: state.pending, isError: state.error, refetch: vi.fn() }) }));
 vi.mock("@/features/orders/api/orderApi", () => ({

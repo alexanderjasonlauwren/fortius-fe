@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -251,8 +251,8 @@ export function TransactionListPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Keuangan"
-        title="Rekap Transaksi"
-        description="Seluruh baris transaksi — surat jalan beserta tagihannya, ditambah kwitansi yang masuk lewat pindaian. Saring, lalu unduh untuk diolah di Excel."
+        title="Daftar Penjualan"
+        description="Setiap surat jalan beserta tagihan dan status bayarnya, ditambah kwitansi yang masuk lewat pindaian. Pakai sebagai daftar kerja untuk menagih yang belum ditagih atau belum lunas. Saring, lalu unduh untuk diolah di Excel."
         actions={
           <CanAccess permission={PERMISSIONS.TRANSACTIONS_EXPORT}>
             <Button
@@ -342,7 +342,7 @@ export function TransactionListPage() {
             <SearchInput
               value={filters.search ?? ""}
               onChange={(search) => patch({ search })}
-              placeholder={`Surat jalan, invoice, ${outletLabel()}, driver, atau plat`}
+              placeholder={`Surat jalan, invoice, ${outletLabel()}, sopir, atau plat`}
             />
           </Field>
 

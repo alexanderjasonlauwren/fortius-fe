@@ -39,7 +39,7 @@
  * actually been billed so far.
  */
 import { getList } from "@/lib/api";
-import { addDays, isoDate } from "@/mocks/seed";
+import { addDays, isoDate } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getDrivers } from "@/features/drivers/api/driverApi";
 import { exportCsv, exportExcel, timestampSuffix, type ExcelColumn } from "@/lib/export";
@@ -52,6 +52,8 @@ import type {
   TransactionsApi,
   TransactionSummary,
 } from "./contract";
+import { holds } from "@/features/rbac/holds";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 
 /** 100 is every list definition's MaxPageSize; the server refuses more. */
 const PAGE_SIZE = 100;
@@ -231,7 +233,12 @@ async function getTransactionSummary(filters?: TransactionFilters): Promise<Tran
  * delivery, and a filter option is not one delivery.
  */
 async function getTransactionFilterOptions(): Promise<TransactionFilterOptions> {
-  const [outlets, drivers] = await Promise.all([getOutletList(), getDrivers()]);
+  // A role that may see sales but not drivers gets no driver filter rather
+  // than a 403 on every visit.
+  const [outlets, drivers] = await Promise.all([
+    getOutletList(),
+    holds(PERMISSIONS.DRIVERS_VIEW) ? getDrivers() : Promise.resolve([]),
+  ]);
   return {
     outlet: outlets
       .map((o) => ({ id: o.id, label: o.nama }))
@@ -254,7 +261,7 @@ const EXPORT_COLUMNS: ExcelColumn<TransactionRow>[] = [
   { header: `Kode ${outletLabelTitle()}`, value: (r) => r.kodeOutlet, width: 14 },
   { header: outletLabelTitle(), value: (r) => r.outlet, width: 26 },
   { header: "Kecamatan", value: (r) => r.kecamatan, width: 16 },
-  { header: "Driver", value: (r) => r.driver, width: 18 },
+  { header: "Sopir", value: (r) => r.driver, width: 18 },
   { header: "Plat", value: (r) => r.plat, width: 12 },
   { header: `Target (${unitLabel()})`, value: (r) => r.target, type: "number", width: 13 },
   { header: `Realisasi (${unitLabel()})`, value: (r) => r.realisasi, type: "number", width: 15 },
@@ -276,14 +283,14 @@ const EXPORT_COLUMNS: ExcelColumn<TransactionRow>[] = [
 
 async function exportTransactionsExcel(filters?: TransactionFilters): Promise<number> {
   const rows = await fetchRows(filters);
-  exportExcel(`rekap-transaksi-${timestampSuffix()}`, "Rekap Transaksi", EXPORT_COLUMNS, rows);
+  exportExcel(`daftar-penjualan-${timestampSuffix()}`, "Daftar Penjualan", EXPORT_COLUMNS, rows);
   return rows.length;
 }
 
 async function exportTransactionsCsv(filters?: TransactionFilters): Promise<number> {
   const rows = await fetchRows(filters);
   exportCsv(
-    `rekap-transaksi-${timestampSuffix()}`,
+    `daftar-penjualan-${timestampSuffix()}`,
     EXPORT_COLUMNS.map((c) => c.header),
     rows.map((row) =>
       EXPORT_COLUMNS.map((c) => {

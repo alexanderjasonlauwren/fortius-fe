@@ -1,26 +1,25 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, History, Pencil, Trash2, UserPlus, Users } from "lucide-react";
+import { KeyRound, Pencil, Trash2, UserPlus, Users } from "lucide-react";
 import {
   createOrUpdateUser,
-  exportUsers,
-  getAuditTrail,
   getUsersWithAccess,
   removeUser,
   ROLE_LABEL,
-  ROLE_SUMMARY,
 } from "@/features/users/api/userApi";
 import { describeRoles } from "@/features/rbac/access";
-import { getDrivers } from "@/features/drivers/api/driverApi";
+import { RoleGrantDialog } from "@/features/users/components/RoleGrantDialog";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
-import { Panel, PanelHeader, Skeleton } from "@/components/common/Panel";
+import { Panel, PanelHeader } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getStatusVariant, spineFor } from "@/lib/status";
-import { Field, SearchInput, SegmentedControl, SelectInput, TextInput } from "@/components/common/Field";
+import { Field, SearchInput, SegmentedControl, TextInput } from "@/components/common/Field";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatDateTimeId, relativeTime } from "@/lib/format";
-import type { UserEntity } from "@/mocks/types";
+import type { UserEntity } from "@/types/domain";
 
 type Role = UserEntity["role"];
 const ROLES: Role[] = ["admin", "manager", "finance", "staff", "viewer", "driver"];
@@ -45,6 +44,8 @@ interface FormState {
   cabang: string;
   /** Which truck a `driver` account drives. */
   driverId?: string;
+  /** The initial password, on create only. */
+  password?: string;
 }
 
 const EMPTY: FormState = {
@@ -66,16 +67,7 @@ export function UserListPage() {
     queryKey: [...scopeKey(), "users", search, role],
     queryFn: () => getUsersWithAccess({ search, role }),
   });
-  const audit = useQuery({
-    queryKey: [...scopeKey(), "audit-trail"],
-    queryFn: () => getAuditTrail({ limit: 40 }),
-  });
-  // Only needed while assigning a sopir, so it is not fetched until then.
-  const fleet = useQuery({
-    queryKey: [...scopeKey(), "drivers", "", "Semua"],
-    queryFn: () => getDrivers(),
-    enabled: editing?.role === "driver",
-  });
+  const [rolesFor, setRolesFor] = useState<UserEntity | null>(null);
 
   const saveMutation = useDeskMutation({
     mutationFn: (values: FormState) => createOrUpdateUser(values),
@@ -93,15 +85,6 @@ export function UserListPage() {
     onDone: () => setPendingDelete(null),
   });
 
-  const exportMutation = useDeskMutation({
-    mutationFn: () => exportUsers(),
-    errorTitle: "Unduh gagal",
-    success: (count) => ({
-      title: "Berkas CSV diunduh",
-      description: `${count} pengguna diekspor.`,
-    }),
-  });
-
   const rows = list.data ?? [];
 
   /** Opening the editor is what clears stale validation, not an effect. */
@@ -117,8 +100,8 @@ export function UserListPage() {
     if (!editing.nama.trim()) next.nama = "Nama wajib diisi.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editing.email))
       next.email = "Masukkan alamat email yang valid.";
-    if (editing.role === "driver" && !editing.driverId)
-      next.driverId = "Pilih armada yang dikemudikan akun ini.";
+    if (!editing.id && (editing.password ?? "").length < 8)
+      next.password = "Kata sandi awal minimal 8 karakter.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     saveMutation.mutate(editing);
@@ -193,6 +176,17 @@ export function UserListPage() {
       width: "1%",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
+          <CanAccess permission={PERMISSIONS.USER_ROLES_ASSIGN}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Atur peran ${row.nama}`}
+              title="Atur peran"
+              onClick={() => setRolesFor(row)}
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+            </Button>
+          </CanAccess>
           <Button
             variant="ghost"
             size="icon-xs"
@@ -230,22 +224,12 @@ export function UserListPage() {
       <PageHeader
         eyebrow="Data induk"
         title="Pengguna & Akses"
-        description="Siapa yang boleh melakukan apa di konsol ini, dan catatan setiap perubahan yang mereka buat."
+        description="Siapa yang boleh melakukan apa di konsol ini."
         actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => exportMutation.mutate(undefined as never)}
-              disabled={exportMutation.isPending}
-            >
-              <Download className="h-3.5 w-3.5" />
-              Unduh CSV
-            </Button>
-            <Button onClick={() => openEditor(EMPTY)}>
-              <UserPlus className="h-3.5 w-3.5" />
-              Undang pengguna
-            </Button>
-          </>
+          <Button onClick={() => openEditor(EMPTY)}>
+            <UserPlus className="h-3.5 w-3.5" />
+            Undang pengguna
+          </Button>
         }
       />
 
@@ -259,7 +243,7 @@ export function UserListPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Nama, email, atau cabang"
-                className="w-52"
+                className="w-60"
               />
               <SegmentedControl
                 value={role}
@@ -292,45 +276,7 @@ export function UserListPage() {
         />
       </Panel>
 
-      <Panel>
-        <PanelHeader
-          title="Jejak aktivitas"
-          hint="Setiap konfirmasi, verifikasi, dan perubahan data induk"
-        />
-        {audit.isLoading ? (
-          <div className="space-y-3 p-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-full" />
-            ))}
-          </div>
-        ) : (audit.data ?? []).length === 0 ? (
-          <div className="px-5 py-10 text-center">
-            <History className="mx-auto mb-3 h-5 w-5 text-ink-muted" strokeWidth={1.75} />
-            <p className="text-sm font-semibold text-ink">Belum ada aktivitas tercatat</p>
-            <p className="mt-1 text-xs text-ink-muted">
-              Catatan muncul begitu ada rencana dikonfirmasi, pembayaran diverifikasi,
-              atau data induk diubah.
-            </p>
-          </div>
-        ) : (
-          <ul className="max-h-96 divide-y divide-line overflow-y-auto">
-            {(audit.data ?? []).map((entry) => (
-              <li key={entry.id} className="flex items-baseline gap-4 px-5 py-2.5">
-                <span
-                  className="data w-20 shrink-0 text-2xs text-ink-muted"
-                  title={formatDateTimeId(entry.at)}
-                >
-                  {relativeTime(entry.at)}
-                </span>
-                <span className="min-w-0 flex-1 text-sm leading-snug text-ink">
-                  {entry.summary}
-                </span>
-                <span className="shrink-0 text-2xs text-ink-muted">{entry.actor}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+      <RoleGrantDialog user={rolesFor} onClose={() => setRolesFor(null)} />
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-lg">
@@ -341,8 +287,8 @@ export function UserListPage() {
               </DialogTitle>
               <DialogDescription>
                 {editing?.id
-                  ? "Perubahan peran berlaku pada sesi berikutnya pengguna masuk."
-                  : "Pengguna baru berstatus diundang sampai mereka masuk untuk pertama kali."}
+                  ? "Nama, email dan telepon akun ini. Perannya diatur lewat tombol kunci di daftar."
+                  : "Akun baru belum punya peran sampai diberi lewat tombol kunci di daftar."}
               </DialogDescription>
             </DialogHeader>
 
@@ -368,53 +314,29 @@ export function UserListPage() {
                   />
                 </Field>
 
-                <Field
-                  label="Peran"
-                  htmlFor="u-role"
-                  hint={ROLE_SUMMARY[editing.role]}
-                  className="sm:col-span-2"
-                >
-                  <SelectInput
-                    id="u-role"
-                    value={editing.role}
-                    onChange={(e) =>
-                      setEditing({ ...editing, role: e.target.value as Role })
-                    }
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>
-                        {ROLE_LABEL[r]}
-                      </option>
-                    ))}
-                  </SelectInput>
-                </Field>
-
-                {editing.role === "driver" && (
+                {!editing.id && (
                   <Field
-                    label="Armada yang dikemudikan"
-                    htmlFor="u-armada"
-                    error={errors.driverId}
-                    hint="Menentukan rute siapa yang dibuka akun ini di halaman Rute Saya."
+                    label="Kata sandi awal"
+                    htmlFor="u-password"
+                    error={errors.password}
+                    hint="Minimal 8 karakter, mengikuti aturan kata sandi perusahaan. Sampaikan ke pengguna secara langsung."
                     required
                     className="sm:col-span-2"
                   >
-                    <SelectInput
-                      id="u-armada"
-                      value={editing.driverId ?? ""}
-                      invalid={!!errors.driverId}
-                      onChange={(e) =>
-                        setEditing({ ...editing, driverId: e.target.value || undefined })
-                      }
-                    >
-                      <option value="">Pilih armada</option>
-                      {(fleet.data ?? []).map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.nama} — {d.nomorSim}
-                        </option>
-                      ))}
-                    </SelectInput>
+                    <TextInput
+                      id="u-password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={editing.password ?? ""}
+                      invalid={!!errors.password}
+                      onChange={(e) => setEditing({ ...editing, password: e.target.value })}
+                    />
                   </Field>
                 )}
+
+                <p className="text-2xs text-ink-muted sm:col-span-2">
+                  Peran diatur lewat tombol kunci di daftar pengguna, setelah akunnya tersimpan.
+                </p>
 
                 <Field label="Telepon" htmlFor="u-telp">
                   <TextInput

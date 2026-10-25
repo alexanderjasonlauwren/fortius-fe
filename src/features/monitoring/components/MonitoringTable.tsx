@@ -1,3 +1,4 @@
+import { DeliveryPhotosButton } from "./DeliveryPhotosButton";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Crosshair, PlayCircle, Printer, Route, TriangleAlert } from "lucide-react";
 import { DataTable, type Column } from "@/components/common/DataTable";
@@ -187,6 +188,7 @@ export function MonitoringTable({
               </Button>
             </>
           )}
+          {row.status === "Selesai" && <DeliveryPhotosButton row={row} />}
           <Button
             size="icon-xs"
             variant="ghost"

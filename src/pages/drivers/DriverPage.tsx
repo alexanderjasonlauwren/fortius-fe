@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatNumber, formatPercentId } from "@/lib/format";
-import type { DriverStatusEntity } from "@/mocks/types";
+import type { DriverStatusEntity } from "@/types/domain";
 import { unitLabel } from "@/lib/lexicon";
 
 const STATUSES: (DriverStatusEntity | "Semua")[] = [
@@ -82,14 +82,14 @@ export function DriverPage() {
 
   const saveMutation = useDeskMutation({
     mutationFn: (values: FormState) => createOrUpdateDriver(values),
-    errorTitle: "Data driver tidak tersimpan",
+    errorTitle: "Data sopir tidak tersimpan",
     success: (d) => ({ title: `${d.nama} tersimpan` }),
     onDone: () => setEditing(null),
   });
 
   const deleteMutation = useDeskMutation({
     mutationFn: (id: string) => removeDriver(id),
-    errorTitle: "Hapus driver gagal",
+    errorTitle: "Hapus sopir gagal",
     success: "Armada dihapus",
     onDone: () => setPendingDelete(null),
   });
@@ -99,7 +99,7 @@ export function DriverPage() {
     errorTitle: "Unduh gagal",
     success: (count) => ({
       title: "Berkas CSV diunduh",
-      description: `${count} driver diekspor.`,
+      description: `${count} sopir diekspor.`,
     }),
   });
 
@@ -116,8 +116,8 @@ export function DriverPage() {
     e.preventDefault();
     if (!editing) return;
     const next: typeof errors = {};
-    if (!editing.nama.trim()) next.nama = "Nama driver wajib diisi.";
-    if (!editing.kode.trim()) next.kode = "Kode driver wajib diisi.";
+    if (!editing.nama.trim()) next.nama = "Nama sopir wajib diisi.";
+    if (!editing.kode.trim()) next.kode = "Kode sopir wajib diisi.";
     if (!editing.telepon.trim()) next.telepon = "Nomor telepon wajib diisi.";
     // Only on create: an existing driver's login is managed from the Users
     // page, not re-issued by editing the driver record.
@@ -135,7 +135,7 @@ export function DriverPage() {
   const columns: Column<DriverView>[] = [
     {
       key: "nama",
-      header: "Driver",
+      header: "Sopir",
       render: (row) => (
         <>
           <Link
@@ -258,8 +258,8 @@ export function DriverPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Data induk"
-        title="Driver"
-        description="Pengemudi yang dapat ditugaskan. Armada dan kapasitasnya ada di daftar Armada — pasangan driver dan kendaraan ditetapkan per rit di papan berangkat."
+        title="Sopir"
+        description="Sopir yang dapat ditugaskan. Armada dan kapasitasnya ada di daftar Armada. Pasangan sopir dan kendaraan ditetapkan per rit di papan berangkat."
         actions={
           <>
             <Button
@@ -272,21 +272,21 @@ export function DriverPage() {
             </Button>
             <Button onClick={() => openEditor(EMPTY)}>
               <Plus className="h-3.5 w-3.5" />
-              Tambah driver
+              Tambah sopir
             </Button>
           </>
         }
         meta={
           <span className="text-xs text-ink-muted">
             <span className="data">{bertugas}</span> dari{" "}
-            <span className="data">{rows.length}</span> driver bertugas hari ini
+            <span className="data">{rows.length}</span> sopir bertugas hari ini
           </span>
         }
       />
 
       <Panel>
         <PanelHeader
-          title="Daftar driver"
+          title="Daftar sopir"
           hint={`${rows.length} baris`}
           actions={
             <div className="flex flex-wrap items-center gap-2">
@@ -294,7 +294,7 @@ export function DriverPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Nama, kode, atau nomor SIM"
-                className="w-56"
+                className="w-64"
               />
               <SegmentedControl
                 value={status}
@@ -313,11 +313,11 @@ export function DriverPage() {
           pageSize={12}
           defaultSortKey="nama"
           emptyIcon={Truck}
-          emptyMessage="Tidak ada driver yang cocok"
-          emptyDescription="Ubah filter, atau tambahkan pengemudi baru ke daftar."
+          emptyMessage="Tidak ada sopir yang cocok"
+          emptyDescription="Ubah filter, atau tambahkan sopir baru ke daftar."
           emptyAction={
             <Button size="sm" onClick={() => openEditor(EMPTY)}>
-              Tambah driver
+              Tambah sopir
             </Button>
           }
           dense
@@ -329,18 +329,17 @@ export function DriverPage() {
           <form onSubmit={submit}>
             <DialogHeader>
               <DialogTitle>
-                {editing?.id ? `Ubah ${editing.nama}` : "Tambah driver"}
+                {editing?.id ? `Ubah ${editing.nama}` : "Tambah sopir"}
               </DialogTitle>
               <DialogDescription>
-                Data pengemudi. Kendaraan dan kapasitasnya didaftarkan di Armada,
-                dan dipasangkan dengan driver saat rit disusun.
+                Data sopir. Kendaraan dan kapasitasnya didaftarkan di Armada, lalu dipasangkan dengan sopir saat rit disusun.
               </DialogDescription>
             </DialogHeader>
 
             {editing && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field
-                  label="Nama driver"
+                  label="Nama sopir"
                   htmlFor="d-nama"
                   error={errors.nama}
                   required
@@ -404,8 +403,8 @@ export function DriverPage() {
                       })
                     }
                   >
-                    <option value="Standby">Standby — siap ditugaskan</option>
-                    <option value="Cuti">Cuti — tidak dapat dipilih</option>
+                    <option value="Standby">Standby (siap ditugaskan)</option>
+                    <option value="Cuti">Cuti (tidak dapat dipilih)</option>
                   </SelectInput>
                 </Field>
 
@@ -418,7 +417,7 @@ export function DriverPage() {
                 {!editing.id && (
                   <div className="sm:col-span-2 space-y-4 rounded-lg border border-line bg-panel-sunk p-4">
                     <p className="text-xs text-ink-muted">
-                      Akun login aplikasi mobile untuk driver ini akan dibuat sekaligus.
+                      Akun login aplikasi mobile untuk sopir ini akan dibuat sekaligus.
                     </p>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <Field
@@ -477,7 +476,7 @@ export function DriverPage() {
                 Batal
               </Button>
               <Button type="submit" disabled={saveMutation.isPending}>
-                Simpan driver
+                Simpan sopir
               </Button>
             </DialogFooter>
           </form>

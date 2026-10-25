@@ -33,7 +33,7 @@
 import { getList, getOne, send } from "@/lib/api";
 import { printDocument } from "@/lib/export";
 import { outletLabelTitle, unitLabelTitle } from "@/lib/lexicon";
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { scheduleOneOrder } from "@/features/orders/api/orderApi.http";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getSettings } from "@/features/settings/api/settingsApi";
@@ -59,6 +59,7 @@ import type {
   DistributionApi,
   ProductOption,
   TripAssignment,
+  PlanHistoryEvent,
 } from "./contract";
 
 /* ── wire shapes, mirroring the backend exactly ────────────────────────── */
@@ -281,7 +282,7 @@ const OPTION_PAGE_SIZE = 100;
  * screen that tracks the journey is Monitoring Distribusi.
  */
 const STATUS_TO_DOMAIN: Record<string, PlanStatus> = {
-  draft: "Draft",
+  draft: "Draf",
   confirmed: "Terkonfirmasi",
   in_progress: "Terkonfirmasi",
   completed: "Selesai",
@@ -289,7 +290,7 @@ const STATUS_TO_DOMAIN: Record<string, PlanStatus> = {
 };
 
 function toPlanStatus(wire: string): PlanStatus {
-  return STATUS_TO_DOMAIN[wire] ?? "Draft";
+  return STATUS_TO_DOMAIN[wire] ?? "Draf";
 }
 
 /**
@@ -473,6 +474,28 @@ async function getPlanList(): Promise<DistributionPlan[]> {
   return page.items.map(toPlanView);
 }
 
+/** Mirrors the backend's distributionorder.HistoryEvent. */
+interface HistoryEventResponse {
+  at: string;
+  user: string;
+  event: PlanHistoryEvent["event"];
+  succeeded: boolean;
+  status_code: number;
+  trip_id?: string;
+}
+
+async function getPlanHistory(planId: string): Promise<PlanHistoryEvent[]> {
+  const rows = await getOne<HistoryEventResponse[]>(`/distribution/orders/${planId}/history`);
+  return (rows ?? []).map((row) => ({
+    at: row.at,
+    user: row.user,
+    event: row.event,
+    succeeded: row.succeeded,
+    statusCode: row.status_code,
+    tripId: row.trip_id,
+  }));
+}
+
 async function getPlan(planId: string): Promise<DistributionPlan> {
   return toPlanView(await getOne<OrderResponse>(`/distribution/orders/${planId}`));
 }
@@ -592,12 +615,12 @@ async function saveDraft(planId: string, rows: PlanRow[], version: number): Prom
   const originScope = scopeKey().join("|");
   const plan = await getPlan(planId);
   if (scopeKey().join("|") !== originScope) {
-    throw new Error("Tenant berubah saat memuat rencana. Buka rencana pada tenant yang sesuai sebelum menyimpan.");
+    throw new Error("Perusahaan yang aktif berganti saat rencana dimuat. Buka lagi rencananya dari perusahaan yang benar, lalu simpan.");
   }
   const agreementId = plan.saId;
   if (!agreementId) {
     throw new Error(
-      "Rencana ini belum terikat ke Schedule Agreement. Buka kembali rencana dan pilih SA " +
+      "Rencana ini belum terikat ke SA. Buka kembali rencananya dan pilih SA " +
         "sebelum menambahkan titik singgah.",
     );
   }
@@ -924,7 +947,7 @@ async function suggestAssignment(planId: string): Promise<AssignmentSuggestion> 
   const km = (board.summary.distance_m / 1000).toLocaleString("id-ID", {
     maximumFractionDigits: 1,
   });
-  const selesai = board.summary.finish_eta ? ` — selesai ± ${board.summary.finish_eta}` : "";
+  const selesai = board.summary.finish_eta ? `, selesai ± ${board.summary.finish_eta}` : "";
   // Silent when straight-line, which has been the only source this ever had
   // until an on-prem router existed — flagging the ordinary case would just be
   // noise. Road distance is the exception worth telling a dispatcher about,
@@ -936,7 +959,7 @@ async function suggestAssignment(planId: string): Promise<AssignmentSuggestion> 
     unroutable,
     dasar:
       `Dikelompokkan per kapasitas armada dan diurutkan menurut jarak antar ` +
-      `${"titik singgah"} — total ± ${km} km${jarak} untuk ${board.summary.trips} trip${selesai}.`,
+      `${"titik singgah"}: total ± ${km} km${jarak} untuk ${board.summary.trips} rit${selesai}.`,
   };
 }
 
@@ -965,7 +988,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
   const ordered = [...rows].sort(compareStops);
 
   printDocument(
-    `${plan.kode} — Lembar Rute`,
+    `${plan.kode} · Lembar Rute`,
     `
     <p class="eyebrow">${settings.namaPerusahaan} · Agen ${settings.nomorAgen}</p>
     <h1>Lembar Rute Distribusi</h1>
@@ -1011,6 +1034,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
 export const distributionApiHttp: DistributionApi = {
   getPlanList,
   getPlan,
+  getPlanHistory,
   getPlanDetail,
   getMonthlyGrid,
   getPaymentBoard,

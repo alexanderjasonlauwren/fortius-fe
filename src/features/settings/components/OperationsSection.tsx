@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useResettableState } from "@/hooks/useResettableState";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarClock } from "lucide-react";
@@ -8,7 +8,7 @@ import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Pan
 import { Field, TextInput, Toggle } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { OperationsEntity } from "@/mocks/types";
+import type { OperationsEntity } from "@/types/domain";
 import { outletLabel } from "@/lib/lexicon";
 
 const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];

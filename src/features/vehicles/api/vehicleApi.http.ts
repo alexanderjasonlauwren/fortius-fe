@@ -13,9 +13,9 @@
  * type keeps `kapasitasKg` optional and the planner's ceiling stays the count.
  */
 import { getList, getOne, send } from "@/lib/api";
-import type { VehicleEntity, VehicleStatusEntity } from "@/mocks/types";
+import type { VehicleEntity, VehicleStatusEntity } from "@/types/domain";
 import type { VehicleApi, VehicleFilters, VehicleView } from "./contract";
-import { toView as decorate } from "./vehicleApi.mock";
+import { decorateVehicle } from "../lib/view";
 
 /** Mirrors the backend's VehicleResponse. */
 interface VehicleResponse {
@@ -74,7 +74,7 @@ function toView(row: VehicleResponse): VehicleView {
   };
   // The same decoration the mock applies, so "lapsing within 30 days" means the
   // same thing in both builds rather than being defined twice.
-  return decorate(vehicle, row.stnk_expires_at, row.kir_expires_at);
+  return decorateVehicle(vehicle, row.stnk_expires_at, row.kir_expires_at);
 }
 
 function toWire(input: Partial<VehicleEntity>) {

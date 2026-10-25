@@ -7,6 +7,7 @@
  * ClaimStatus union are the same set, unlike delivery_status/payment_status
  * elsewhere in this codebase), so no translation is needed either way.
  */
+import type { RateBasis } from "../lib/rate";
 import { getList, getOne, send } from "@/lib/api";
 import type { ClaimStatus, ID } from "@/types/domain";
 import type {
@@ -14,8 +15,10 @@ import type {
   ClaimFilters,
   ClaimView,
   CreateClaimInput,
+  CreateTransportInvoiceInput,
   RecapFilters,
   RecapReport,
+  TransportInvoice,
   TransportationClaimApi,
   UpdateClaimInput,
   UpdateClaimStatusInput,
@@ -41,6 +44,7 @@ interface ClaimResponse {
   status_updated_at?: string;
   settled_at?: string;
   settled_amount?: number;
+  tax_withheld?: number;
   settlement_mode?: "cash" | "bank";
   delivery_ids?: string[];
   version: number;
@@ -67,6 +71,7 @@ function toView(row: ClaimResponse): ClaimView {
     statusUpdatedAt: row.status_updated_at,
     settledAt: row.settled_at,
     settledAmount: row.settled_amount,
+    taxWithheld: row.tax_withheld,
     settlementMode: row.settlement_mode,
     deliveryIds: row.delivery_ids ?? [],
     version: row.version,
@@ -115,6 +120,7 @@ async function updateClaimStatus(input: UpdateClaimStatusInput): Promise<ClaimVi
       status_note: input.statusNote,
       settled_at: input.settledAt,
       settled_amount: input.settledAmount,
+      tax_withheld: input.taxWithheld,
       settlement_mode: input.settlementMode,
     }),
   );
@@ -128,8 +134,24 @@ async function generateLines(id: ID): Promise<ClaimView> {
   return toView(await send<ClaimResponse>("post", `/transportation-claims/${id}/lines/generate`));
 }
 
+async function generateFromSim3lon(id: ID): Promise<ClaimView> {
+  return toView(await send<ClaimResponse>("post", `/transportation-claims/${id}/lines/from-sim3lon`));
+}
+
 /** Mirrors the backend's transportationclaim.BeritaAcaraResponse. */
 interface BeritaAcaraResponse {
+  kind?: "lo" | "deliveries";
+  loading_orders?: Array<{
+    no: number;
+    date: string;
+    lo_number: string;
+    so_number?: string;
+    material: string;
+    qty_pcs: number;
+    qty_kg: number;
+    rate_per_kg: number;
+    amount: number;
+  }>;
   header: {
     claim_number: string;
     handover_reference?: string;
@@ -150,7 +172,8 @@ interface BeritaAcaraResponse {
     outlet_count: number;
     qty: number;
     weight_kg: number;
-    rate_per_kg: number;
+    rate_basis: RateBasis;
+    rate: number;
     amount: number;
   }>;
   lines: Array<{
@@ -162,7 +185,8 @@ interface BeritaAcaraResponse {
     product_code: string;
     qty: number;
     weight_kg: number;
-    rate_per_kg: number;
+    rate_basis: RateBasis;
+    rate: number;
     amount: number;
     has_drift: boolean;
     current_delivered_qty?: number;
@@ -172,7 +196,7 @@ interface BeritaAcaraResponse {
     group_count: number;
     total_qty: number;
     total_weight_kg: number;
-    rates: Array<{ rate_per_kg: number; qty: number; weight_kg: number; amount: number }>;
+    rates: Array<{ rate_basis: RateBasis; rate: number; qty: number; weight_kg: number; amount: number }>;
     amount: number;
     sum_of_line_amounts: number;
     rounding_difference: number;
@@ -184,6 +208,18 @@ interface BeritaAcaraResponse {
 async function getDocument(id: ID): Promise<BeritaAcaraDocument> {
   const row = await getOne<BeritaAcaraResponse>(`/transportation-claims/${id}/document`);
   return {
+    kind: row.kind === "lo" ? "lo" : "deliveries",
+    loadingOrders: (row.loading_orders ?? []).map((o) => ({
+      no: o.no,
+      date: o.date,
+      loNumber: o.lo_number,
+      soNumber: o.so_number,
+      material: o.material,
+      qtyPcs: o.qty_pcs,
+      qtyKg: o.qty_kg,
+      ratePerKg: o.rate_per_kg,
+      amount: o.amount,
+    })),
     header: {
       claimNumber: row.header.claim_number,
       handoverReference: row.header.handover_reference,
@@ -204,7 +240,8 @@ async function getDocument(id: ID): Promise<BeritaAcaraDocument> {
       outletCount: g.outlet_count,
       qty: g.qty,
       weightKg: g.weight_kg,
-      ratePerKg: g.rate_per_kg,
+      rateBasis: g.rate_basis,
+      rate: g.rate,
       amount: g.amount,
     })),
     lines: row.lines.map((l) => ({
@@ -216,7 +253,8 @@ async function getDocument(id: ID): Promise<BeritaAcaraDocument> {
       productCode: l.product_code,
       qty: l.qty,
       weightKg: l.weight_kg,
-      ratePerKg: l.rate_per_kg,
+      rateBasis: l.rate_basis,
+      rate: l.rate,
       amount: l.amount,
       hasDrift: l.has_drift,
       currentDeliveredQty: l.current_delivered_qty,
@@ -227,7 +265,8 @@ async function getDocument(id: ID): Promise<BeritaAcaraDocument> {
       totalQty: row.footer.total_qty,
       totalWeightKg: row.footer.total_weight_kg,
       rates: row.footer.rates.map((r) => ({
-        ratePerKg: r.rate_per_kg,
+        rateBasis: r.rate_basis,
+        rate: r.rate,
         qty: r.qty,
         weightKg: r.weight_kg,
         amount: r.amount,
@@ -301,6 +340,104 @@ async function getRecap(filters?: RecapFilters): Promise<RecapReport> {
   };
 }
 
+/** Mirrors the backend's transportationclaim.InvoiceResponse. */
+interface InvoiceResponse {
+  id?: string;
+  claim_id: string;
+  claim_number: string;
+  claim_status: ClaimStatus;
+  invoice_number: string;
+  invoice_date: string;
+  recipient_name: string;
+  recipient_address?: string;
+  order_reference?: string;
+  order_date?: string;
+  tax_invoice_number?: string;
+  tax_invoice_date?: string;
+  description: string;
+  amount: number;
+  vat_rate: number;
+  vat_amount: number;
+  total: number;
+  bank?: { id: string; bank_name: string; account_number: string; account_holder: string };
+  place?: string;
+  signatory: { company_name: string; name?: string; title?: string; city?: string };
+  created_at?: string;
+}
+
+function toInvoice(row: InvoiceResponse): TransportInvoice {
+  return {
+    id: row.id,
+    claimId: row.claim_id,
+    claimNumber: row.claim_number,
+    claimStatus: row.claim_status,
+    invoiceNumber: row.invoice_number,
+    invoiceDate: row.invoice_date,
+    recipientName: row.recipient_name,
+    recipientAddress: row.recipient_address,
+    orderReference: row.order_reference,
+    orderDate: row.order_date,
+    taxInvoiceNumber: row.tax_invoice_number,
+    taxInvoiceDate: row.tax_invoice_date,
+    description: row.description,
+    amount: row.amount,
+    vatRate: row.vat_rate,
+    vatAmount: row.vat_amount,
+    total: row.total,
+    bank: row.bank && {
+      id: row.bank.id,
+      bankName: row.bank.bank_name,
+      accountNumber: row.bank.account_number,
+      accountHolder: row.bank.account_holder,
+    },
+    place: row.place,
+    signatory: {
+      companyName: row.signatory.company_name,
+      name: row.signatory.name,
+      title: row.signatory.title,
+      city: row.signatory.city,
+    },
+    createdAt: row.created_at,
+  };
+}
+
+/** An empty optional field is left out: the server validates a sent date's format. */
+function optional(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+async function getInvoiceDraft(claimId: ID): Promise<TransportInvoice> {
+  return toInvoice(await getOne<InvoiceResponse>(`/transportation-claims/${claimId}/invoice/draft`));
+}
+
+async function createInvoice(input: CreateTransportInvoiceInput): Promise<TransportInvoice> {
+  return toInvoice(
+    await send<InvoiceResponse>("post", `/transportation-claims/${input.claimId}/invoice`, {
+      invoice_number: input.invoiceNumber.trim(),
+      invoice_date: input.invoiceDate,
+      recipient_name: input.recipientName.trim(),
+      recipient_address: optional(input.recipientAddress),
+      order_reference: optional(input.orderReference),
+      order_date: optional(input.orderDate),
+      tax_invoice_number: optional(input.taxInvoiceNumber),
+      tax_invoice_date: optional(input.taxInvoiceDate),
+      description: input.description.trim(),
+      vat_amount: input.vatAmount,
+      bank_account_id: input.bankAccountId,
+      place: optional(input.place),
+    }),
+  );
+}
+
+async function getInvoice(claimId: ID): Promise<TransportInvoice> {
+  return toInvoice(await getOne<InvoiceResponse>(`/transportation-claims/${claimId}/invoice`));
+}
+
+async function listInvoices(): Promise<TransportInvoice[]> {
+  return (await getOne<InvoiceResponse[]>("/transportation-claims/invoices")).map(toInvoice);
+}
+
 export const transportationApiHttp: TransportationClaimApi = {
   getClaims,
   createClaim,
@@ -308,6 +445,11 @@ export const transportationApiHttp: TransportationClaimApi = {
   updateClaimStatus,
   deleteClaim,
   generateLines,
+  generateFromSim3lon,
   getDocument,
   getRecap,
+  getInvoiceDraft,
+  createInvoice,
+  getInvoice,
+  listInvoices,
 };

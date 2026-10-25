@@ -23,6 +23,9 @@ vi.mock("@/features/drivers/api/driverApi", () => ({
   getDrivers: (...args: unknown[]) => getDrivers(...args),
 }));
 
+const holds = vi.fn<(permission: string) => boolean>(() => true);
+vi.mock("@/features/rbac/holds", () => ({ holds: (p: string) => holds(p) }));
+
 const exportCsv = vi.fn();
 const exportExcel = vi.fn();
 vi.mock("@/lib/export", () => ({
@@ -215,6 +218,19 @@ describe("getTransactionFilterOptions", () => {
     expect(options.outlet).toEqual([{ id: OUTLET_ID, label: "Pangkalan Ahmad" }]);
     expect(options.kecamatan).toEqual(["Sidorejo"]);
     expect(options.drivers).toEqual([{ id: DRIVER_ID, label: "Budi" }]);
+  });
+
+  // Regression 2026-10-24 F16: the finance officer may open the sales list
+  // but not read drivers, and every visit fired a 403 for the filter.
+  it("does not ask for drivers the user may not read", async () => {
+    getDrivers.mockClear();
+    holds.mockImplementation((p) => p !== "masterdata.read.drivers");
+    const options = await transactionApiHttp.getTransactionFilterOptions();
+    holds.mockImplementation(() => true);
+
+    expect(getDrivers).not.toHaveBeenCalled();
+    expect(options.drivers).toEqual([]);
+    expect(options.outlet).toEqual([{ id: OUTLET_ID, label: "Pangkalan Ahmad" }]);
   });
 });
 

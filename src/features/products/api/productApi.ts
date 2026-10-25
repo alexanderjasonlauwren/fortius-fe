@@ -1,17 +1,9 @@
-/**
- * The product adapter this build uses.
- *
- * Both implementations are passed to `pick`, so the choice is visible here and
- * a build cannot silently fall back to the mock.
- */
-import { pick } from "@/lib/dataSource";
-import { productApiMock } from "./productApi.mock";
 import { productApiHttp } from "./productApi.http";
 import type { ProductApi } from "./contract";
 
-export type { ProductFilters, ProductView, StockSummary } from "./contract";
+export type { NewTransportTariff, ProductFilters, ProductView, StockSummary, TransportTariff, UnitOption } from "./contract";
 
-const api: ProductApi = pick(productApiMock, productApiHttp);
+const api: ProductApi = productApiHttp;
 
 export const getProducts = api.getProducts.bind(api);
 export const getProductDetail = api.getProductDetail.bind(api);
@@ -20,3 +12,6 @@ export const removeProduct = api.removeProduct.bind(api);
 export const changeStock = api.changeStock.bind(api);
 export const getStockSummary = api.getStockSummary.bind(api);
 export const exportProducts = api.exportProducts.bind(api);
+export const getUnits = api.getUnits.bind(api);
+export const getTariffs = api.getTariffs.bind(api);
+export const createTariff = api.createTariff.bind(api);

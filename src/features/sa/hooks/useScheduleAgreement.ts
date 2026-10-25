@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
@@ -47,7 +47,7 @@ export function useScheduleAgreement() {
   const deleteMutation = useDeskMutation({
     mutationFn: (saId: string) => deleteSA(saId),
     errorTitle: "Hapus SA gagal",
-    success: "Schedule Agreement dihapus",
+    success: "SA dihapus",
   });
 
   const printMutation = useDeskMutation({

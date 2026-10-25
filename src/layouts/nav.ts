@@ -2,15 +2,26 @@ import type { LucideIcon } from "lucide-react";
 import { allowsManualIntake, type OrderIntakeMode } from "@/features/distribution/api/intakePolicy.contract";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import {
+  BadgeCheck,
   Network,
   Bell,
   BookOpen,
+  Boxes,
+  ChartColumn,
+  ChartPie,
+  FileInput,
+  ListTree,
+  Lock,
+  Building2,
   ClipboardCheck,
   ClipboardList,
   FileSignature,
+  FileCheck,
+  FileSpreadsheet,
   FileText,
   Fuel,
   IdCard,
+  Landmark,
   LayoutDashboard,
   Map,
   MapPin,
@@ -18,6 +29,7 @@ import {
   ReceiptText,
   Route,
   Settings,
+  ShoppingCart,
   Store,
   Table2,
   Truck,
@@ -57,6 +69,10 @@ export interface NavGroup {
 
 export const NAV_GROUPS: NavGroup[] = [
   {
+    // What people open first thing: the day's board, the money, the reports.
+    // Laporan and Dasbor Keuangan sit here rather than at the bottom of
+    // Keuangan because the client asked for reports one click away
+    // (accounting parity P6).
     label: "Menu utama",
     items: [
       {
@@ -66,7 +82,23 @@ export const NAV_GROUPS: NavGroup[] = [
         hint: "Papan berangkat hari ini dan angka kunci",
       },
       {
-        name: "Laporan Keuangan",
+        name: "Dasbor Keuangan",
+        href: "/finance-dashboard",
+        icon: ChartPie,
+        hint: "Kas & bank, piutang, hutang, laba, dan tren 12 bulan",
+        permission: [PERMISSIONS.FINANCE_REPORTS_VIEW, PERMISSIONS.FINANCIAL_STATEMENTS_VIEW],
+      },
+      {
+        name: "Laporan",
+        href: "/laporan",
+        icon: ChartColumn,
+        hint: "Laba rugi, neraca, arus kas, umur piutang & hutang, penjualan, pembelian, biaya",
+        permission: PERMISSIONS.FINANCE_REPORTS_VIEW,
+      },
+      {
+        // The operational recap -- volume, verified cash, top outlets -- not
+        // a Laba Rugi or Neraca; the owner's daily view of the operation.
+        name: "Rekap Operasional",
         href: "/reports",
         icon: FileText,
         hint: "Rekap distribusi, kas terverifikasi, dan piutang per periode",
@@ -88,7 +120,7 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Schedule Agreement",
         href: "/sa",
         icon: FileText,
-        hint: `Kuota dari ${supplierLabel()} dan sisa yang bisa ditarik`,
+        hint: `Kuota dari ${supplierLabel()}, sisa yang bisa ditarik, dan penerbit SA`,
         permission: PERMISSIONS.SA_VIEW,
       },
       {
@@ -106,8 +138,17 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: [PERMISSIONS.DELIVERIES_VIEW, PERMISSIONS.GPS_TRACKS_VIEW],
       },
       {
-        name: "Verifikasi Pembayaran",
-        href: "/payment-control",
+        name: "SIM3LON",
+        href: "/integration/sim3lon",
+        icon: Network,
+        hint: "Data perencanaan & penyaluran ditarik langsung dari SIM3LON Pertamina",
+        permission: PERMISSIONS.INTEGRATION_SIM3LON_VIEW,
+      },
+      {
+        // Was "Verifikasi Pembayaran" at /payment-control: it allocates funds
+        // to dispatch, it does not verify receipts (that is Penerimaan Kas).
+        name: "Alokasi Dana Pengiriman",
+        href: "/dispatch-funding",
         icon: ClipboardCheck,
         hint: "Dana terverifikasi per pangkalan sebelum armada berangkat",
         permission: PERMISSIONS.PAYMENTS_VIEW,
@@ -122,13 +163,54 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Keuangan",
+    // Jurnal's model: the documents money moves on -- sales, purchases,
+    // costs, cash -- each with its own master data beside it.
+    label: "Keuangan · Transaksi",
     items: [
+      {
+        name: "Tagihan & Piutang",
+        href: "/receivables",
+        icon: ReceiptText,
+        hint: "Tagihan penjualan, umur piutang, dan nota kredit",
+        permission: PERMISSIONS.PAYMENTS_VIEW,
+      },
+      {
+        // Tahap 2 of the transport fee SOP: the invoice to Pertamina once
+        // the BAST is accepted.
+        name: "Invoice Transport Fee",
+        href: "/transport-invoices",
+        icon: FileCheck,
+        hint: "Invoice ke Pertamina untuk BAST yang sudah disetujui",
+        permission: PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW,
+      },
+      {
+        name: "Penerimaan Kas",
+        href: "/payments",
+        icon: Wallet,
+        hint: "Uang masuk dan alokasinya ke tagihan",
+        permission: PERMISSIONS.PAYMENTS_VIEW,
+      },
+      {
+        // Was "Rekap Transaksi": a working list of surat jalan and their
+        // billing, not a report.
+        name: "Daftar Penjualan",
+        href: "/transactions",
+        icon: Table2,
+        hint: "Setiap surat jalan dengan tagihan dan status bayarnya, disaring dan diekspor",
+        permission: PERMISSIONS.TRANSACTIONS_VIEW,
+      },
+      {
+        name: "Pembelian",
+        href: "/purchases",
+        icon: ShoppingCart,
+        hint: "Tagihan vendor, pembayarannya, dan daftar vendor",
+        permission: PERMISSIONS.PURCHASES_VIEW,
+      },
       {
         name: "Pengeluaran & Kas Kecil",
         href: "/expenses",
         icon: Fuel,
-        hint: "Catat biaya operasional dan persetujuannya",
+        hint: "Catat biaya operasional, persetujuannya, dan kategori biaya",
         permission: PERMISSIONS.EXPENSES_VIEW,
       },
       {
@@ -139,32 +221,72 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: [PERMISSIONS.OCR_VIEW, PERMISSIONS.OCR_ARCHIVE_VIEW],
       },
       {
-        name: "Piutang",
-        href: "/receivables",
-        icon: ReceiptText,
-        hint: "Umur piutang, tagihan, dan nota kredit",
-        permission: PERMISSIONS.PAYMENTS_VIEW,
+        name: "Persediaan",
+        href: "/inventory",
+        icon: Boxes,
+        hint: "Stok per produk dengan harga rata-rata, saldo awal, dan stok opname",
+        permission: PERMISSIONS.INVENTORY_VIEW,
       },
       {
-        name: "Penerimaan Kas",
-        href: "/payments",
-        icon: Wallet,
-        hint: "Uang masuk dan alokasinya ke tagihan",
-        permission: PERMISSIONS.PAYMENTS_VIEW,
+        name: "Kas & Bank",
+        href: "/cash-bank",
+        icon: Landmark,
+        hint: "Voucher kas, rekening koran, rekonsiliasi, dan daftar rekening",
+        permission: PERMISSIONS.CASH_VOUCHERS_VIEW,
       },
       {
-        name: "Buku Besar",
+        name: "Aset Tetap",
+        href: "/assets",
+        icon: Building2,
+        hint: "Daftar aset, penyusutan bulanan, dan rekonsiliasi",
+        permission: PERMISSIONS.ASSETS_VIEW,
+      },
+    ],
+  },
+  {
+    label: "Keuangan · Akun & Laporan",
+    items: [
+      {
+        name: "Persetujuan",
+        href: "/approvals",
+        icon: BadgeCheck,
+        hint: "Pembatalan dokumen dan pengembalian dana yang menunggu persetujuan",
+        permission: PERMISSIONS.VOID_REQUESTS_VIEW,
+      },
+      {
+        name: "Daftar Akun",
+        href: "/accounts",
+        icon: ListTree,
+        hint: "Bagan akun dan saldo; tiap akun membuka transaksinya",
+        permission: PERMISSIONS.ACCOUNTS_VIEW,
+      },
+      {
+        name: "Jurnal Umum",
         href: "/ledger",
         icon: BookOpen,
-        hint: "Jurnal, neraca saldo, dan laba rugi",
+        hint: "Jurnal, jurnal manual, dan neraca saldo",
         permission: PERMISSIONS.JOURNALS_VIEW,
       },
       {
-        name: "Rekap Transaksi",
-        href: "/transactions",
-        icon: Table2,
-        hint: "Daftar seluruh transaksi, disaring dan diekspor ke Excel",
-        permission: PERMISSIONS.INVOICES_VIEW,
+        name: "Saldo Awal",
+        href: "/opening-balance",
+        icon: FileInput,
+        hint: "Impor saldo awal akun saat mulai memakai sistem",
+        permission: PERMISSIONS.FISCAL_YEARS_VIEW,
+      },
+      {
+        name: "Tutup Buku",
+        href: "/fiscal-years",
+        icon: Lock,
+        hint: "Tutup dan buka kembali tahun buku",
+        permission: PERMISSIONS.FISCAL_YEARS_VIEW,
+      },
+      {
+        name: "Laporan Keuangan",
+        href: "/financial-statements",
+        icon: FileSpreadsheet,
+        hint: "Laba Rugi, Neraca, Penjelasan Akun, Komparasi, dan Buku Besar",
+        permission: PERMISSIONS.FINANCIAL_STATEMENTS_VIEW,
       },
     ],
   },
@@ -179,10 +301,10 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: PERMISSIONS.OUTLETS_VIEW,
       },
       {
-        name: "Driver",
+        name: "Sopir",
         href: "/drivers",
         icon: IdCard,
-        hint: "Pengemudi, SIM, dan kinerja 30 hari",
+        hint: "Sopir, SIM, dan kinerja 30 hari",
         permission: PERMISSIONS.DRIVERS_VIEW,
       },
       // Two entries, because the service serves two lists. A driver swaps

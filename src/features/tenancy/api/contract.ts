@@ -10,7 +10,7 @@
  * adapter: mapping there is what keeps every component unaware of which source
  * it is running against.
  */
-import type { ID, TenantEntity } from "@/types/domain";
+import type { BranchEntity, ID, TenantEntity } from "@/types/domain";
 
 /** One step of a tenant's breadcrumb, root first. */
 export interface TenantAncestor {
@@ -102,4 +102,10 @@ export interface TenancyApi {
   createTenant(input: CreateTenantInput): Promise<CreateTenantResult>;
   /** Marks a tenant deleted. Never removes the row. */
   deactivateTenant(id: ID): Promise<void>;
+  /**
+   * Branches of the session's acting tenant, as row-level security scopes
+   * them. `tenantId` is stamped with `actingTenantId`: the wire carries no
+   * tenant, because the session already names it.
+   */
+  getBranches(actingTenantId: ID): Promise<BranchEntity[]>;
 }

@@ -1,46 +1,39 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
+import { AttachmentsButton } from "@/features/attachments/components/AttachmentsButton";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { FileSpreadsheet, Receipt, ShieldAlert, StickyNote } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FilePlus, FileSpreadsheet, Receipt, ShieldAlert, StickyNote } from "lucide-react";
 import {
   exportAging,
   getAgingReport,
   getInvoices,
-  submitCreditNote,
   type AgingRow,
   type InvoiceView,
 } from "@/features/finance/api/financeApi";
+import { ManualInvoiceDialog } from "@/features/finance/components/ManualInvoiceDialog";
+import { CreditNoteDialog } from "@/features/finance/components/CreditNoteDialog";
+import { CreditNoteSection } from "@/features/finance/components/CreditNoteSection";
+import { useAuthStore } from "@/features/auth/store/authStore";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader, Meter } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getStatusVariant, spineFor } from "@/lib/status";
-import {
-  Field,
-  SearchInput,
-  SegmentedControl,
-  TextInput,
-  TextareaInput,
-} from "@/components/common/Field";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { SearchInput, SegmentedControl } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateId, formatNumber, formatRupiah, formatRupiahShort } from "@/lib/format";
-import { outletLabel, outletLabelTitle, unitLabel } from "@/lib/lexicon";
+import { outletLabel, outletLabelTitle } from "@/lib/lexicon";
 
-type Tab = "umur" | "tagihan";
+type Tab = "umur" | "tagihan" | "nota-kredit";
 
 export function ReceivablesPage() {
   const [tab, setTab] = useState<Tab>("umur");
+  const canViewCreditNotes = useAuthStore((st) => st.hasPermission(PERMISSIONS.CREDIT_NOTES_VIEW));
 
   return (
     <div className="space-y-5">
@@ -55,11 +48,14 @@ export function ReceivablesPage() {
             options={[
               { value: "umur" as const, label: "Umur piutang" },
               { value: "tagihan" as const, label: "Daftar tagihan" },
+              ...(canViewCreditNotes ? [{ value: "nota-kredit" as const, label: "Nota kredit" }] : []),
             ]}
           />
         }
       />
-      {tab === "umur" ? <AgingSection /> : <InvoiceSection />}
+      {tab === "umur" && <AgingSection />}
+      {tab === "tagihan" && <InvoiceSection />}
+      {tab === "nota-kredit" && canViewCreditNotes && <CreditNoteSection />}
     </div>
   );
 }
@@ -266,31 +262,22 @@ function AgingSection() {
 
 /* ── invoices ──────────────────────────────────────────────────────────── */
 
+const INVOICE_TYPE_LABEL: Record<InvoiceView["invoiceType"], string> = {
+  delivery: "Pengiriman",
+  registration: "Pendaftaran",
+  other: "Lain-lain",
+};
+
 function InvoiceSection() {
   const [status, setStatus] = useState("Belum lunas");
   const [search, setSearch] = useState("");
   const [creditNote, setCreditNote] = useState<InvoiceView | null>(null);
-  const [form, setForm] = useState({ jumlah: 0, alasan: "" });
+  const [manualInvoiceOpen, setManualInvoiceOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const invoices = useQuery({
     queryKey: [...scopeKey(), "invoices", status, search],
     queryFn: () => getInvoices({ status: status as never, search }),
-  });
-
-  const mutation = useDeskMutation({
-    mutationFn: () =>
-      submitCreditNote({
-        outletId: creditNote!.outletId,
-        invoiceId: creditNote!.id,
-        jumlah: form.jumlah,
-        alasan: form.alasan,
-      }),
-    errorTitle: "Nota kredit gagal diterbitkan",
-    success: (n) => ({
-      title: `${n.nomor} diterbitkan`,
-      description: "Piutang berkurang dan retur tercatat di buku besar.",
-    }),
-    onDone: () => setCreditNote(null),
   });
 
   const columns: Column<InvoiceView>[] = [
@@ -299,8 +286,16 @@ function InvoiceSection() {
       header: "Tagihan",
       render: (row) => (
         <>
-          <span className="data block text-xs text-ink">{row.nomor}</span>
-          <span className="data block text-2xs text-ink-muted">{row.suratJalan}</span>
+          <Link to={`/receivables/${row.id}`} className="data block text-xs text-ink underline-offset-2 hover:underline">
+            {row.nomor}
+          </Link>
+          {row.invoiceType === "delivery" ? (
+            <span className="data block text-2xs text-ink-muted">{row.suratJalan}</span>
+          ) : (
+            <span className="mt-0.5 inline-flex rounded-sm bg-panel-sunk px-1.5 py-0.5 text-2xs font-medium text-ink-muted">
+              {INVOICE_TYPE_LABEL[row.invoiceType]}
+            </span>
+          )}
         </>
       ),
       sortValue: (row) => row.nomor,
@@ -400,20 +395,21 @@ function InvoiceSection() {
       header: "",
       align: "right",
       width: "1%",
-      render: (row) =>
-        row.sisa > 0 ? (
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => {
-              setForm({ jumlah: 0, alasan: "" });
-              setCreditNote(row);
-            }}
-          >
-            <StickyNote className="h-3 w-3" />
-            Nota kredit
-          </Button>
-        ) : null,
+      render: (row) => (
+        <div className="flex items-center justify-end gap-1">
+          {row.sisa > 0 && (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => setCreditNote(row)}
+            >
+              <StickyNote className="h-3 w-3" />
+              Nota kredit
+            </Button>
+          )}
+          <AttachmentsButton ownerType="invoice" ownerId={row.id} label={row.nomor} />
+        </div>
+      ),
     },
   ];
 
@@ -429,7 +425,7 @@ function InvoiceSection() {
                 value={search}
                 onChange={setSearch}
                 placeholder={`Nomor tagihan, ${outletLabel()}, surat jalan`}
-                className="w-56"
+                className="w-80"
               />
               <SegmentedControl
                 value={status}
@@ -439,9 +435,16 @@ function InvoiceSection() {
                   { value: "Jatuh Tempo", label: "Jatuh tempo" },
                   { value: "Sebagian", label: "Sebagian" },
                   { value: "Lunas", label: "Lunas" },
+                  { value: "Batal", label: "Batal" },
                   { value: "Semua", label: "Semua" },
                 ]}
               />
+              <CanAccess permission={PERMISSIONS.INVOICES_CREATE}>
+                <Button size="sm" onClick={() => setManualInvoiceOpen(true)}>
+                  <FilePlus className="h-3.5 w-3.5" />
+                  Buat tagihan
+                </Button>
+              </CanAccess>
             </div>
           }
         />
@@ -460,66 +463,17 @@ function InvoiceSection() {
         />
       </Panel>
 
-      <Dialog open={!!creditNote} onOpenChange={(o) => !o && setCreditNote(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nota kredit untuk {creditNote?.nomor}</DialogTitle>
-            <DialogDescription>
-              Mengurangi jumlah yang ditagih — untuk barang yang dikembalikan atau
-              koreksi penagihan. Tercatat sebagai retur penjualan, bukan pengurangan
-              omzet kotor.
-            </DialogDescription>
-          </DialogHeader>
+      <CreditNoteDialog
+        invoice={creditNote}
+        onClose={() => setCreditNote(null)}
+        onIssued={() => void queryClient.invalidateQueries({ queryKey: [...scopeKey(), "credit-notes"] })}
+      />
 
-          {creditNote && (
-            <div className="rounded-md border border-line bg-panel-sunk px-4 py-3 text-xs">
-              <div className="flex justify-between gap-4">
-                <span className="text-ink-muted">Sisa tagihan</span>
-                <span className="data font-semibold text-ink">
-                  {formatRupiah(creditNote.sisa)}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <Field label="Nilai nota kredit" htmlFor="nk-jumlah" required>
-              <TextInput
-                id="nk-jumlah"
-                type="number"
-                mono
-                min={1}
-                max={creditNote?.sisa}
-                value={form.jumlah}
-                onChange={(e) => setForm({ ...form, jumlah: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Alasan" htmlFor="nk-alasan" required>
-              <TextareaInput
-                id="nk-alasan"
-                rows={3}
-                value={form.alasan}
-                onChange={(e) => setForm({ ...form, alasan: e.target.value })}
-                placeholder={`Contoh: 5 ${unitLabel()} dikembalikan karena segel rusak.`}
-              />
-            </Field>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreditNote(null)}>
-              Batal
-            </Button>
-            <Button
-              disabled={
-                form.jumlah <= 0 || !form.alasan.trim() || mutation.isPending
-              }
-              onClick={() => mutation.mutate(undefined as never)}
-            >
-              Terbitkan nota kredit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ManualInvoiceDialog
+        open={manualInvoiceOpen}
+        onClose={() => setManualInvoiceOpen(false)}
+        onCreated={() => void queryClient.invalidateQueries({ queryKey: [...scopeKey(), "invoices"] })}
+      />
     </>
   );
 }

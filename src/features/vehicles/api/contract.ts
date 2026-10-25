@@ -7,7 +7,7 @@
  * so this is the half of the model that was missing rather than a split of
  * something that existed.
  */
-import type { VehicleEntity, VehicleStatusEntity } from "@/mocks/types";
+import type { VehicleEntity, VehicleStatusEntity } from "@/types/domain";
 
 /**
  * A truck with the dates the depot has to watch.

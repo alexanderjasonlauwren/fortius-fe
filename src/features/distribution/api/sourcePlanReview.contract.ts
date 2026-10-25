@@ -22,7 +22,7 @@ export function sourcePlanMessage(review: SourcePlanReview): string {
     case "no_source": return "SA ini belum memiliki sumber SIM3LON. Upload dan tinjau sumber terlebih dahulu.";
     case "uncovered_date": return review.reason === "aggregate_fakultatif_has_no_daily_schedule"
       ? "SA Fakultatif hanya memiliki total agregat, belum memiliki jadwal harian."
-      : "Tanggal ini tidak tercakup dalam snapshot SIM3LON.";
+      : "Tanggal ini tidak ada di data SIM3LON yang terakhir ditarik.";
     case "empty_day": return "Snapshot SIM3LON mencakup tanggal ini dengan alokasi nol; tidak ada titik singgah untuk diisi.";
     case "incomplete": return "Alokasi belum lengkap atau pemetaan pangkalan tidak cocok. Perbaiki sumber sebelum mengisi rencana.";
   }

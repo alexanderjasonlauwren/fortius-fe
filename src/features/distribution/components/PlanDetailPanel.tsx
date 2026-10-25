@@ -23,10 +23,10 @@ import { SelectInput, TextInput } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { usesApi } from "@/lib/dataSource";
 import { useToast } from "@/hooks/useToast";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
+import { useAuthStore } from "@/features/auth/store/authStore";
 import { formatDateLong, formatNumber } from "@/lib/format";
 import type {
   AssignmentSuggestion,
@@ -37,6 +37,7 @@ import type {
   UnroutableStop,
   VehicleOption,
 } from "../types";
+import { PlanHistory } from "./PlanHistory";
 import { suggestAssignment } from "../api/distributionApi";
 import { applySuggestion, compareStops, moveStop } from "../lib/stopOrder";
 import { outletLabel, outletLabelTitle, unitLabel } from "@/lib/lexicon";
@@ -215,7 +216,12 @@ export function PlanDetailPanel({
   );
   const [dasar, setDasar] = useResettableState<string | null>([rows, plan?.id], () => null);
 
-  const editable = plan?.status === "Draft";
+  const editable = plan?.status === "Draf";
+  // Choosing who drives and in which truck is its own permission
+  // (distribution.assign.distribution_orders): someone may shape the day's
+  // stops without deciding the crew. Without it the crew is shown, not edited.
+  const canAssign = useAuthStore((state) => state.hasPermission(PERMISSIONS.DRIVERS_ASSIGN));
+  const crewEditable = editable && canAssign;
 
   const total = draft.reduce((s, r) => s + r.jumlahUnit, 0);
   /**
@@ -526,13 +532,13 @@ export function PlanDetailPanel({
                   variant="ghost"
                   size="sm"
                   onClick={() => void suggest()}
-                  disabled={draft.length === 0 || dirty || isSuggesting}
+                  disabled={!canAssign || draft.length === 0 || dirty || isSuggesting}
                   title={
                     draft.length === 0
                       ? `Tambahkan ${outletLabel()} terlebih dahulu`
                       : dirty
-                        ? "Simpan draf dulu — usulan disusun dari titik singgah yang tersimpan"
-                        : "Susun usulan trip. Tidak menyimpan apa pun sampai Anda simpan."
+                        ? "Simpan draf dulu. Usulan disusun dari titik singgah yang sudah tersimpan"
+                        : "Susun usulan trip; belum tersimpan sampai Anda menekan Simpan."
                   }
                 >
                   <Wand2 className="h-3.5 w-3.5" />
@@ -614,7 +620,7 @@ export function PlanDetailPanel({
           unit={unitLabel()}
           tone={overQuota ? "rust" : undefined}
         />
-        <Figure label="Trip" value={formatNumber(trips.length)} unit="rit" />
+        <Figure label="Rit" value={formatNumber(trips.length)} unit="rit" />
       </div>
 
       {/* What the last proposal could not place, and what it was based on.
@@ -672,7 +678,7 @@ export function PlanDetailPanel({
               <span className="data">
                 {formatNumber(belumTersimpan - plan.sisaKuotaSA)}
               </span>{" "}
-              {unitLabel()}. Kurangi jumlah, atau aktifkan agreement lain di{" "}
+              {unitLabel()}. Kurangi jumlah, atau aktifkan SA lain di{" "}
               <Link to="/sa" className="font-semibold text-ink underline decoration-signal decoration-2 underline-offset-2">
                 Schedule Agreement
               </Link>
@@ -681,12 +687,11 @@ export function PlanDetailPanel({
           )}
           {overloaded.map((t) => (
             <Blocker key={t.key}>
-              {t.driver?.label ?? "Driver"} pada trip{" "}
+              {t.driver?.label ?? "Sopir"} pada rit{" "}
               <span className="data">{t.tripNo}</span> membawa{" "}
               <span className="data">{formatNumber(t.muatan)}</span> {unitLabel()},
               melebihi kapasitas{" "}
-              <span className="data">{formatNumber(t.kapasitas)}</span>. Pindahkan
-              sebagian titik ke armada lain, atau ke trip berikutnya.
+              <span className="data">{formatNumber(t.kapasitas)}</span>. Pindahkan sebagian titik ke armada lain, atau ke rit berikutnya.
             </Blocker>
           ))}
           {tanpaProduk.length > 0 && (
@@ -697,8 +702,7 @@ export function PlanDetailPanel({
           )}
           {unassigned.length > 0 && (
             <Blocker>
-              {unassigned.length} titik belum punya driver. Tetapkan armada sebelum
-              konfirmasi.
+              {unassigned.length} titik belum punya sopir. Tetapkan armada sebelum konfirmasi.
             </Blocker>
           )}
           {kreditDiblokir.map((r) => (
@@ -724,7 +728,7 @@ export function PlanDetailPanel({
         per-row controls stay underneath for the stop that needs its own
         answer.
       */}
-      {editable && selected.size > 0 && (
+      {crewEditable && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-line bg-signal-soft/40 px-5 py-2.5">
           <span className="text-xs font-semibold text-ink">
             {selected.size} titik dipilih
@@ -733,28 +737,28 @@ export function PlanDetailPanel({
           <span className="mx-1 h-4 w-px bg-line" aria-hidden />
 
           <SelectInput
-            aria-label="Driver untuk titik terpilih"
+            aria-label="Sopir untuk titik terpilih"
             className="h-8 w-44 py-1.5 text-xs"
             value={bulkDriverId}
             onChange={(e) => setBulkDriverId(e.target.value)}
           >
-            <option value="">Pilih driver</option>
+            <option value="">Pilih sopir</option>
             {driverOptions.map((d) => (
               <option key={d.id} value={d.id} disabled={d.disabled}>
-                {d.label} — {d.sublabel}
+                {d.label} · {d.sublabel}
                 {d.disabled ? " (cuti)" : ""}
               </option>
             ))}
           </SelectInput>
           <SelectInput
-            aria-label="Trip untuk titik terpilih"
+            aria-label="Rit untuk titik terpilih"
             className="h-8 w-24 py-1.5 text-xs"
             value={bulkTripNo}
             onChange={(e) => setBulkTripNo(e.target.value)}
           >
             {Array.from({ length: MAX_TRIP }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
-                Trip {n}
+                Rit {n}
               </option>
             ))}
           </SelectInput>
@@ -812,7 +816,7 @@ export function PlanDetailPanel({
           <EmptyState
             icon={Truck}
             title="Rencana ini belum punya titik singgah"
-            description={allowsManualDemand ? `Tambahkan ${outletLabel()} satu per satu, atau tarik pesanan yang sudah disetujui dari halaman Pesanan ${outletLabelTitle()}.` : "Tinjau alokasi SIM3LON untuk tanggal ini. Sumber gagal atau belum lengkap tidak boleh diganti dengan demand manual."}
+            description={allowsManualDemand ? `Tambahkan ${outletLabel()} satu per satu, atau tarik pesanan yang sudah disetujui dari halaman Pesanan ${outletLabelTitle()}.` : "Periksa alokasi SIM3LON untuk tanggal ini. Bila datanya gagal dimuat atau belum lengkap, perbaiki dulu; titik tidak bisa diisi manual."}
             action={
               editable && allowsManualDemand && (
                 <div className="flex gap-2">
@@ -848,7 +852,7 @@ export function PlanDetailPanel({
                   Muatan
                 </th>
                 <th className="label px-3 py-2.5 text-2xs text-ink-muted" style={{ width: "14rem" }}>
-                  Driver / armada
+                  Sopir / armada
                 </th>
                 <th className="label px-3 py-2.5 text-2xs text-ink-muted" style={{ width: "8rem" }}>
                   Kredit
@@ -863,6 +867,7 @@ export function PlanDetailPanel({
                     trip={trip}
                     colSpan={editable ? 7 : 5}
                     editable={editable}
+                    editableCrew={crewEditable}
                     vehicleOptions={vehicleOptions}
                     vehicleUsage={vehicleUsage}
                     onVehicleChange={setTripVehicle}
@@ -876,6 +881,7 @@ export function PlanDetailPanel({
                       key={row.id}
                       row={row}
                       editable={editable}
+                      editableCrew={crewEditable}
                       editableDemand={editable && allowsManualDemand}
                       over={trip.muatan > trip.kapasitas}
                       driverOptions={driverOptions}
@@ -913,6 +919,7 @@ export function PlanDetailPanel({
                       key={row.id}
                       row={row}
                       editable={editable}
+                      editableCrew={crewEditable}
                       editableDemand={editable && allowsManualDemand}
                       over={false}
                       driverOptions={driverOptions}
@@ -943,7 +950,7 @@ export function PlanDetailPanel({
             {editable
               ? "Alokasi mengikuti SIM3LON; kuantitas tidak diedit manual. Atur armada dan rute sebelum konfirmasi."
               : plan.status === "Batal"
-              ? "Rencana dibatalkan. Kuota sudah dikembalikan ke agreement."
+              ? "Rencana dibatalkan. Kuota sudah dikembalikan ke SA."
               : `Dikonfirmasi oleh ${plan.dikonfirmasiOleh ?? "—"}. Titik singgah tidak dapat diubah di sini; surat jalan diterbitkan saat trip diberangkatkan.`}
           </p>
         )}
@@ -952,6 +959,7 @@ export function PlanDetailPanel({
             Ada perubahan yang belum disimpan.
           </p>
         )}
+        <PlanHistory planId={plan.id} />
       </div>
     </div>
   );
@@ -1129,6 +1137,7 @@ function Blocker({ children }: { children: React.ReactNode }) {
 function StopRow({
   row,
   editable,
+  editableCrew = editable,
   editableDemand,
   over,
   driverOptions,
@@ -1145,6 +1154,8 @@ function StopRow({
 }: {
   row: PlanRow;
   editable: boolean;
+  /** Whether the driver may be changed: needs the assign permission too. */
+  editableCrew?: boolean;
   editableDemand: boolean;
   /** True when the trip this row sits on is over its truck's capacity. */
   over: boolean;
@@ -1215,17 +1226,7 @@ function StopRow({
         </td>
 
         <td className="px-3 py-2.5">
-          {editable && !usesApi ? (
-            <TextInput
-              type="time"
-              mono
-              aria-label={`Jam pengiriman ${row.outlet}`}
-              value={row.jamPengiriman}
-              onChange={(e) =>
-                patchRow(row.id, { jamPengiriman: e.target.value })
-              }
-            />
-          ) : editable ? (
+          {editable ? (
             // The service plans a delivery date, not a clock time to type in
             // -- this cell shows the board's own ETA estimate (or "—" before
             // one exists) rather than an input nothing here persists. See
@@ -1251,10 +1252,10 @@ function StopRow({
         </td>
 
         <td className="px-3 py-2.5">
-          {editable ? (
+          {editableCrew ? (
             <>
               <SelectInput
-                aria-label={`Driver untuk ${row.outlet}`}
+                aria-label={`Sopir untuk ${row.outlet}`}
                 value={row.driverId ?? ""}
                 invalid={!row.driverId || over}
                 onChange={(e) =>
@@ -1269,7 +1270,7 @@ function StopRow({
                 <option value="">Belum ditetapkan</option>
                 {driverOptions.map((d) => (
                   <option key={d.id} value={d.id} disabled={d.disabled}>
-                    {d.label} — {d.sublabel}
+                    {d.label} · {d.sublabel}
                     {d.disabled ? " (cuti)" : ""}
                   </option>
                 ))}
@@ -1279,7 +1280,7 @@ function StopRow({
                   is not an assignment, and the grouping has nowhere to put it. */}
               {driver && (
                 <SelectInput
-                  aria-label={`Trip untuk ${row.outlet}`}
+                  aria-label={`Rit untuk ${row.outlet}`}
                   className="mt-1 py-1.5 text-xs"
                   value={String(tripOf(row))}
                   invalid={over}
@@ -1287,7 +1288,7 @@ function StopRow({
                 >
                   {Array.from({ length: MAX_TRIP }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>
-                      Trip {n}
+                      Rit {n}
                     </option>
                   ))}
                 </SelectInput>
@@ -1358,6 +1359,7 @@ function TripHeader({
   trip,
   colSpan,
   editable,
+  editableCrew = editable,
   vehicleOptions,
   vehicleUsage,
   onVehicleChange,
@@ -1367,6 +1369,8 @@ function TripHeader({
   trip: TripGroup;
   colSpan: number;
   editable: boolean;
+  /** Whether the truck may be changed: needs the assign permission too. */
+  editableCrew?: boolean;
   vehicleOptions: VehicleOption[];
   /** Which trip already has each truck out — see the doc comment where this is built. */
   vehicleUsage: Map<string, TripGroup>;
@@ -1386,9 +1390,9 @@ function TripHeader({
     <tr className="border-b border-line bg-panel-sunk">
       <td colSpan={colSpan} className="px-5 py-2">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <span className="label text-2xs text-ink-muted">Trip {trip.tripNo}</span>
+          <span className="label text-2xs text-ink-muted">Rit {trip.tripNo}</span>
           <span className="text-sm font-medium text-ink">
-            {trip.driver?.label ?? "Driver tidak dikenal"}
+            {trip.driver?.label ?? "Sopir tidak dikenal"}
           </span>
           {trip.driver?.sublabel && (
             <span className="data text-2xs text-ink-muted">{trip.driver.sublabel}</span>
@@ -1413,9 +1417,9 @@ function TripHeader({
             NULL, so a run without a truck cannot be committed at all — which is
             why an unchosen one is called out rather than left blank.
           */}
-          {editable ? (
+          {editableCrew ? (
             <SelectInput
-              aria-label={`Armada trip ${trip.tripNo}`}
+              aria-label={`Armada rit ${trip.tripNo}`}
               className={cn(
                 "data h-8 w-64 text-xs font-semibold",
                 !trip.vehicleId && "border-rust",
@@ -1431,9 +1435,9 @@ function TripHeader({
                 // picker already states it against this trip's own muatan.
                 return (
                   <option key={v.id} value={v.id} disabled={usedByOther}>
-                    {v.label} — {v.sublabel}
+                    {v.label} · {v.sublabel}
                     {usedByOther
-                      ? ` (dipakai ${usedByTrip.driver?.label ?? "trip lain"})`
+                      ? ` (dipakai ${usedByTrip.driver?.label ?? "rit lain"})`
                       : ""}
                   </option>
                 );
@@ -1481,7 +1485,7 @@ function TripHeader({
             value={trip.muatan}
             max={Math.max(trip.kapasitas, trip.muatan)}
             tone={over ? "rust" : "pine"}
-            label={`Muatan trip ${trip.tripNo}`}
+            label={`Muatan rit ${trip.tripNo}`}
           />
         </div>
       </td>

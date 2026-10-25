@@ -10,11 +10,25 @@
  */
 import type { User } from "@/types/auth";
 
-/** The tenant a session is acting as. */
+/** The tenant a session is acting as. `id` is the public id, as on every tenant. */
 export interface SessionTenant {
-  id: number;
+  id: string;
   code: string;
   name: string;
+}
+
+/** A tenant this user may switch the session into. */
+export interface SwitchableTenant {
+  id: string;
+  code: string;
+  name: string;
+  /** Absolute depth from the root, as `TenantEntity.level`. */
+  level: number;
+  /**
+   * False when the user reaches this tenant only through a subtree grant from
+   * above: they are borrowing a group's authority, not working at home.
+   */
+  viaMembership: boolean;
 }
 
 export interface SessionResult {
@@ -52,4 +66,16 @@ export interface AuthApi {
    * session is broken.
    */
   logout(): Promise<void>;
+
+  /** The tenants this session may switch into, the current one included. */
+  listSwitchableTenants(): Promise<SwitchableTenant[]>;
+
+  /**
+   * Re-issues the session in another tenant and returns it.
+   *
+   * The acting tenant is a signed claim, so it changes only by exchanging the
+   * refresh token for a new pair; a query parameter or a header naming the
+   * tenant would be the client deciding what row-level security shows.
+   */
+  switchTenant(tenantId: string): Promise<SessionResult>;
 }

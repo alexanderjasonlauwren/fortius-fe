@@ -112,16 +112,14 @@ function UploadStep({
       <ul className="space-y-1.5 text-xs leading-relaxed text-ink-muted">
         <li>
           Hari libur ditulis <span className="data text-ink">0</span>, bukan
-          dikosongkan. Sel kosong dilaporkan sebagai masalah, karena "tidak ada
-          kewajiban" dan "belum diisi" adalah dua hal berbeda.
+          dikosongkan. Sel kosong akan ditandai sebagai masalah.
         </li>
         <li>
           Tanggal dibaca hari-dulu: <span className="data text-ink">03/09/2026</span> berarti 3
           September. Format <span className="data text-ink">2026-09-03</span> paling aman.
         </li>
         <li>
-          Tanggal yang sudah tercatat tetapi tidak ada di berkas dibiarkan apa
-          adanya. Impor tidak pernah menghapus kewajiban.
+          Tanggal yang sudah tercatat tetapi tidak ada di berkas tidak diubah.
         </li>
       </ul>
 
@@ -195,7 +193,7 @@ function ReviewStep({
             {diff.masalah.map((m, i) => (
               <li key={i} className="text-2xs leading-relaxed text-ink">
                 <span className="data">Baris {m.baris}</span>
-                {m.nilai ? <span className="data"> · {m.nilai}</span> : null} — {m.alasan}
+                {m.nilai ? <span className="data"> · {m.nilai}</span> : null} · {m.alasan}
               </li>
             ))}
           </ul>
@@ -235,8 +233,7 @@ function ReviewStep({
 
       <p className="text-xs leading-relaxed text-ink-muted">
         Menerapkan menulis <span className="data text-ink">{formatNumber(ditulis)}</span> tanggal,
-        termasuk yang tidak berubah — supaya catatan asal-usulnya menunjuk berkas ini, bukan impor
-        sebelumnya. Tanggal yang tidak disebut berkas ini tidak disentuh.
+        termasuk yang tidak berubah, sehingga semuanya tercatat berasal dari berkas ini. Tanggal yang tidak ada di berkas tidak diubah.
       </p>
 
       <div className="flex gap-2">

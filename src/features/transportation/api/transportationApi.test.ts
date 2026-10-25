@@ -228,7 +228,7 @@ describe("getDocument", () => {
           outlet_count: 1,
           qty: 89_040,
           weight_kg: 267_120,
-          rate_per_kg: 354.64,
+          rate_basis: "per_kg", rate: 354.64,
           amount: 94_731_436.8,
         },
       ],
@@ -242,7 +242,7 @@ describe("getDocument", () => {
           product_code: "LPG-003",
           qty: 89_040,
           weight_kg: 267_120,
-          rate_per_kg: 354.64,
+          rate_basis: "per_kg", rate: 354.64,
           amount: 94_731_436.8,
           has_drift: false,
         },
@@ -252,7 +252,7 @@ describe("getDocument", () => {
         group_count: 1,
         total_qty: 89_040,
         total_weight_kg: 267_120,
-        rates: [{ rate_per_kg: 354.64, qty: 89_040, weight_kg: 267_120, amount: 94_731_436.8 }],
+        rates: [{ rate_basis: "per_kg", rate: 354.64, qty: 89_040, weight_kg: 267_120, amount: 94_731_436.8 }],
         amount: 94_731_436.8,
         sum_of_line_amounts: 94_731_436.8,
         rounding_difference: 0,
@@ -271,6 +271,20 @@ describe("getDocument", () => {
     expect(doc.lines[0].hasDrift).toBe(false);
     expect(doc.footer.amount).toBe(94_731_436.8);
     expect(doc.signatory.companyName).toBe("PT Nugroho Adhiraya");
+    // Each rate travels with its basis (client decision G5).
+    expect(doc.lines[0]).toMatchObject({ rateBasis: "per_kg", rate: 354.64 });
+    expect(doc.groups[0]).toMatchObject({ rateBasis: "per_kg", rate: 354.64 });
+    expect(doc.footer.rates[0]).toMatchObject({ rateBasis: "per_kg", rate: 354.64 });
+  });
+});
+
+describe("tariff display", () => {
+  it("names the unit the rate is priced in", async () => {
+    const { formatTariff } = await import("../lib/rate");
+    const { unitLabel } = await import("@/lib/lexicon");
+    // The tenant's own word for a unit: "tabung" for an LPG agent.
+    expect(formatTariff(1050, "per_unit")).toBe(`Rp 1.050/${unitLabel()}`);
+    expect(formatTariff(354.64, "per_kg")).toBe("Rp 354,64/kg");
   });
 });
 
@@ -326,5 +340,137 @@ describe("getRecap", () => {
     expect(report.rows[0].claimedAmount).toBe(5_957_952);
     expect(report.rows[0].avgDaysToSettle).toBeUndefined();
     expect(report.totals.outstandingAmount).toBe(5_957_952);
+  });
+});
+
+describe("BA LO from SIM3LON", () => {
+  it("pulls a draft's LOs through its own sub-route", async () => {
+    send.mockResolvedValue(claimWire({ claimed_amount: 12_937_267.2, total_qty: 12_160, total_weight_kg: 36_480 }));
+    const out = await transportationApiHttp.generateFromSim3lon("11111111-1111-4111-8111-111111111111");
+    expect(send).toHaveBeenCalledWith(
+      "post",
+      "/transportation-claims/11111111-1111-4111-8111-111111111111/lines/from-sim3lon",
+    );
+    expect(out.totalWeightKg).toBe(36_480);
+  });
+
+  it("reads a BA LO document's LO lines and keeps a delivery document as it was", async () => {
+    const base = {
+      header: { claim_number: "BAST-1", handover_date: "2026-04-02", tenant_legal_name: "PT Bhakta", branch_name: "SLT", claim_status: "draft" },
+      groups: [],
+      lines: [],
+      footer: {
+        line_count: 1, group_count: 0, total_qty: 360, total_weight_kg: 1080,
+        rates: [{ rate_basis: "per_kg", rate: 354.64, qty: 360, weight_kg: 1080, amount: 383_011.2 }],
+        amount: 383_011.2, sum_of_line_amounts: 383_011.2, rounding_difference: 0, drifted_line_count: 0,
+      },
+      signatory: { company_name: "PT Bhakta", title: "Direktur" },
+    };
+    getOne.mockResolvedValueOnce({
+      ...base,
+      kind: "lo",
+      loading_orders: [{ no: 1, date: "2026-03-02", lo_number: "8135493179", so_number: "0002633368",
+        material: "REFILL/ISI LPG @3KG (NET)", qty_pcs: 360, qty_kg: 1080, rate_per_kg: 354.64, amount: 383_011.2 }],
+    });
+    const lo = await transportationApiHttp.getDocument("c-1");
+    expect(lo.kind).toBe("lo");
+    expect(lo.loadingOrders[0]).toMatchObject({ loNumber: "8135493179", qtyKg: 1080, ratePerKg: 354.64 });
+
+    getOne.mockResolvedValueOnce(base);
+    const deliveries = await transportationApiHttp.getDocument("c-2");
+    expect(deliveries.kind).toBe("deliveries");
+    expect(deliveries.loadingOrders).toEqual([]);
+  });
+
+  it("sends the tax Pertamina withheld with a payment", async () => {
+    send.mockResolvedValue(claimWire({ claim_status: "paid", settled_amount: 12_678_521.86, tax_withheld: 258_745.34 }));
+    const out = await transportationApiHttp.updateClaimStatus({
+      id: "c-1", version: 3, claimStatus: "paid", settledAt: "2026-04-20",
+      settledAmount: 12_678_521.86, taxWithheld: 258_745.34, settlementMode: "bank",
+    });
+    const [, , body] = send.mock.calls[0];
+    expect(body).toMatchObject({ settled_amount: 12_678_521.86, tax_withheld: 258_745.34 });
+    expect(out.taxWithheld).toBe(258_745.34);
+  });
+});
+
+describe("transport fee invoice", () => {
+  const invoiceWire = {
+    id: "33333333-3333-4333-8333-333333333333",
+    claim_id: "c-9",
+    claim_number: "BAST-SLT-202610-0003",
+    claim_status: "approved",
+    invoice_number: "01/PT.BDA/TF/12102026",
+    invoice_date: "2026-10-12",
+    recipient_name: "PT. PERTAMINA PATRA NIAGA",
+    order_reference: "SP - 001/PND700000/2025-S0",
+    order_date: "2025-01-03",
+    tax_invoice_number: "08002600419112271",
+    description: "Transport fee Agen LPG 3kg Periode September 2026",
+    amount: 12_298_915,
+    vat_rate: 12,
+    vat_amount: 0,
+    total: 12_298_915,
+    bank: { id: "b-1", bank_name: "BNI", account_number: "1792837164", account_holder: "PT. BHAKTA DHARMA ANINDITA" },
+    signatory: { company_name: "PT. Bhakta Dharma Anindita", name: "Bimbo Adhi Nugroho" },
+  };
+
+  it("reads an issued invoice onto the console's names", async () => {
+    getOne.mockResolvedValue(invoiceWire);
+    const out = await transportationApiHttp.getInvoice("c-9");
+    expect(getOne).toHaveBeenCalledWith("/transportation-claims/c-9/invoice");
+    expect(out).toMatchObject({
+      invoiceNumber: "01/PT.BDA/TF/12102026",
+      orderReference: "SP - 001/PND700000/2025-S0",
+      taxInvoiceNumber: "08002600419112271",
+      total: 12_298_915,
+      bank: { bankName: "BNI", accountNumber: "1792837164" },
+      signatory: { name: "Bimbo Adhi Nugroho" },
+    });
+  });
+
+  it("leaves blank optional fields out, so the server never sees an empty date", async () => {
+    send.mockResolvedValue(invoiceWire);
+    await transportationApiHttp.createInvoice({
+      claimId: "c-9",
+      invoiceNumber: " 01/PT.BDA/TF/12102026 ",
+      invoiceDate: "2026-10-12",
+      recipientName: "PT. PERTAMINA PATRA NIAGA",
+      orderReference: "SP - 001/PND700000/2025-S0",
+      orderDate: "",
+      taxInvoiceDate: "  ",
+      description: "Transport fee Agen LPG 3kg Periode September 2026",
+      vatAmount: 0,
+      bankAccountId: "b-1",
+    });
+    const [method, path, body] = send.mock.calls[0];
+    expect(method).toBe("post");
+    expect(path).toBe("/transportation-claims/c-9/invoice");
+    expect(body).toMatchObject({ invoice_number: "01/PT.BDA/TF/12102026", bank_account_id: "b-1", vat_amount: 0 });
+    expect(body.order_date).toBeUndefined();
+    expect(body.tax_invoice_date).toBeUndefined();
+    expect(body).not.toHaveProperty("amount");
+  });
+
+  it("lists every issued invoice", async () => {
+    getOne.mockResolvedValue([invoiceWire]);
+    const out = await transportationApiHttp.listInvoices();
+    expect(getOne).toHaveBeenCalledWith("/transportation-claims/invoices");
+    expect(out[0].claimNumber).toBe("BAST-SLT-202610-0003");
+  });
+});
+
+// Regression 2026-10-24 F10: the status dialog offered every status, and a
+// submitted claim could be marked paid. It offers what the backend allows.
+describe("CLAIM_NEXT_STATUSES", () => {
+  it("reaches paid only through review and approval, and ends at paid or rejected", async () => {
+    const { CLAIM_NEXT_STATUSES } = await import("./contract");
+    const reachesPaid = Object.entries(CLAIM_NEXT_STATUSES)
+      .filter(([, next]) => next.includes("paid"))
+      .map(([from]) => from);
+    expect(reachesPaid).toEqual(["approved"]);
+    expect(CLAIM_NEXT_STATUSES.paid).toEqual([]);
+    expect(CLAIM_NEXT_STATUSES.rejected).toEqual([]);
+    expect(CLAIM_NEXT_STATUSES.submitted).toEqual(["under_review", "rejected"]);
   });
 });

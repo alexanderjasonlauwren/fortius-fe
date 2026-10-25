@@ -11,17 +11,33 @@ import { SAManagementPage } from "./pages/sa/SAManagementPage";
 import { SADetailPage } from "./pages/sa/SADetailPage";
 import { DistributionPage } from "./pages/distribution/DistributionPage";
 import { MonitoringPage } from "./pages/monitoring/MonitoringPage";
+import { SIM3LONIntegrationPage } from "./pages/integration/SIM3LONIntegrationPage";
 import { TransportationClaimListPage } from "./pages/transportation/TransportationClaimListPage";
 import { TransportationClaimDocumentPage } from "./pages/transportation/TransportationClaimDocumentPage";
 import { TransportationRecapPage } from "./pages/transportation/TransportationRecapPage";
+import { TransportInvoicePage } from "./pages/transportation/TransportInvoicePage";
 import { ExpensePage } from "./pages/expenses/ExpensePage";
 import { SopirPage } from "./pages/sopir/SopirPage";
 import { OcrPage } from "./pages/ocr/OcrPage";
 import { PaymentPage } from "./pages/payments/PaymentPage";
 import { PaymentControlPage } from "./pages/payments/PaymentControlPage";
 import { ReceivablesPage } from "./pages/receivables/ReceivablesPage";
+import { InvoiceDetailPage } from "./pages/receivables/InvoiceDetailPage";
+import { CashBankPage } from "./pages/cashbank/CashBankPage";
+import { AssetsPage } from "./pages/assets/AssetsPage";
+import { PurchaseDetailPage } from "./pages/purchases/PurchaseDetailPage";
+import { PurchasesPage } from "./pages/purchases/PurchasesPage";
+import { OpeningBalanceWizardPage } from "./pages/openingbalance/OpeningBalanceWizardPage";
 import { LedgerPage } from "./pages/ledger/LedgerPage";
+import { FinancialStatementsPage } from "./pages/financialstatements/FinancialStatementsPage";
 import { ReportsPage } from "./pages/reports/ReportsPage";
+import { AccountsPage } from "./pages/accounts/AccountsPage";
+import { FinanceDashboardPage } from "./pages/financedashboard/FinanceDashboardPage";
+import { FiscalYearsPage } from "./pages/fiscalyears/FiscalYearsPage";
+import { ApprovalsPage } from "./pages/approvals/ApprovalsPage";
+import { InventoryPage } from "./pages/inventory/InventoryPage";
+import { FinanceReportsPage } from "./pages/financereports/FinanceReportsPage";
+import { FinanceReportPage } from "./pages/financereports/FinanceReportPage";
 import { TransactionListPage } from "./pages/transactions/TransactionListPage";
 import { OutletListPage } from "./pages/outlet/OutletListPage";
 import { OutletFormPage } from "./pages/outlet/OutletFormPage";
@@ -102,6 +118,13 @@ const router = createBrowserRouter([
           <MonitoringPage />
         </RequirePermission>
       ) },
+      // The backend additionally restricts this to SPBE tenants; the permission
+      // gate here only hides it from roles that cannot open it at all.
+      { path: "integration/sim3lon", element: (
+        <RequirePermission permission={PERMISSIONS.INTEGRATION_SIM3LON_VIEW}>
+          <SIM3LONIntegrationPage />
+        </RequirePermission>
+      ) },
       { path: "transportation-claims", element: (
         <RequirePermission permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
           <TransportationClaimListPage />
@@ -110,6 +133,11 @@ const router = createBrowserRouter([
       { path: "transportation-claims/recap", element: (
         <RequirePermission permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
           <TransportationRecapPage />
+        </RequirePermission>
+      ) },
+      { path: "transport-invoices", element: (
+        <RequirePermission permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
+          <TransportInvoicePage />
         </RequirePermission>
       ) },
       { path: "transportation-claims/:id", element: (
@@ -141,19 +169,93 @@ const router = createBrowserRouter([
           <ReceivablesPage />
         </RequirePermission>
       ) },
+      { path: "receivables/:id", element: (
+        <RequirePermission permission={PERMISSIONS.INVOICES_VIEW}>
+          <InvoiceDetailPage />
+        </RequirePermission>
+      ) },
       { path: "payments", element: (
         <RequirePermission permission={PERMISSIONS.PAYMENTS_VIEW}>
           <PaymentPage />
         </RequirePermission>
       ) },
-      { path: "payment-control", element: (
+      // Renamed "Alokasi Dana Pengiriman" in accounting parity P6: it funds
+      // dispatch, it does not verify payments. The old path still lands.
+      { path: "dispatch-funding", element: (
         <RequirePermission permission={PERMISSIONS.PAYMENTS_VIEW}>
           <PaymentControlPage />
+        </RequirePermission>
+      ) },
+      { path: "payment-control", element: <Navigate to="/dispatch-funding" replace /> },
+      { path: "cash-bank", element: (
+        <RequirePermission permission={PERMISSIONS.CASH_VOUCHERS_VIEW}>
+          <CashBankPage />
+        </RequirePermission>
+      ) },
+      { path: "assets", element: (
+        <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+          <AssetsPage />
+        </RequirePermission>
+      ) },
+      { path: "purchases", element: (
+        <RequirePermission permission={PERMISSIONS.PURCHASES_VIEW}>
+          <PurchasesPage />
+        </RequirePermission>
+      ) },
+      { path: "purchases/:id", element: (
+        <RequirePermission permission={PERMISSIONS.PURCHASES_VIEW}>
+          <PurchaseDetailPage />
+        </RequirePermission>
+      ) },
+      { path: "opening-balance", element: (
+        <RequirePermission permission={PERMISSIONS.FISCAL_YEARS_VIEW}>
+          <OpeningBalanceWizardPage />
+        </RequirePermission>
+      ) },
+      { path: "accounts", element: (
+        <RequirePermission permission={PERMISSIONS.ACCOUNTS_VIEW}>
+          <AccountsPage />
+        </RequirePermission>
+      ) },
+      // Client answer 5: voids and refunds wait here for a second person.
+      { path: "approvals", element: (
+        <RequirePermission permission={PERMISSIONS.VOID_REQUESTS_VIEW}>
+          <ApprovalsPage />
+        </RequirePermission>
+      ) },
+      { path: "inventory", element: (
+        <RequirePermission permission={PERMISSIONS.INVENTORY_VIEW}>
+          <InventoryPage />
+        </RequirePermission>
+      ) },
+      { path: "fiscal-years", element: (
+        <RequirePermission permission={PERMISSIONS.FISCAL_YEARS_VIEW}>
+          <FiscalYearsPage />
         </RequirePermission>
       ) },
       { path: "ledger", element: (
         <RequirePermission permission={PERMISSIONS.JOURNALS_VIEW}>
           <LedgerPage />
+        </RequirePermission>
+      ) },
+      { path: "financial-statements", element: (
+        <RequirePermission permission={PERMISSIONS.FINANCIAL_STATEMENTS_VIEW}>
+          <FinancialStatementsPage />
+        </RequirePermission>
+      ) },
+      { path: "finance-dashboard", element: (
+        <RequirePermission permissions={[PERMISSIONS.FINANCE_REPORTS_VIEW, PERMISSIONS.FINANCIAL_STATEMENTS_VIEW]}>
+          <FinanceDashboardPage />
+        </RequirePermission>
+      ) },
+      { path: "laporan", element: (
+        <RequirePermission permission={PERMISSIONS.FINANCE_REPORTS_VIEW}>
+          <FinanceReportsPage />
+        </RequirePermission>
+      ) },
+      { path: "laporan/:key", element: (
+        <RequirePermission permission={PERMISSIONS.FINANCE_REPORTS_VIEW}>
+          <FinanceReportPage />
         </RequirePermission>
       ) },
       { path: "reports", element: (

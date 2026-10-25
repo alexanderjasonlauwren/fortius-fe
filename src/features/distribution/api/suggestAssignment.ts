@@ -33,7 +33,7 @@ export const ALASAN_KAPASITAS = "Tidak ada armada dengan sisa muatan yang cukup"
 /** The stop is bigger than the biggest truck, so no packing can place it. */
 export const ALASAN_TERLALU_BESAR = "Muatan melebihi kapasitas armada terbesar";
 /** There is no fleet to place it on at all. */
-export const ALASAN_TANPA_ARMADA = "Belum ada driver yang tersedia";
+export const ALASAN_TANPA_ARMADA = "Belum ada sopir yang tersedia";
 
 /**
  * How many depot cycles one driver may do in a day.

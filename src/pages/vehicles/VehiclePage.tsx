@@ -1,4 +1,4 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Pencil, Plus, Trash2, Truck } from "lucide-react";
@@ -27,7 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatDateId, formatNumber } from "@/lib/format";
 import { unitLabel } from "@/lib/lexicon";
-import type { VehicleStatusEntity } from "@/mocks/types";
+import type { VehicleStatusEntity } from "@/types/domain";
 
 const STATUSES: (VehicleStatusEntity | "Semua")[] = ["Semua", "Aktif", "Perawatan", "Nonaktif"];
 
@@ -196,7 +196,7 @@ export function VehiclePage() {
       <PageHeader
         eyebrow="Data induk"
         title="Armada"
-        description="Kendaraan yang dapat dimuati, kapasitas angkutnya, dan masa berlaku dokumennya. Driver ditetapkan per rit di papan berangkat."
+        description="Kendaraan yang dapat dimuati, kapasitas angkutnya, dan masa berlaku dokumennya. Sopir ditetapkan per rit di papan berangkat."
         actions={
           <Button onClick={() => openEditor(EMPTY)}>
             <Plus className="h-3.5 w-3.5" />
@@ -328,9 +328,9 @@ export function VehiclePage() {
                       })
                     }
                   >
-                    <option value="Aktif">Aktif — siap dimuati</option>
-                    <option value="Perawatan">Perawatan — sedang di bengkel</option>
-                    <option value="Nonaktif">Nonaktif — tidak dipakai</option>
+                    <option value="Aktif">Aktif (siap dimuati)</option>
+                    <option value="Perawatan">Perawatan (sedang di bengkel)</option>
+                    <option value="Nonaktif">Nonaktif (tidak dipakai)</option>
                   </SelectInput>
                 </Field>
               </div>

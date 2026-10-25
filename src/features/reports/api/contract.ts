@@ -8,7 +8,7 @@
  * arithmetic with no data source of their own, the same reason
  * `financeApi/contract.ts` holds `AGING_BUCKETS`.
  */
-import { addDays, isoDate, startOfToday } from "@/mocks/seed";
+import { addDays, isoDate, startOfToday } from "@/lib/date";
 
 export type ReportRange = "hari-ini" | "7h" | "30h" | "bulan-ini" | "bulan-lalu";
 
@@ -54,6 +54,13 @@ export interface ReportSummary {
   unitTarget: number;
   pencapaian: number;
   pendapatan: number;
+  /**
+   * Revenue for SIM3LON days before a branch's planning start date: sold and
+   * paid outside the system, posted to the ledger as Dr Bank / Cr Penjualan.
+   * Kept apart from `pendapatan`, which is only what the system verified.
+   */
+  pendapatanSebelumGoLive: number;
+  unitSebelumGoLive: number;
   piutang: number;
   ditolak: number;
   suratJalan: number;
@@ -68,6 +75,7 @@ export interface DailyPoint {
   target: number;
   realisasi: number;
   pendapatan: number;
+  pendapatanSebelumGoLive: number;
 }
 
 export interface TopOutletRow {

@@ -1,37 +1,24 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { Moon, Sun, TriangleAlert } from "lucide-react";
 import {
-  Database,
-  Download,
-  Moon,
-  Play,
-  RotateCcw,
-  Sun,
-  TriangleAlert,
-} from "lucide-react";
-import {
-  exportData,
   getSettingsDetail,
   clearSettingOverride,
-  resetData,
   updateSettings,
 } from "@/features/settings/api/settingsApi";
 import {
   INHERITABLE_FIELDS,
   type InheritableFieldKey,
 } from "@/features/settings/api/fields";
-import { advanceOperations } from "@/mocks/rules";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { useTheme } from "@/hooks/useTheme";
-import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/components/common/PageHeader";
 import { InheritableField } from "@/features/settings/components/InheritableField";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
-import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import {
   Field,
   SegmentedControl,
@@ -40,13 +27,16 @@ import {
   TextareaInput,
   Toggle,
 } from "@/components/common/Field";
-import { SupplierSection } from "@/features/settings/components/SupplierSection";
-import { BankSection } from "@/features/settings/components/BankSection";
+import { RegistrationPackageSection } from "@/features/settings/components/RegistrationPackageSection";
 import { NumberingSection } from "@/features/settings/components/NumberingSection";
+import { SettlementSection } from "@/features/settings/components/SettlementSection";
 import { OperationsSection } from "@/features/settings/components/OperationsSection";
+import { TransportFeeRateSection } from "@/features/settings/components/TransportFeeRateSection";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { Button } from "@/components/ui/button";
 import { cn, getInitials } from "@/lib/utils";
-import type { SettingsEntity } from "@/mocks/types";
+import type { SettingsEntity } from "@/types/domain";
 import { describeAccess, describeRoles } from "@/features/rbac/access";
 
 /**
@@ -66,15 +56,12 @@ export function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>("agen");
   const { theme, setTheme } = useTheme();
   const user = useAuthStore((state) => state.user);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const settings = useQuery({
     queryKey: [...scopeKey(), "settings", "detail"],
     queryFn: getSettingsDetail,
   });
   const [form, setForm] = useState<SettingsEntity | null>(null);
-  const [resetting, setResetting] = useState(false);
 
   /**
    * Fields this tenant has taken ownership of during THIS edit.
@@ -171,48 +158,14 @@ export function SettingsPage() {
     </InheritableField>
   );
 
-  const exportMutation = useDeskMutation({
-    mutationFn: () => exportData(),
-    errorTitle: "Ekspor gagal",
-    success: "Salinan data diunduh",
-  });
-
-  const resetMutation = useDeskMutation({
-    mutationFn: () => resetData(),
-    errorTitle: "Atur ulang gagal",
-    success: () => ({
-      title: "Data contoh dibuat ulang",
-      description: "Konsol kembali ke satu hari kerja yang segar.",
-    }),
-    onDone: () => setResetting(false),
-  });
-
   const set = <K extends keyof SettingsEntity>(key: K, value: SettingsEntity[K]) =>
     setForm((f) => (f ? { ...f, [key]: value } : f));
-
-  /** Demo control: pushes today's run forward without waiting for the clock. */
-  const runSimulation = () => {
-    let steps = 0;
-    for (let i = 0; i < 6; i++) if (advanceOperations()) steps += 1;
-    queryClient.invalidateQueries();
-    toast({
-      title:
-        steps > 0
-          ? "Simulasi hari dimajukan"
-          : "Tidak ada surat jalan yang bisa dimajukan",
-      description:
-        steps > 0
-          ? "Surat jalan hari ini bergerak beberapa langkah. Periksa papan berangkat dan monitoring."
-          : "Semua surat jalan hari ini sudah selesai, atau jadwalnya belum tiba.",
-      tone: steps > 0 ? "success" : "info",
-    });
-  };
 
   /**
    * Belt-and-braces: `if (!form)` alone cannot tell "still loading" from
    * "failed" — both leave `form` null — so a genuine error read as an
    * eternal skeleton, with nothing on screen explaining why. Found live
-   * against the API build; see mocks/scope.ts's `setActiveScope` for the
+   * against the API build; see lib/scope.ts's `setActiveScope` for the
    * root-cause fix this is deliberately kept alongside, not instead of.
    */
   if (settings.isError) {
@@ -381,7 +334,7 @@ export function SettingsPage() {
         <Panel>
           <PanelHeader
             title="Identitas hukum"
-            hint="Tidak diwarisi — setiap badan hukum punya miliknya sendiri"
+            hint="Tidak diwarisi. Setiap badan hukum punya datanya sendiri"
           />
           <PanelBody className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
@@ -423,9 +376,9 @@ export function SettingsPage() {
               >
                 {/* Asia/Jakarta is the IANA identifier for WIB, which covers
                     Central Java. It names a timezone, not a city. */}
-                <option value="Asia/Jakarta">WIB — Asia/Jakarta</option>
-                <option value="Asia/Makassar">WITA — Asia/Makassar</option>
-                <option value="Asia/Jayapura">WIT — Asia/Jayapura</option>
+                <option value="Asia/Jakarta">WIB (Asia/Jakarta)</option>
+                <option value="Asia/Makassar">WITA (Asia/Makassar)</option>
+                <option value="Asia/Jayapura">WIT (Asia/Jayapura)</option>
               </SelectInput>
             </Field>
             <div className="sm:col-span-2">
@@ -463,13 +416,12 @@ export function SettingsPage() {
         <Panel className="xl:col-span-2">
           <PanelHeader
             title="Kantor terdaftar"
-            hint="Alamat resmi badan hukum — bukan titik awal distribusi"
+            hint="Alamat resmi badan hukum, bukan titik awal distribusi"
           />
           <PanelBody className="space-y-3">
             <p className="text-xs leading-relaxed text-ink-muted">
               Armada memuat dari <span className="font-medium text-ink">cabang</span>,
-              dan satu PT bisa punya beberapa. Koordinat di sini dipakai untuk
-              menampilkan tenant di peta dan sebagai titik awal cabang pertama
+              dan satu PT bisa punya beberapa. Koordinat di sini dipakai untuk menampilkan perusahaan di peta dan sebagai titik awal cabang pertama
               yang dibuat tanpa koordinat sendiri.
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -566,26 +518,32 @@ export function SettingsPage() {
             page: geofence radius, stop duration, planning lead time and whether
             driver location is recorded. Same iam.tenant_settings row. */}
         {tab === "operasi" && <OperationsSection />}
+        {tab === "operasi" && (
+          <CanAccess permission={PERMISSIONS.SETTINGS_EDIT}>
+            <SettlementSection />
+          </CanAccess>
+        )}
+        {tab === "operasi" && (
+          <CanAccess permission={PERMISSIONS.TRANSPORT_TARIFFS_VIEW}>
+            <TransportFeeRateSection />
+          </CanAccess>
+        )}
 
         {tab === "istilah" && (
         <Panel className="lg:col-span-2">
           <PanelHeader
             title="Istilah"
-            hint="Sebutan yang dipakai di seluruh konsol — ubah untuk bidang usaha lain"
+            hint="Sebutan yang dipakai di seluruh konsol. Ubah bila bidang usahanya lain"
           />
           <PanelBody className="space-y-4">
             <p className="text-xs leading-relaxed text-ink-muted">
-              Konsol ini menangani distribusi apa pun. Yang membedakan satu bidang
-              usaha dari yang lain hanyalah sebutannya, jadi tiga kata di bawah ini
-              adalah data, bukan bagian dari aplikasi. Mengubahnya mengganti label
-              di seluruh halaman, kolom tabel, surat jalan, dan berkas ekspor —
-              tanpa menyentuh satu pun angka atau riwayat.
+              Tiga sebutan ini dipakai di seluruh konsol: halaman, kolom tabel, surat jalan, dan berkas ekspor. Mengubahnya hanya mengganti label; angka dan riwayat tidak berubah.
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field
                 label="Satuan"
                 htmlFor="istilah-satuan"
-                hint="Satu unit yang Anda antar — tabung, galon, dus, sak. Dipakai pada angka gabungan lintas produk."
+                hint="Satu unit yang Anda antar, misalnya tabung, galon, dus, sak. Dipakai pada angka gabungan lintas produk."
               >
                 <TextInput
                   id="istilah-satuan"
@@ -599,7 +557,7 @@ export function SettingsPage() {
               <Field
                 label="Titik antar"
                 htmlFor="istilah-outlet"
-                hint="Tempat tujuan pengiriman — pangkalan, depot, toko, gerai."
+                hint="Tempat tujuan pengiriman, misalnya pangkalan, depot, toko, gerai."
               >
                 <TextInput
                   id="istilah-outlet"
@@ -613,7 +571,7 @@ export function SettingsPage() {
               <Field
                 label="Pemasok"
                 htmlFor="istilah-pemasok"
-                hint="Sumber pasokan yang kuotanya Anda tarik — SPBE, pabrik, distributor pusat."
+                hint="Sumber pasokan yang kuotanya Anda tarik, misalnya SPBE, pabrik, distributor pusat."
               >
                 <TextInput
                   id="istilah-pemasok"
@@ -631,8 +589,19 @@ export function SettingsPage() {
 
         {tab === "master" && (
           <div className="space-y-4 lg:col-span-2">
-            <SupplierSection />
-            <BankSection />
+            {/* Accounting parity P6 moved the finance master data next to the
+                work that uses it, as Jurnal keeps it. */}
+            <p className="text-xs text-ink-muted">
+              Vendor ada di{" "}
+              <Link to="/purchases?tab=vendor" className="font-semibold text-ink underline underline-offset-4">Pembelian</Link>,
+              kategori biaya di{" "}
+              <Link to="/expenses?tab=kategori" className="font-semibold text-ink underline underline-offset-4">Pengeluaran</Link>,
+              rekening kas &amp; bank di{" "}
+              <Link to="/cash-bank?tab=rekening" className="font-semibold text-ink underline underline-offset-4">Kas &amp; Bank</Link>,
+              dan penerbit SA di{" "}
+              <Link to="/sa" className="font-semibold text-ink underline underline-offset-4">Schedule Agreement</Link>.
+            </p>
+            <RegistrationPackageSection />
             <NumberingSection />
           </div>
         )}
@@ -679,88 +648,6 @@ export function SettingsPage() {
         )}
 
       </div>
-
-      {tab === "sistem" && (
-      <Panel>
-        <PanelHeader
-          title="Data & simulasi"
-          hint="Konsol ini berjalan di atas data contoh yang tersimpan di peramban Anda"
-        />
-        <PanelBody className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Action
-            icon={Play}
-            title="Majukan simulasi hari"
-            description="Menggerakkan surat jalan hari ini beberapa langkah — berguna untuk melihat papan berangkat hidup di luar jam operasional."
-            action={
-              <Button variant="outline" className="w-full" onClick={runSimulation}>
-                Jalankan simulasi
-              </Button>
-            }
-          />
-          <Action
-            icon={Download}
-            title="Unduh salinan data"
-            description="Mengekspor seluruh isi konsol sebagai berkas JSON, setara dengan cadangan basis data."
-            action={
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => exportMutation.mutate(undefined as never)}
-                disabled={exportMutation.isPending}
-              >
-                Unduh JSON
-              </Button>
-            }
-          />
-          <Action
-            icon={RotateCcw}
-            title="Atur ulang data contoh"
-            description="Menghapus seluruh perubahan Anda dan membuat ulang satu hari kerja yang segar."
-            action={
-              <Button
-                variant="destructive"
-                className="w-full"
-                onClick={() => setResetting(true)}
-              >
-                Atur ulang
-              </Button>
-            }
-          />
-        </PanelBody>
-      </Panel>
-      )}
-
-      <ConfirmDialog
-        isOpen={resetting}
-        title="Atur ulang seluruh data?"
-        message="Semua rencana, verifikasi, dan perubahan data induk yang Anda buat akan hilang."
-        details="Konsol dimuat ulang dengan satu hari kerja baru: riwayat pengiriman di belakang, rencana berjalan hari ini, dan draf untuk hari berikutnya."
-        confirmLabel="Atur ulang data"
-        isPending={resetMutation.isPending}
-        onCancel={() => setResetting(false)}
-        onConfirm={() => resetMutation.mutate(undefined as never)}
-      />
-    </div>
-  );
-}
-
-function Action({
-  icon: Icon,
-  title,
-  description,
-  action,
-}: {
-  icon: typeof Database;
-  title: string;
-  description: string;
-  action: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col rounded-md border border-line bg-panel-sunk p-4">
-      <Icon className="mb-3 h-4 w-4 text-ink-muted" strokeWidth={1.75} />
-      <p className="text-sm font-semibold text-ink">{title}</p>
-      <p className="mt-1 flex-1 text-xs leading-relaxed text-ink-muted">{description}</p>
-      <div className="mt-4">{action}</div>
     </div>
   );
 }

@@ -47,7 +47,7 @@ const activityColumns: Column<RecentActivity>[] = [
   },
   {
     key: "driver",
-    header: "Driver",
+    header: "Sopir",
     render: (row) => <span className="text-ink-muted">{row.driver}</span>,
     sortValue: (row) => row.driver,
   },
@@ -180,7 +180,7 @@ export function DashboardPage() {
             kpi ? (
               <>
                 <span className="data">{formatNumber(quotaUsed)}</span> dari{" "}
-                <span className="data">{formatNumber(kpi.monthlyQuotaTotal)}</span> sudah ditarik
+                <span className="data">{formatNumber(kpi.monthlyQuotaTotal)}</span> tersalurkan
               </>
             ) : undefined
           }

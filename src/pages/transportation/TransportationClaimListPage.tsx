@@ -1,18 +1,19 @@
-import { scopeKey } from "@/mocks/scope";
+import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Calculator, Eye, FileText, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { BarChart3, Calculator, CloudDownload, Eye, FileText, Pencil, Plus, ReceiptText, ShieldCheck, Trash2 } from "lucide-react";
 import {
   createClaim,
   deleteClaim,
   generateLines,
+  generateFromSim3lon,
   getClaims,
   updateClaim,
   updateClaimStatus,
   type ClaimView,
 } from "@/features/transportation/api/transportationApi";
-import { CLAIM_STATUSES, CLAIM_STATUS_LABEL } from "@/features/transportation/api/contract";
+import { CLAIM_NEXT_STATUSES, CLAIM_STATUSES, CLAIM_STATUS_LABEL } from "@/features/transportation/api/contract";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
@@ -20,6 +21,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { ActionTooltip } from "@/components/common/ActionTooltip";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getStatusVariant, spineFor } from "@/lib/status";
 import { Field, SearchInput, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
@@ -32,7 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { formatRupiah } from "@/lib/format";
+import { formatNumber, formatRupiah } from "@/lib/format";
 import type { ClaimStatus } from "@/types/domain";
 
 interface FormState {
@@ -56,14 +58,17 @@ function periodLabel(periodStart: string): string {
 interface StatusFormState {
   id: string;
   version: number;
+  /** The claim's status now; claimStatus is where it is being moved. */
+  fromStatus: ClaimStatus;
   claimStatus: ClaimStatus;
   principalInvoiceNumber: string;
   statusNote: string;
   settledAt: string;
   settledAmount: string;
+  taxWithheld: string;
   settlementMode: "cash" | "bank";
   labelForTitle: string;
-  /** The claim's own claimedAmount -- settledAmount must match it exactly. */
+  /** The claim's own claimedAmount -- settledAmount + taxWithheld must make it up. */
   expectedAmount: number;
 }
 
@@ -114,6 +119,15 @@ export function TransportationClaimListPage() {
     }),
   });
 
+  // The BA LO: the period's LPG 3 kg Loading Orders from SIM3LON, per kg.
+  const loMutation = useDeskMutation({
+    mutationFn: (id: string) => generateFromSim3lon(id),
+    errorTitle: "LO dari SIM3LON tidak dapat diambil",
+    success: (c) => ({
+      title: `${c.claimNumber}: ${formatNumber(c.totalWeightKg)} kg dari SIM3LON senilai ${formatRupiah(c.claimedAmount)}`,
+    }),
+  });
+
   const statusMutation = useDeskMutation({
     mutationFn: (values: StatusFormState) =>
       updateClaimStatus({
@@ -126,6 +140,10 @@ export function TransportationClaimListPage() {
         settledAmount:
           values.claimStatus === "paid" && values.settledAmount
             ? Number(values.settledAmount)
+            : undefined,
+        taxWithheld:
+          values.claimStatus === "paid" && Number(values.taxWithheld) > 0
+            ? Number(values.taxWithheld)
             : undefined,
         settlementMode: values.claimStatus === "paid" ? values.settlementMode : undefined,
       }),
@@ -150,11 +168,13 @@ export function TransportationClaimListPage() {
     setStatusEditing({
       id: row.id,
       version: row.version,
-      claimStatus: row.claimStatus,
+      fromStatus: row.claimStatus,
+      claimStatus: CLAIM_NEXT_STATUSES[row.claimStatus][0] ?? row.claimStatus,
       principalInvoiceNumber: row.principalInvoiceNumber ?? "",
       statusNote: "",
       settledAt: row.settledAt ?? "",
       settledAmount: row.settledAmount ? String(row.settledAmount) : String(row.claimedAmount || ""),
+      taxWithheld: row.taxWithheld ? String(row.taxWithheld) : "",
       settlementMode: row.settlementMode ?? "bank",
       labelForTitle: row.claimNumber,
       expectedAmount: row.claimedAmount,
@@ -241,54 +261,94 @@ export function TransportationClaimListPage() {
       render: (row) => (
         <div className="flex justify-end gap-1">
           <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Lihat Berita Acara ${row.claimNumber}`}
-              onClick={() => navigate(`/transportation-claims/${row.id}`)}
-            >
-              <Eye className="h-3.5 w-3.5" />
-            </Button>
-          </CanAccess>
-          {row.claimStatus === "draft" && (
-            <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
+            <ActionTooltip label="Lihat Berita Acara / BA LO. Cetak atau unduh PDF dari sana">
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label={`Buat lini ${row.claimNumber}`}
-                title="Buat/perbarui lini dari pengiriman pada periode ini"
-                disabled={generateMutation.isPending}
-                onClick={() => generateMutation.mutate(row.id)}
+                aria-label={`Lihat Berita Acara ${row.claimNumber}`}
+                onClick={() => navigate(`/transportation-claims/${row.id}`)}
               >
-                <Calculator className="h-3.5 w-3.5" />
+                <Eye className="h-3.5 w-3.5" />
               </Button>
+            </ActionTooltip>
+          </CanAccess>
+          {(row.claimStatus === "approved" || row.claimStatus === "paid") && (
+            <ActionTooltip label="Invoice transport fee (Tahap 2) untuk BAST yang sudah disetujui">
+              <Button variant="ghost" size="icon-xs" asChild aria-label={`Invoice ${row.claimNumber}`}>
+                <Link to="/transport-invoices">
+                  <ReceiptText className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </ActionTooltip>
+          )}
+          {row.claimStatus === "draft" && (
+            <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
+              <ActionTooltip
+                label="Hitung lini dari pengiriman (surat jalan) yang selesai pada periode ini"
+                disabled={generateMutation.isPending}
+              >
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Buat lini ${row.claimNumber}`}
+                  disabled={generateMutation.isPending}
+                  onClick={() => generateMutation.mutate(row.id)}
+                >
+                  <Calculator className="h-3.5 w-3.5" />
+                </Button>
+              </ActionTooltip>
+              <ActionTooltip
+                label="Ambil LO dari SIM3LON (BA LO): setiap LO LPG 3 kg pada periode ini × tarif per kg"
+                disabled={loMutation.isPending}
+              >
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Ambil LO dari SIM3LON ${row.claimNumber}`}
+                  disabled={loMutation.isPending}
+                  onClick={() => loMutation.mutate(row.id)}
+                >
+                  <CloudDownload className="h-3.5 w-3.5" />
+                </Button>
+              </ActionTooltip>
             </CanAccess>
           )}
           <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Ubah status ${row.claimNumber}`}
-              onClick={() => openStatusEditor(row)}
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Ubah ${row.claimNumber}`}
-              onClick={() =>
-                openEditor({
-                  id: row.id,
-                  version: row.version,
-                  period: row.periodStart?.slice(0, 7) ?? "",
-                  handoverReference: row.handoverReference ?? "",
-                  handoverDate: row.handoverDate,
-                })
+            <ActionTooltip
+              label={
+                CLAIM_NEXT_STATUSES[row.claimStatus].length > 0
+                  ? "Ubah status: ajukan, tinjau, setujui, tolak, atau tandai lunas"
+                  : `Klaim ${CLAIM_STATUS_LABEL[row.claimStatus].toLowerCase()} tidak dapat diubah lagi`
               }
             >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Ubah status ${row.claimNumber}`}
+                disabled={CLAIM_NEXT_STATUSES[row.claimStatus].length === 0}
+                onClick={() => openStatusEditor(row)}
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+              </Button>
+            </ActionTooltip>
+            <ActionTooltip label="Ubah nomor dan tanggal serah terima BAST">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Ubah ${row.claimNumber}`}
+                onClick={() =>
+                  openEditor({
+                    id: row.id,
+                    version: row.version,
+                    period: row.periodStart?.slice(0, 7) ?? "",
+                    handoverReference: row.handoverReference ?? "",
+                    handoverDate: row.handoverDate,
+                  })
+                }
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            </ActionTooltip>
           </CanAccess>
           {/* Only a draft may be deleted -- mirrors the service's own rule
               (a submitted claim is a record of something already sent to
@@ -296,15 +356,17 @@ export function TransportationClaimListPage() {
               always fail past draft. */}
           {row.claimStatus === "draft" && (
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_DELETE}>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Hapus ${row.claimNumber}`}
-                onClick={() => setPendingDelete(row)}
-                className="hover:bg-rust-soft hover:text-rust-ink"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              <ActionTooltip label="Hapus klaim draf ini">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Hapus ${row.claimNumber}`}
+                  onClick={() => setPendingDelete(row)}
+                  className="hover:bg-rust-soft hover:text-rust-ink"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </ActionTooltip>
             </CanAccess>
           )}
         </div>
@@ -317,22 +379,26 @@ export function TransportationClaimListPage() {
       <PageHeader
         eyebrow="Operasi harian"
         title="Klaim Transportasi (BAST)"
-        description="Buka klaim untuk satu periode, lalu buat lininya dari pengiriman yang sudah selesai -- nilai klaim dihitung otomatis, tidak diketik manual."
+        description="Buka klaim untuk satu periode, lalu isi lininya dari LO SIM3LON atau dari pengiriman yang sudah selesai. Nilai klaim dihitung otomatis."
         actions={
           <div className="flex gap-2">
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_VIEW}>
-              <Button variant="outline" asChild>
-                <Link to="/transportation-claims/recap">
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  Rekap bulanan
-                </Link>
-              </Button>
+              <ActionTooltip label="Rekap per bulan: jumlah klaim, nilai, yang sudah dibayar dan sisa piutang">
+                <Button variant="outline" asChild>
+                  <Link to="/transportation-claims/recap">
+                    <BarChart3 className="h-3.5 w-3.5" />
+                    Rekap bulanan
+                  </Link>
+                </Button>
+              </ActionTooltip>
             </CanAccess>
             <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_CREATE}>
-              <Button onClick={() => openEditor(EMPTY)}>
-                <Plus className="h-3.5 w-3.5" />
-                Buka klaim baru
-              </Button>
+              <ActionTooltip label="Buka klaim draf untuk satu bulan, lalu isi lininya dari LO SIM3LON atau pengiriman">
+                <Button onClick={() => openEditor(EMPTY)}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Buka klaim baru
+                </Button>
+              </ActionTooltip>
             </CanAccess>
           </div>
         }
@@ -353,7 +419,7 @@ export function TransportationClaimListPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Nomor BAST, klaim, atau invoice"
-                className="w-64"
+                className="w-72"
               />
               <SelectInput value={status} onChange={(e) => setStatus(e.target.value as ClaimStatus | "Semua")}>
                 <option value="Semua">Semua status</option>
@@ -396,7 +462,7 @@ export function TransportationClaimListPage() {
               <DialogTitle>{editing?.id ? "Ubah BAST" : "Buka klaim baru"}</DialogTitle>
               <DialogDescription>
                 {editing?.id
-                  ? "Nomor BAST adalah nomor pada dokumen serah terima itu sendiri -- kosongkan jika belum diterbitkan."
+                  ? "Nomor BAST adalah nomor di dokumen serah terimanya. Kosongkan bila belum terbit."
                   : "Nomor klaim diterbitkan otomatis. Setelah dibuka, gunakan “Buat lini” pada baris klaim untuk menghitung nilainya dari pengiriman pada periode ini."}
               </DialogDescription>
             </DialogHeader>
@@ -433,7 +499,7 @@ export function TransportationClaimListPage() {
                 <Field
                   label="Nomor BAST"
                   htmlFor="tc-ref"
-                  hint="Nomor pada dokumen fisik/hasil pindai -- kosongkan jika belum ada."
+                  hint="Nomor di dokumen fisik atau hasil pindaian. Kosongkan bila belum ada."
                 >
                   <TextInput
                     id="tc-ref"
@@ -470,8 +536,7 @@ export function TransportationClaimListPage() {
             <DialogHeader>
               <DialogTitle>Ubah status {statusEditing?.labelForTitle}</DialogTitle>
               <DialogDescription>
-                Catat status yang dibaca dari iVendor. Bisa diubah ke status apa pun, kapan
-                pun -- ini catatan atas proses di luar sistem, bukan alur persetujuan internal.
+                Catat status terbaru dari iVendor. Status bisa diubah kapan saja mengikuti iVendor.
               </DialogDescription>
             </DialogHeader>
 
@@ -488,7 +553,7 @@ export function TransportationClaimListPage() {
                       })
                     }
                   >
-                    {CLAIM_STATUSES.map((s) => (
+                    {CLAIM_NEXT_STATUSES[statusEditing.fromStatus].map((s) => (
                       <option key={s} value={s}>
                         {CLAIM_STATUS_LABEL[s]}
                       </option>
@@ -518,11 +583,10 @@ export function TransportationClaimListPage() {
                   />
                 </Field>
 
-                {/* Only relevant on the transition to "paid" -- all three are
-                    required together, and settledAmount must match the
-                    claim's own claimedAmount exactly (mirrors the backend's
-                    own UpdateStatusRequest rule: a short payment or a
-                    withholding is not yet handled). */}
+                {/* Only relevant on the transition to "paid" -- date, amount
+                    and method are required together, and the money received
+                    plus the tax Pertamina withheld must make up the claim's
+                    own claimedAmount (the backend's UpdateStatusRequest rule). */}
                 {statusEditing.claimStatus === "paid" && (
                   <>
                     <Field label="Tanggal pelunasan" htmlFor="tc-settled-at" required>
@@ -536,9 +600,9 @@ export function TransportationClaimListPage() {
                       />
                     </Field>
                     <Field
-                      label="Jumlah pelunasan"
+                      label="Uang diterima"
                       htmlFor="tc-settled-amount"
-                      hint={`Harus sama dengan nilai klaim: ${formatRupiah(statusEditing.expectedAmount)}.`}
+                      hint={`Diterima + pajak dipotong harus sama dengan nilai klaim: ${formatRupiah(statusEditing.expectedAmount)}.`}
                       required
                     >
                       <TextInput
@@ -549,6 +613,29 @@ export function TransportationClaimListPage() {
                         onChange={(e) =>
                           setStatusEditing({ ...statusEditing, settledAmount: e.target.value })
                         }
+                      />
+                    </Field>
+                    <Field
+                      label="Pajak dipotong Pertamina"
+                      htmlFor="tc-tax-withheld"
+                      hint="Sesuai bukti potong; dicatat ke Pajak Dibayar Dimuka. Kosongkan bila tidak ada."
+                    >
+                      <TextInput
+                        id="tc-tax-withheld"
+                        type="number"
+                        mono
+                        value={statusEditing.taxWithheld}
+                        onChange={(e) => {
+                          const tax = e.target.value;
+                          // The money that arrived is what is left once the
+                          // tax is taken out; the operator can still correct it.
+                          const left = statusEditing.expectedAmount - (Number(tax) || 0);
+                          setStatusEditing({
+                            ...statusEditing,
+                            taxWithheld: tax,
+                            settledAmount: left > 0 ? String(Math.round(left * 100) / 100) : statusEditing.settledAmount,
+                          });
+                        }}
                       />
                     </Field>
                     <Field label="Metode pembayaran" htmlFor="tc-settlement-mode" required>
@@ -586,7 +673,7 @@ export function TransportationClaimListPage() {
       <ConfirmDialog
         isOpen={!!pendingDelete}
         title={`Hapus ${pendingDelete?.claimNumber}?`}
-        message="Hanya draft yang bisa dihapus. Klaim yang sudah diserahkan adalah catatan yang sudah dikirim ke prinsipal -- ubah statusnya jika perlu dikoreksi."
+        message="Hanya klaim draf yang bisa dihapus. Klaim yang sudah diajukan ke Pertamina cukup diubah statusnya bila perlu dikoreksi."
         confirmLabel="Hapus"
         variant="destructive"
         isPending={deleteMutation.isPending}

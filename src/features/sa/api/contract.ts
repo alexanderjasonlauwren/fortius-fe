@@ -10,13 +10,17 @@
  * it is running against.
  */
 import type {
+  PlanningCutoverReport,
+  QuotaSummary,
   SAImportApplied,
   SAImportBatch,
   SAImportSummary,
   SIM3LONApplied,
+  SIM3LONLiveCandidate,
   SIM3LONApplyReview,
   SIM3LONPreview,
   SIM3LONReconciliationPreview,
+  SIM3LONVarianceReport,
   ScheduleAgreement,
   SAFilterParams,
   UploadSAPayload,
@@ -56,4 +60,32 @@ export interface ScheduleAgreementApi {
   previewSIM3LON(file: File, supplierName: string, productId: string): Promise<SIM3LONPreview>;
   getSIM3LONReconciliation(batchId: string): Promise<SIM3LONReconciliationPreview>;
   applySIM3LON(batchId: string, review?: SIM3LONApplyReview): Promise<SIM3LONApplied>;
+  syncLivePenyaluran(period: string): Promise<SIM3LONLiveCandidate>;
+  getLivePenyaluranCandidates(period: string): Promise<SIM3LONLiveCandidate[]>;
+  /**
+   * Sets the date the default branch starts planning in the system. Earlier
+   * SIM3LON days become the Base quota's opening balance. `dryRun` reports the
+   * movement and blockers without writing.
+   */
+  setPlanningCutover(planningStartDate: string, dryRun: boolean): Promise<PlanningCutoverReport>;
+  /**
+   * Where the latest SIM3LON disagrees with confirmed-or-later plans, from the
+   * planning start date on. Computed on every read; nothing is rewritten.
+   */
+  getSIM3LONVariances(productId: string, month: string): Promise<SIM3LONVarianceReport>;
+  /** The scoped branch's quota for one month, `YYYY-MM`: daily, then monthly. */
+  getQuotaSummary(month: string): Promise<QuotaSummary>;
+
+  /**
+   * The tenant's configured preselection for the import dialog's product
+   * field, resolved through tenant_settings inheritance. `null` when
+   * neither this tenant nor an ancestor has set one -- the dialog then
+   * leaves the field for the user to choose, same as before this existed.
+   */
+  getSIM3LONDefaultProduct(): Promise<string | null>;
+  /**
+   * Replaces the acting tenant's own preference. `null` clears the override
+   * and restores inheritance.
+   */
+  setSIM3LONDefaultProduct(code: string | null): Promise<string | null>;
 }

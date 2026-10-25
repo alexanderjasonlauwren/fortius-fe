@@ -16,7 +16,7 @@ export function PlanSummaryChips({
       value: `${totalUnit.toLocaleString("id-ID")} / 600 ${unitLabelTitle()}`,
     },
     { label: `Jumlah ${outletLabelTitle()}`, value: `${jumlahOutlet} Lokasi` },
-    { label: "Total Driver", value: `${jumlahDriver} Personel` },
+    { label: "Total Sopir", value: `${jumlahDriver} Personel` },
   ];
 
   return (

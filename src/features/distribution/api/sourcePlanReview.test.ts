@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 const getOne = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api", () => ({ getOne }));
 import { sourcePlanReviewHttp } from "./sourcePlanReview.http";
-import { sourcePlanReviewMock } from "./sourcePlanReview.mock";
 import { sourcePlanMessage } from "./sourcePlanReview.contract";
 import { sourceRowsForEmptyDraft } from "./fillSourcePlan";
 import type { DistributionPlan, PlanRow } from "../types";
@@ -15,7 +14,7 @@ describe("source plan review", () => {
     const review = await sourcePlanReviewHttp.getSourcePlanReview("sa", date);
     expect(getOne).toHaveBeenCalledWith(`/schedule-agreements/sa/outlet-plan-review?date=${date}`);
     expect(review).toMatchObject({ batchId: "batch", date, status: "ready", rows: [{ outletId: "outlet", jumlah: 50 }] });
-    const rows = sourceRowsForEmptyDraft({ status: "Draft", tanggal: date, branchId: "branch" } as DistributionPlan, [], review, []);
+    const rows = sourceRowsForEmptyDraft({ status: "Draf", tanggal: date, branchId: "branch" } as DistributionPlan, [], review, []);
     expect(rows).toHaveLength(1);
     expect(rows[0].statusBayar).toBe("Belum Lunas");
   });
@@ -24,7 +23,7 @@ describe("source plan review", () => {
     const review = await sourcePlanReviewHttp.getSourcePlanReview("sa", date);
     expect(review.status).toBe(status);
     expect(sourcePlanMessage(review)).toBeTruthy();
-    expect(sourceRowsForEmptyDraft({ status: "Draft" } as DistributionPlan, [], review, [])).toEqual([]);
+    expect(sourceRowsForEmptyDraft({ status: "Draf" } as DistributionPlan, [], review, [])).toEqual([]);
   });
   it("network failure is an error, not an empty day", async () => {
     getOne.mockRejectedValue(new Error("network"));
@@ -39,10 +38,7 @@ describe("source plan review", () => {
   it("never overwrites existing or confirmed plans on fill retry", async () => {
     getOne.mockResolvedValue(response);
     const review = await sourcePlanReviewHttp.getSourcePlanReview("sa", date);
-    expect(() => sourceRowsForEmptyDraft({ status: "Draft" } as DistributionPlan, [{}] as PlanRow[], review, [])).toThrow("Jangan menimpa");
+    expect(() => sourceRowsForEmptyDraft({ status: "Draf" } as DistributionPlan, [{}] as PlanRow[], review, [])).toThrow("Jangan menimpa");
     expect(() => sourceRowsForEmptyDraft({ status: "Terkonfirmasi" } as DistributionPlan, [], review, [])).toThrow("Jangan menimpa");
-  });
-  it("mock reports no source rather than invented SIM3LON allocations", async () => {
-    expect(await sourcePlanReviewMock.getSourcePlanReview("sa", date)).toEqual({ status: "no_source", date, rows: [], unresolvedRegistrationCodes: [] });
   });
 });

@@ -18,5 +18,4 @@ export interface NotificationApi {
   clearReadNotifications(): Promise<number>;
   getNotificationSettings(): Promise<NotificationSettings>;
   saveNotificationSettings(settings: NotificationSettings): Promise<NotificationSettings>;
-  sendTestNotification(channel: "whatsapp" | "email"): Promise<{ channel: string; tujuan: string }>;
 }
