@@ -10,12 +10,12 @@ import { cn } from "@/lib/utils";
 
 /**
  * The hero is the dispatch rail, drawn flat: the same device the console opens
- * on, so the product's one memorable idea is present before you sign in.
+ * on, so the product's one memorable idea is present before you sign in. It is
+ * an illustration, so lanes are numbered trucks, not invented drivers.
  */
-const RAIL: { name: string; plat: string; blocks: [number, number, string][] }[] = [
+const RAIL: { name: string; blocks: [number, number, string][] }[] = [
   {
-    name: "Budi Santoso",
-    plat: "B 3277 CK",
+    name: "Truk 01",
     blocks: [
       [4, 18, "done"],
       [26, 18, "done"],
@@ -23,8 +23,7 @@ const RAIL: { name: string; plat: string; blocks: [number, number, string][] }[]
     ],
   },
   {
-    name: "Agus Setiawan",
-    plat: "B 2677 AB",
+    name: "Truk 02",
     blocks: [
       [12, 17, "done"],
       [36, 18, "run"],
@@ -32,8 +31,7 @@ const RAIL: { name: string; plat: string; blocks: [number, number, string][] }[]
     ],
   },
   {
-    name: "Ahmad Subarjo",
-    plat: "B 7280 CK",
+    name: "Truk 03",
     blocks: [
       [8, 16, "done"],
       [44, 18, "queue"],
@@ -41,8 +39,7 @@ const RAIL: { name: string; plat: string; blocks: [number, number, string][] }[]
     ],
   },
   {
-    name: "Rahmat Hidayat",
-    plat: "B 7038 RFS",
+    name: "Truk 04",
     blocks: [
       [20, 18, "done"],
       [48, 15, "late"],
@@ -144,7 +141,7 @@ export function LoginPage() {
                       {lane.name}
                     </p>
                     <p className="data truncate text-[0.5625rem] text-[#9AA093]">
-                      {lane.plat}
+                      {lane.blocks.length} rit
                     </p>
                   </div>
                   <div className="relative h-4 flex-1 rounded-sm bg-white/[0.04]">
@@ -164,9 +161,8 @@ export function LoginPage() {
           </div>
         </div>
 
-        <p className="relative z-10 text-xs text-[#676B62]">
-          © {new Date().getFullYear()} {APP_NAME} · Kebijakan Privasi · Syarat &amp;
-          Ketentuan
+        <p className="relative z-10 text-xs text-[#9AA093]">
+          © {new Date().getFullYear()} {APP_NAME}
         </p>
       </div>
 

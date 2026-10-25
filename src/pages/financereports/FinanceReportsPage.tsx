@@ -7,7 +7,7 @@
  */
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Star } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
@@ -43,9 +43,7 @@ export function FinanceReportsPage() {
         <>
           {pinned.length > 0 && (
             <div>
-              <p className="label mb-2 flex items-center gap-1.5 text-2xs text-ink-muted">
-                <Star className="h-3 w-3" /> Sering dipakai
-              </p>
+              <p className="label mb-2 text-2xs text-ink-muted">Laporan utama</p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 {pinned.map((e) => (
                   <Link key={e.key} to={e.href} className="rounded-md border border-line bg-panel p-3 transition-colors hover:border-line-strong hover:bg-panel-sunk">

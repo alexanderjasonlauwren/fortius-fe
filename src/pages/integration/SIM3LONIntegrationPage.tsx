@@ -61,7 +61,7 @@ export function SIM3LONIntegrationPage() {
       {snapshot.isError && (
         <Panel spine="danger">
           <PanelBody className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-red-500" />
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-rust" />
             <div>
               <p className="font-semibold text-ink">Tidak dapat memuat data SIM3LON</p>
               <p className="mt-1 text-sm text-ink-muted">
@@ -88,7 +88,7 @@ export function SIM3LONIntegrationPage() {
               </>
             ) : sync.isError ? (
               <>
-                <AlertTriangle className="size-6 text-red-500" />
+                <AlertTriangle className="size-6 text-rust" />
                 <p className="font-semibold text-ink">Gagal menarik data SIM3LON</p>
                 <p className="max-w-md text-sm text-ink-muted">
                   {(sync.error as Error)?.message ?? "Terjadi kesalahan."}

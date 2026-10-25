@@ -29,7 +29,8 @@ const STATIC_ENTRIES: StaticEntry[] = [
   { key: "daftar_penjualan", category: "penjualan", title: "Daftar Penjualan", description: "Setiap surat jalan dengan tagihan dan status bayarnya, untuk daftar kerja penagihan.", href: "/transactions", permission: PERMISSIONS.TRANSACTIONS_VIEW },
 ];
 
-/** Opened most, shown first on the hub. */
+/** A fixed pick of the core statements, shown first on the hub. Not usage
+ *  data, so the hub labels them "Laporan utama", not "Sering dipakai". */
 export const FAVOURITE_KEYS = ["laba_rugi", "neraca", "cash_flow", "ar_aging", "ap_aging"];
 
 /** Every entry this person may open, in catalogue order: the statements

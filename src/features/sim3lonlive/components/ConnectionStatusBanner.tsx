@@ -1,4 +1,4 @@
-import { RefreshCw, Wifi } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ interface Props {
 
 function formatSyncedAt(iso: string): string {
   const d = new Date(iso);
+  if (!iso) return "tidak tercatat";
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("id-ID", {
     day: "2-digit",
@@ -23,8 +24,9 @@ function formatSyncedAt(iso: string): string {
 }
 
 /**
- * The proof, made visible: a live-connection banner naming the wilayah and period
- * the data came from and when it was last pulled from SIM3LON.
+ * Names the wilayah and period the data came from and when it was last pulled.
+ * The page shows a stored pull, not a live link, so there is no "connected"
+ * light: the sync time is the honest freshness signal.
  */
 export function ConnectionStatusBanner({
   wilayah,
@@ -35,20 +37,13 @@ export function ConnectionStatusBanner({
 }: Props) {
   return (
     <div className="mb-6 flex flex-col gap-3 rounded-md border border-line bg-panel px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-start gap-3">
-        <span className="relative mt-0.5 flex h-2.5 w-2.5 shrink-0">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-        </span>
-        <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-            <Wifi className="size-4 text-emerald-500" />
-            Terhubung ke SIM3LON
-          </p>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            {wilayah} · periode {period} · terakhir sinkron {formatSyncedAt(syncedAt)}
-          </p>
-        </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-ink">
+          Sinkron terakhir {formatSyncedAt(syncedAt)}
+        </p>
+        <p className="mt-0.5 text-xs text-ink-muted">
+          {wilayah} · periode {period}
+        </p>
       </div>
       <Button
         variant="outline"

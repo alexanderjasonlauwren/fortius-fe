@@ -401,7 +401,7 @@ export function TransportInvoicePage() {
                 <Field label="Tempat tanda tangan">
                   <TextInput value={values.place} onChange={(e) => set("place")(e.target.value)} />
                 </Field>
-                <div className="rounded-md border border-line bg-surface-sunken p-3 sm:col-span-2">
+                <div className="rounded-md border border-line bg-panel-sunk p-3 sm:col-span-2">
                   <div className="flex items-baseline justify-between text-sm">
                     <span className="text-ink-muted">Transport fee (BA LO)</span>
                     <span className="data text-ink">{formatRupiah(amount)}</span>

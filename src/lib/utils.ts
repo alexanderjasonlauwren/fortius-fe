@@ -51,21 +51,3 @@ export function getInitials(name: string): string {
     .join("")
     .toUpperCase();
 }
-
-export function stringToColor(str: string): string {
-  const colors = [
-    "#1565C0",
-    "#2E7D32",
-    "#6A1B9A",
-    "#C62828",
-    "#00838F",
-    "#EF6C00",
-    "#4527A0",
-    "#283593",
-  ];
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-}

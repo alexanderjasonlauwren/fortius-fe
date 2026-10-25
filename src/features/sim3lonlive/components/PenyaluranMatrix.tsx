@@ -10,7 +10,7 @@ import type { MatrixDayCell, MatrixSection } from "../api/contract";
  */
 function cellClass(cell: MatrixDayCell): string {
   if (cell.dayFlag === 1 || cell.fakultatif === true) return "bg-panel-sunk text-ink-muted/60";
-  if (cell.qty > 0) return "bg-emerald-500/10 font-semibold text-emerald-700 dark:text-emerald-300";
+  if (cell.qty > 0) return "bg-pine-soft font-semibold text-pine-ink";
   return "text-ink-muted/40";
 }
 
@@ -33,7 +33,7 @@ export function PenyaluranMatrix({ section }: { section: MatrixSection }) {
                 key={d.day}
                 className={cn(
                   "data px-1.5 py-2 text-center font-medium",
-                  (d.dayFlag === 1 || d.fakultatif === true) && "text-amber-600 dark:text-amber-400",
+                  (d.dayFlag === 1 || d.fakultatif === true) && "text-signal-ink",
                 )}
                 title={d.dayFlag === 1 || d.fakultatif === true ? "Hari bertanda di SIM3LON" : undefined}
               >

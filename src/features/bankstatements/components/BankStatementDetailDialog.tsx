@@ -5,7 +5,7 @@
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Wand2 } from "lucide-react";
+import { Link2, Loader2 } from "lucide-react";
 import { getChartOfAccounts } from "@/features/finance/api/financeApi";
 import { leafAccounts } from "@/features/finance/lib/accounts";
 import {
@@ -120,7 +120,7 @@ export function BankStatementDetailDialog({ importId, onClose }: BankStatementDe
             disabled={autoMatchMutation.isPending || unmatchedCount === 0}
             onClick={() => autoMatchMutation.mutate(undefined as never)}
           >
-            {autoMatchMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+            {autoMatchMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
             Jalankan pencocokan otomatis
           </Button>
         </div>

@@ -219,7 +219,7 @@ export function FinanceReportPage() {
           {report.data.checks.map((c) =>
             c.ok ? (
               <div key={c.label} className="flex items-center gap-2 rounded-md border border-line bg-panel-sunk p-2.5 text-xs text-ink-muted">
-                <CircleCheck className="h-3.5 w-3.5 shrink-0 text-[#00B050]" />
+                <CircleCheck className="h-3.5 w-3.5 shrink-0 text-pine" />
                 {c.label}: sesuai ({formatRupiah(c.expected)})
               </div>
             ) : (

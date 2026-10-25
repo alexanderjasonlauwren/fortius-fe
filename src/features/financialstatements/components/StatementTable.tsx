@@ -71,7 +71,7 @@ export function StatementTable({
                 <td className={cn("data w-40 py-1.5 pl-3 text-right text-sm text-ink", line.isBold && "border-t border-line font-semibold")}>
                   {line.kind === "header" ? "" : formatSigned(line.amount)}
                   {line.ratio != null && (
-                    <span className="block text-2xs font-normal text-[#00B050]">{formatRatio(line.ratio)}</span>
+                    <span className="block text-2xs font-normal text-pine-ink">{formatRatio(line.ratio)}</span>
                   )}
                 </td>
               </tr>

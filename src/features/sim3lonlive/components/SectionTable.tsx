@@ -94,7 +94,7 @@ export function GridTableSection({ section }: { section: GridSection }) {
 /** A section the bridge could not fetch. */
 export function SectionError({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 p-5 text-sm text-amber-700 dark:text-amber-400">
+    <div className="flex items-start gap-2 p-5 text-sm text-signal-ink">
       <AlertTriangle className="mt-0.5 size-4 shrink-0" />
       <div>
         <p className="font-medium">Bagian ini gagal dimuat dari SIM3LON.</p>

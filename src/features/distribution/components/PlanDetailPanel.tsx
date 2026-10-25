@@ -7,11 +7,11 @@ import {
   Lock,
   Plus,
   Printer,
+  Route,
   Save,
   Trash2,
   TriangleAlert,
   Truck,
-  Wand2,
   XCircle,
 } from "lucide-react";
 import { Meter, PanelHeader } from "@/components/common/Panel";
@@ -541,7 +541,7 @@ export function PlanDetailPanel({
                         : "Susun usulan trip; belum tersimpan sampai Anda menekan Simpan."
                   }
                 >
-                  <Wand2 className="h-3.5 w-3.5" />
+                  <Route className="h-3.5 w-3.5" />
                   Sarankan penugasan
                 </Button>
                 <Button

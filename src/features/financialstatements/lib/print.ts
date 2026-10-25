@@ -23,7 +23,7 @@ export function statementPrintHtml(title: string, statement: Statement, periodLa
       const label = `${line.noteNumber != null ? `(${line.noteNumber}) ` : ""}${escapeHtml(line.label)}`;
       const amount = line.kind === "header" ? "" : escapeHtml(signed(line.amount));
       const ratio = line.ratio != null
-        ? `<div style="font-size:9px;color:#00B050">${Math.round(line.ratio * 100)}%</div>`
+        ? `<div style="font-size:9px;color:#2E6A55">${Math.round(line.ratio * 100)}%</div>`
         : "";
       const weight = line.isBold ? "font-weight:700;" : "";
       const rule = line.isBold && line.kind !== "header" ? "border-top:1px solid #171a16;" : "";
