@@ -33,7 +33,7 @@ ENV NODE_OPTIONS=--max-old-space-size=1024
 RUN npm run build
 
 # Stage 2: Serve static bundle via Nginx
-FROM nginx:1.27-alpine
+FROM nginx:1.30-alpine
 
 # Remove default static files
 RUN rm -rf /usr/share/nginx/html/*
