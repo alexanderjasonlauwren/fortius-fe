@@ -29,25 +29,16 @@
  * `delivered_qty` (what the outlet actually accepted) -- the same pairing
  * `delivery/entities.go`'s own header describes.
  *
- * # Two known caps, both already established elsewhere
+ * # Every row in the window, not the newest page
  *
- * `/payments` and `/invoices` have no date-range filter server-side
- * (`internal/repository/payment` and `invoice`'s own list definitions --
- * see `financeApi.http.ts`'s own header for the same limitation on the
- * aging report), so both are fetched once at `MaxPageSize` (100, newest
- * first) and the date window is applied client-side, same as
- * `getAgingReport()` already does. At real data volumes beyond 100 rows in
- * a period this undercounts revenue and receivables -- the plan's own
- * B-Step 5 names this exact trigger for a dedicated backend aggregation
- * endpoint (`GetTrialBalance`-style), not assumed away here.
- *
- * `/deliveries` itself has no such cap for the count that matters:
- * `suratJalan`'s underlying page also stops at 100 rows for a range with
- * more surat jalan than that, which understates every per-status count and
- * the daily series alike. Same trigger, same fix, once real volumes justify
- * it.
+ * Deliveries, payments and invoices are each read with a server-side date
+ * window and every page of it (`getAllPages`), because the figures below are
+ * sums: reading only the newest 100 rows and windowing them in the browser
+ * undercounted any period that held more (fixed 2026-11-02). The window is the
+ * UTC day, the same boundary the ledger reports draw. If the page ceiling is
+ * ever reached, `lengkap` says so and the screen must show it.
  */
-import { getList, getOne } from "@/lib/api";
+import { getAllPages, getOne } from "@/lib/api";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getVehicles } from "@/features/vehicles/api/vehicleApi";
 import { getSettings } from "@/features/settings/api/settingsApi";
@@ -67,9 +58,6 @@ import {
 } from "./contract";
 import { holds } from "@/features/rbac/holds";
 import { PERMISSIONS } from "@/features/rbac/permissions";
-
-/** 100 is every list definition's MaxPageSize; the server refuses more. */
-const PAGE_SIZE = 100;
 
 /** Mirrors the fields of delivery's own DeliveryResponse this adapter needs. */
 interface DeliveryResponse {
@@ -103,9 +91,31 @@ interface InvoiceResponse {
 const SELESAI_STATUSES = new Set(["delivered"]);
 const TERTUNDA_STATUSES = new Set(["pending", "on_route"]);
 
-function inWindow(iso: string, window: { from: string; to: string }): boolean {
-  const day = iso.slice(0, 10);
-  return day >= window.from && day <= window.to;
+/** A fetched window, and whether every row of it arrived. */
+interface Fetched<T> {
+  rows: T[];
+  complete: boolean;
+}
+
+/**
+ * The server-side window for a timestamp column: `gte` the first day, `lt`
+ * the day after the last. `lte` would compare against midnight of `to` and
+ * drop almost all of that day (verified live on `created_at`).
+ */
+function windowFilters(field: string, window: { from: string; to: string }) {
+  const exclusiveEnd = isoDate(addDays(new Date(`${window.to}T00:00:00Z`), 1));
+  return [
+    { field, operator: "gte" as const, value: window.from },
+    { field, operator: "lt" as const, value: exclusiveEnd },
+  ];
+}
+
+async function fetchWindow<T>(path: string, field: string, sortField: string, window: { from: string; to: string }): Promise<Fetched<T>> {
+  const { items, truncated } = await getAllPages<T>(path, {
+    sort: [{ field: sortField, direction: "desc" }],
+    filters: windowFilters(field, window),
+  });
+  return { rows: items, complete: !truncated };
 }
 
 async function outletsById(): Promise<Map<string, OutletView>> {
@@ -113,34 +123,16 @@ async function outletsById(): Promise<Map<string, OutletView>> {
   return new Map(outlets.map((o) => [o.id, o]));
 }
 
-/**
- * `window.to` is inclusive, but the server's `date` filter compares `lte`
- * literally against midnight UTC of that day -- against `created_at`, a
- * timestamp, that excludes almost all of `window.to` itself (verified live:
- * a delivery at 16:52 UTC matched `gte` its own day but not `lte` it). The
- * exclusive `lt` bound one day later is the only one that reads "through the
- * end of `window.to`" correctly.
- */
-async function fetchDeliveries(window: { from: string; to: string }): Promise<DeliveryResponse[]> {
-  const exclusiveEnd = isoDate(addDays(new Date(`${window.to}T00:00:00Z`), 1));
-  const page = await getList<DeliveryResponse>("/deliveries", {
-    pageSize: PAGE_SIZE,
-    sort: [{ field: "created_at", direction: "desc" }],
-    filters: [
-      { field: "date", operator: "gte" as const, value: window.from },
-      { field: "date", operator: "lt" as const, value: exclusiveEnd },
-    ],
-  });
-  return page.items;
+function fetchDeliveries(window: { from: string; to: string }) {
+  return fetchWindow<DeliveryResponse>("/deliveries", "date", "created_at", window);
 }
 
-/** No date filter server-side -- see this file's header. */
-async function fetchPayments(): Promise<PaymentResponse[]> {
-  const page = await getList<PaymentResponse>("/payments", {
-    pageSize: PAGE_SIZE,
-    sort: [{ field: "payment_date", direction: "desc" }],
-  });
-  return page.items;
+function fetchPayments(window: { from: string; to: string }) {
+  return fetchWindow<PaymentResponse>("/payments", "payment_date", "payment_date", window);
+}
+
+function fetchInvoices(window: { from: string; to: string }) {
+  return fetchWindow<InvoiceResponse>("/invoices", "issued_at", "issued_at", window);
 }
 
 /** Mirrors the SIM3LON usecase's OpeningRevenueResponse. */
@@ -160,26 +152,17 @@ async function fetchOpeningRevenue(window: { from: string; to: string }): Promis
   return getOne<OpeningRevenueResponse>(`/sim3lon-opening-revenue?${params.toString()}`);
 }
 
-/** No date filter server-side -- see this file's header. */
-async function fetchInvoices(): Promise<InvoiceResponse[]> {
-  const page = await getList<InvoiceResponse>("/invoices", {
-    pageSize: PAGE_SIZE,
-    sort: [{ field: "issued_at", direction: "desc" }],
-  });
-  return page.items;
-}
-
 async function getReportSummary(range: ReportRange): Promise<ReportSummary> {
   const window = resolveRange(range);
-  const [deliveries, payments, invoices, opening] = await Promise.all([
+  const [fetchedDeliveries, fetchedPayments, fetchedInvoices, opening] = await Promise.all([
     fetchDeliveries(window),
-    fetchPayments(),
-    fetchInvoices(),
+    fetchPayments(window),
+    fetchInvoices(window),
     fetchOpeningRevenue(window),
   ]);
-
-  const paymentsInWindow = payments.filter((p) => inWindow(p.payment_date, window));
-  const invoicesInWindow = invoices.filter((i) => inWindow(i.issued_at, window));
+  const deliveries = fetchedDeliveries.rows;
+  const paymentsInWindow = fetchedPayments.rows;
+  const invoicesInWindow = fetchedInvoices.rows;
 
   const realisasi = deliveries.reduce((s, d) => s + d.delivered_qty, 0);
   const target = deliveries.reduce((s, d) => s + d.dispatched_qty, 0);
@@ -209,13 +192,14 @@ async function getReportSummary(range: ReportRange): Promise<ReportSummary> {
     suratJalanTertunda: deliveries.filter((d) => TERTUNDA_STATUSES.has(d.delivery_status)).length,
     outletDilayani: new Set(deliveries.map((d) => d.outlet_id).filter(Boolean)).size,
     rerataPerHari: Math.round(realisasi / days),
+    lengkap: fetchedDeliveries.complete && fetchedPayments.complete && fetchedInvoices.complete,
   };
 }
 
 async function getDailySeries(range: ReportRange): Promise<DailyPoint[]> {
   const window = resolveRange(range);
-  const [deliveries, payments, opening] = await Promise.all([
-    fetchDeliveries(window), fetchPayments(), fetchOpeningRevenue(window),
+  const [{ rows: deliveries }, { rows: payments }, opening] = await Promise.all([
+    fetchDeliveries(window), fetchPayments(window), fetchOpeningRevenue(window),
   ]);
   const points = new Map<string, DailyPoint>();
 
@@ -246,12 +230,11 @@ async function getDailySeries(range: ReportRange): Promise<DailyPoint[]> {
 
 async function getTopOutlet(range: ReportRange, limit = 8): Promise<TopOutletRow[]> {
   const window = resolveRange(range);
-  const [deliveries, invoices, outlets] = await Promise.all([
+  const [{ rows: deliveries }, { rows: invoicesInWindow }, outlets] = await Promise.all([
     fetchDeliveries(window),
-    fetchInvoices(),
+    fetchInvoices(window),
     outletsById(),
   ]);
-  const invoicesInWindow = invoices.filter((i) => inWindow(i.issued_at, window));
 
   // unit is dispatched_qty, not delivered_qty: nilai below comes from the
   // invoice each delivery raises at DISPATCH (see invoice.CreateFromDelivery
@@ -296,7 +279,7 @@ async function getDriverPerformance(range: ReportRange): Promise<DriverPerforman
   const window = resolveRange(range);
   // The plate rides on the delivery row; the vehicle list only adds the
   // armada, and a role that may not read vehicles goes without it.
-  const [deliveries, vehicles] = await Promise.all([
+  const [{ rows: deliveries }, vehicles] = await Promise.all([
     fetchDeliveries(window),
     holds(PERMISSIONS.VEHICLES_VIEW) ? getVehicles() : Promise.resolve([]),
   ]);

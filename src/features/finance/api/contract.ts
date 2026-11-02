@@ -134,6 +134,8 @@ export interface AgingReport {
   jatuhTempoTotal: number;
   outletMenunggak: number;
   buckets: readonly string[];
+  /** False when an open-invoice list hit the page ceiling: totals are a floor. */
+  lengkap: boolean;
 }
 
 export interface PaymentView {

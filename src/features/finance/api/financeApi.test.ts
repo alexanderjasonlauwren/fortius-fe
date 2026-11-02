@@ -7,11 +7,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  */
 
 const getList = vi.fn();
+const getAllPages = vi.fn();
 const getOne = vi.fn();
 const send = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  getAllPages: (...args: unknown[]) => getAllPages(...args),
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),
@@ -80,6 +82,7 @@ function invoiceWire(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   getList.mockReset();
+  getAllPages.mockReset();
   getOne.mockReset();
   send.mockReset();
   getOutletList.mockReset();
@@ -188,12 +191,18 @@ describe("aging", () => {
   });
 
   /** blokirOtomatis only flags an outlet blocked when it is actually overdue. */
+  /** Serves `byStatus[status]` for each open-status read the aging view makes. */
+  function serveOpen(byStatus: Record<string, unknown[]>, truncated: string[] = []) {
+    getAllPages.mockImplementation((path: string, params: { filters: { value: string }[] }) => {
+      if (path !== "/invoices") throw new Error(`unexpected path: ${path}`);
+      const status = params.filters[0].value;
+      return Promise.resolve({ items: byStatus[status] ?? [], truncated: truncated.includes(status) });
+    });
+  }
+
   it("only marks an outlet blocked when it is both auto-block and overdue", async () => {
     const overdue = new Date(Date.now() - 5 * 86_400_000).toISOString();
-    getList.mockResolvedValue({
-      items: [invoiceWire({ payment_status: "overdue", due_date: overdue, outstanding_amount: 20_000 })],
-      pagination: {},
-    });
+    serveOpen({ overdue: [invoiceWire({ payment_status: "overdue", due_date: overdue, outstanding_amount: 20_000 })] });
     getOutletList.mockResolvedValue([outlet({ blokirOtomatis: true })]);
     const report = await financeApiHttp.getAgingReport();
     expect(report.rows[0].terblokir).toBe(true);
@@ -201,6 +210,24 @@ describe("aging", () => {
     getOutletList.mockResolvedValue([outlet({ blokirOtomatis: false })]);
     const report2 = await financeApiHttp.getAgingReport();
     expect(report2.rows[0].terblokir).toBe(false);
+  });
+
+  // Regression 2026-11-02: aging read the newest 100 invoices of any status,
+  // so an older unpaid one dropped off once 100 newer invoices existed.
+  it("reads every open invoice by status, through every page, not the newest page", async () => {
+    serveOpen({ unpaid: [invoiceWire({ payment_status: "unpaid", outstanding_amount: 70_000 })] });
+    const report = await financeApiHttp.getAgingReport();
+
+    const statuses = getAllPages.mock.calls.map(([, params]) => params.filters[0].value).sort();
+    expect(statuses).toEqual(["overdue", "partial", "unpaid"]);
+    expect(getList).not.toHaveBeenCalledWith("/invoices", expect.anything());
+    expect(report.grandTotal).toBe(70_000);
+    expect(report.lengkap).toBe(true);
+  });
+
+  it("says the aging totals are a floor when an open-invoice list hit the ceiling", async () => {
+    serveOpen({ partial: [] }, ["partial"]);
+    expect((await financeApiHttp.getAgingReport()).lengkap).toBe(false);
   });
 });
 

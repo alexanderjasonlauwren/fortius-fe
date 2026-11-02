@@ -359,6 +359,41 @@ export async function getList<T>(path: string, params: ListParams = {}): Promise
   }
 }
 
+/** Every page of a collection, and whether the walk stopped short. */
+export interface AllPages<T> {
+  items: T[];
+  /**
+   * True when `maxPages` ran out while the server still had more. A caller
+   * that sums or filters these items must say so on screen: a silent partial
+   * total is the defect this helper exists to prevent.
+   */
+  truncated: boolean;
+}
+
+/**
+ * GET every page of a collection, up to `maxPages`.
+ *
+ * One page is `MaxPageSize` (100) at most, so a screen that read only the
+ * first page and then summed or filtered it in the browser undercounted as
+ * soon as a tenant had 101 rows. Use this where a screen genuinely needs the
+ * whole set (a total, a lookup, a filter the server cannot express); use a
+ * server-paged table everywhere else. The ceiling keeps a runaway list from
+ * becoming a runaway request loop.
+ */
+export async function getAllPages<T>(
+  path: string,
+  params: Omit<ListParams, "page" | "cursor"> = {},
+  { maxPages = 20 }: { maxPages?: number } = {},
+): Promise<AllPages<T>> {
+  const items: T[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const result = await getList<T>(path, { ...params, page, pageSize: params.pageSize ?? 100 });
+    items.push(...result.items);
+    if (!result.pagination.has_next) return { items, truncated: false };
+  }
+  return { items, truncated: true };
+}
+
 /**
  * POST a file as multipart form data, unwrapped.
  *

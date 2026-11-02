@@ -13,7 +13,7 @@
  * file used to paper over with "—" and a synthetic line, closed by the
  * accounting parity plan's P2.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getList, getOne, send } from "@/lib/api";
 import { toApiTimestamp, todayIso } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import type { OutletView } from "@/features/outlet/api/contract";
@@ -275,8 +275,27 @@ async function createManualInvoice(input: CreateManualInvoiceInput): Promise<Inv
 
 /* ── ageing ────────────────────────────────────────────────────────────── */
 
+/**
+ * Every invoice still open: one fully paged read per open status, since the
+ * status filter is equality only. This used to be the newest 100 invoices of
+ * any status, so an older unpaid invoice fell off the aging view as soon as
+ * a tenant had issued 100 newer ones (fixed 2026-11-02). Open invoices stay
+ * few -- pangkalan pay H-1 -- so the set is small even when the ledger is not.
+ */
+async function fetchOpenInvoices(): Promise<{ rows: InvoiceResponse[]; complete: boolean }> {
+  const pages = await Promise.all(
+    ["unpaid", "partial", "overdue"].map((status) =>
+      getAllPages<InvoiceResponse>("/invoices", {
+        sort: [{ field: "due_date", direction: "asc" }],
+        filters: [{ field: "payment_status", operator: "eq" as const, value: status }],
+      }),
+    ),
+  );
+  return { rows: pages.flatMap((page) => page.items), complete: pages.every((page) => !page.truncated) };
+}
+
 async function getAgingReport(): Promise<AgingReport> {
-  const [rows, outlets] = await Promise.all([fetchInvoices(), outletsById()]);
+  const [{ rows, complete }, outlets] = await Promise.all([fetchOpenInvoices(), outletsById()]);
   const today = new Date().toISOString().slice(0, 10);
   const views = rows.map((r) => toInvoiceView(r, outlets, today));
 
@@ -321,6 +340,7 @@ async function getAgingReport(): Promise<AgingReport> {
     jatuhTempoTotal: outRows.reduce((s, r) => s + r.jatuhTempo, 0),
     outletMenunggak: outRows.filter((r) => r.jatuhTempo > 0).length,
     buckets: AGING_BUCKETS,
+    lengkap: complete,
   };
 }
 
