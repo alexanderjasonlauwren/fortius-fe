@@ -1,4 +1,4 @@
-import { apiClient, getList, getOne, send, upload } from "@/lib/api";
+import { apiClient, getAllPages, getOne, send, upload } from "@/lib/api";
 import type { ExpenseCategory } from "@/features/expenses/api/contract";
 import type { OcrApi, ReceiptExtraction, ReceiptStatus, ReviewReceiptInput, ReviewReceiptResult, UploadReceiptInput } from "./contract";
 
@@ -49,10 +49,13 @@ function toReceipt(row: ExtractionResponse, category?: ExpenseCategory): Receipt
 
 async function getReceipts(search?: string): Promise<ReceiptExtraction[]> {
   const [extractions, archive] = await Promise.all([
-    getList<ExtractionResponse>("/ocr/extractions", {
-      pageSize: 100, search: search?.trim() || undefined, sort: [{ field: "created_at", direction: "desc" }],
+    // Whole lists: the queue filters by review status here, which the server
+    // cannot, and receipts arrive a few a day. Reading the newest 100 hid an
+    // older receipt still waiting for review (fixed 2026-11-02).
+    getAllPages<ExtractionResponse>("/ocr/extractions", {
+      search: search?.trim() || undefined, sort: [{ field: "created_at", direction: "desc" }],
     }),
-    getList<ArchiveResponse>("/ocr/archive", { pageSize: 100, sort: [{ field: "archived_at", direction: "desc" }] }),
+    getAllPages<ArchiveResponse>("/ocr/archive", { sort: [{ field: "archived_at", direction: "desc" }] }),
   ]);
   const categoryOf = new Map(archive.items.map((row) => [row.extraction_id, row.category]));
   return extractions.items.map((row) => toReceipt(row, categoryOf.get(row.id)));

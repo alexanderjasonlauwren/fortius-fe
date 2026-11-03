@@ -493,7 +493,8 @@ describe("credit notes", () => {
       }],
       pagination: {},
     });
-    const [note] = await financeApiHttp.getCreditNotes({ status: "Terpakai" });
+    const { items: [note] } = await financeApiHttp.getCreditNotes({ status: "Terpakai" }, 2);
+    expect(getList.mock.calls[0][1].page).toBe(2);
     expect(getList.mock.calls[0][1].filters).toEqual([
       { field: "credit_note_status", operator: "eq", value: "applied" },
     ]);

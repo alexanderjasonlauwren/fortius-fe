@@ -356,7 +356,8 @@ export interface FinanceApi {
   /** Reverses fundDistributionStop for a stop not yet dispatched. */
   releaseDistributionStop(input: FundStopInput): Promise<FundingResult>;
   submitCreditNote(input: CreditNoteInput): Promise<CreditNoteView>;
-  getCreditNotes(filters?: CreditNoteFilters): Promise<CreditNoteView[]>;
+  /** One server page; `page` is 1-based. */
+  getCreditNotes(filters?: CreditNoteFilters, page?: number): Promise<Paged<CreditNoteView>>;
   /** Lands an issued credit note on its invoice (or on invoiceId, for a
    *  credit on account). */
   applyCreditNote(id: string, version: number, invoiceId?: string): Promise<CreditNoteView>;

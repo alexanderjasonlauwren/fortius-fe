@@ -650,7 +650,8 @@ const CREDIT_NOTE_STATUS_CODE: Record<CreditNoteView["status"], string> = {
   Batal: "cancelled",
 };
 
-async function getCreditNotes(filters?: CreditNoteFilters): Promise<CreditNoteView[]> {
+/** One server page of credit notes; every filter is already the server's. */
+async function getCreditNotes(filters?: CreditNoteFilters, page = 1): Promise<Paged<CreditNoteView>> {
   const wire: { field: string; operator: "eq"; value: string }[] = [];
   if (filters?.status && filters.status !== "Semua") {
     wire.push({ field: "credit_note_status", operator: "eq", value: CREDIT_NOTE_STATUS_CODE[filters.status] });
@@ -658,13 +659,13 @@ async function getCreditNotes(filters?: CreditNoteFilters): Promise<CreditNoteVi
   if (filters?.outletId && filters.outletId !== "Semua") {
     wire.push({ field: "outlet_id", operator: "eq", value: filters.outletId });
   }
-  const page = await getList<CreditNoteResponse>("/credit-notes", {
-    pageSize: PAGE_SIZE,
+  return getPage<CreditNoteResponse, CreditNoteView>("/credit-notes", {
+    page,
+    pageSize: 50,
     sort: [{ field: "issue_date", direction: "desc" }],
     search: filters?.search,
     filters: wire,
-  });
-  return page.items.map(toCreditNoteView);
+  }, toCreditNoteView);
 }
 
 async function applyCreditNote(id: string, version: number, invoiceId?: string): Promise<CreditNoteView> {
