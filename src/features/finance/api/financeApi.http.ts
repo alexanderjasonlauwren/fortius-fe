@@ -13,7 +13,7 @@
  * file used to paper over with "—" and a synthetic line, closed by the
  * accounting parity plan's P2.
  */
-import { getAllPages, getList, getOne, getPage, send, type Paged } from "@/lib/api";
+import { getAllPages, getOne, getPage, send, type Paged } from "@/lib/api";
 import { toApiTimestamp, todayIso } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import type { OutletView } from "@/features/outlet/api/contract";
@@ -567,17 +567,19 @@ function toFundingResult(
 /** Every unrejected receipt for this outlet -- a rejected one is refused by
  *  FundStop itself, so there is no point offering it in the picker. */
 async function getOutletReceipts(outletId: string): Promise<PaymentView[]> {
+  // Every page: a receipt with money left on it can be older than the
+  // outlet's newest 100 (fixed 2026-11-02).
   const [page, outlets] = await Promise.all([
-    getList<PaymentResponse>("/payments", {
-      pageSize: PAGE_SIZE,
+    getAllPages<PaymentResponse>("/payments", {
       sort: [{ field: "payment_date", direction: "desc" }],
-      filters: [{ field: "outlet_id", operator: "eq" as const, value: outletId }],
+      filters: [
+        { field: "outlet_id", operator: "eq" as const, value: outletId },
+        { field: "payment_status", operator: "in" as const, value: "pending,verified" },
+      ],
     }),
     outletsById(),
   ]);
-  return page.items
-    .filter((r) => r.payment_status !== "rejected")
-    .map((r) => toPaymentView(r, outlets));
+  return page.items.map((r) => toPaymentView(r, outlets));
 }
 
 async function fundDistributionStop(input: FundStopInput): Promise<FundingResult> {
@@ -759,42 +761,28 @@ function toJournalView(row: JournalResponse): JournalView {
   };
 }
 
-// A range with more than this many journals stops paginating rather than
-// walking forever against a fat-fingered date range -- 20 pages at
-// PAGE_SIZE is 2,000 journals, already more than LedgerPage's own table
-// renders usefully in one screen.
-const MAX_JOURNAL_PAGES = 20;
-
 /**
- * Every journal in the range, not just the first 100.
+ * One server page of the range's journals.
  *
- * Was capped at one page (PAGE_SIZE), silently dropping anything past it
- * for a range that crossed that many journals -- the ledger's own trial
- * balance and P&L are unaffected (they sum server-side), but this list is
- * what LedgerPage's Jurnal tab and the financial-statements Buku Besar tab
- * both render directly.
+ * This used to walk up to 20 pages and stop there without a word, so a month
+ * with more than 2,000 journals (an invoice and a receipt per delivery reach
+ * that) showed only its newest 2,000 (fixed 2026-11-02). The trial balance
+ * and statements were never affected: they sum on the server.
  */
-async function getJournals(range?: DateRange, query?: JournalQuery): Promise<JournalView[]> {
+async function getJournals(range?: DateRange, query?: JournalQuery, page = 1): Promise<Paged<JournalView>> {
   const filters: { field: string; operator: "eq" | "gte" | "lte"; value: string }[] = [];
   if (range?.from) filters.push({ field: "journal_date", operator: "gte", value: range.from });
   if (range?.to) filters.push({ field: "journal_date", operator: "lte", value: range.to });
   if (query?.accountId) filters.push({ field: "account_id", operator: "eq", value: query.accountId });
-
-  const items: JournalResponse[] = [];
-  for (let pageNumber = 1; pageNumber <= MAX_JOURNAL_PAGES; pageNumber++) {
-    const page = await getList<JournalResponse>("/journals", {
-      page: pageNumber,
-      pageSize: PAGE_SIZE,
-      sort: [{ field: "journal_date", direction: "desc" }],
-      filters,
-      search: query?.search?.trim() || undefined,
-    });
-    items.push(...page.items);
-    if (!page.pagination.has_next) break;
-  }
-  // The list carries each journal's lines and its source document, so the
-  // range is one request per page -- it used to be one more per journal.
-  return items.map(toJournalView);
+  // The list carries each journal's lines and its source document, so a page
+  // is one request.
+  return getPage<JournalResponse, JournalView>("/journals", {
+    page,
+    pageSize: 50,
+    sort: [{ field: "journal_date", direction: "desc" }],
+    filters,
+    search: query?.search?.trim() || undefined,
+  }, toJournalView);
 }
 
 async function createManualJournal(input: CreateManualJournalInput): Promise<JournalView> {

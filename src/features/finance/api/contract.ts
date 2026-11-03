@@ -363,7 +363,8 @@ export interface FinanceApi {
   applyCreditNote(id: string, version: number, invoiceId?: string): Promise<CreditNoteView>;
   cancelCreditNote(id: string, version: number, reason: string): Promise<CreditNoteView>;
   getInvoice(id: string): Promise<InvoiceDetailView>;
-  getJournals(range?: DateRange, query?: JournalQuery): Promise<JournalView[]>;
+  /** One server page of the range's journals; `page` is 1-based. */
+  getJournals(range?: DateRange, query?: JournalQuery, page?: number): Promise<Paged<JournalView>>;
   /** "Jurnal umum" (gap-closing plan, Phase E). Refused by the real
    *  backend's own finance.create.journals grant for anyone but
    *  tenant_admin -- the same tier manual journal entry has always sat

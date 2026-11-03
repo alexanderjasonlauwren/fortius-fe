@@ -307,7 +307,8 @@ export function DataTable<T>({
 const pagerButton =
   "rounded-sm border border-line-strong p-1 text-ink-muted transition-colors hover:border-ink hover:text-ink disabled:pointer-events-none disabled:opacity-40";
 
-function ServerPager({ paging, shown }: { paging: ServerPaging; shown: number }) {
+/** The pager under a server-paged list; exported for lists that are not tables. */
+export function ServerPager({ paging, shown }: { paging: ServerPaging; shown: number }) {
   const first = (paging.page - 1) * paging.pageSize + 1;
   const last = first + shown - 1;
   const total =

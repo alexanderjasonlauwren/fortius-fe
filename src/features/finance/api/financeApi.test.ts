@@ -20,7 +20,7 @@ vi.mock("@/lib/api", () => ({
     const result = await getList(path, params);
     return {
       items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50,
-      hasNext: Boolean(result.pagination?.has_next),
+      hasNext: Boolean(result.pagination?.has_next), totalItems: result.pagination?.total_items,
     };
   },
   getOne: (...args: unknown[]) => getOne(...args),
@@ -514,37 +514,21 @@ describe("credit notes", () => {
 });
 
 describe("journals", () => {
-  it("walks every page rather than stopping at the first 100", async () => {
-    getList
-      .mockResolvedValueOnce({
-        items: Array.from({ length: 100 }, (_, i) => journalWire({ id: `p1-${i}` })),
-        pagination: { page: 1, page_size: 100, has_next: true, has_prev: false },
-      })
-      .mockResolvedValueOnce({
-        items: Array.from({ length: 30 }, (_, i) => journalWire({ id: `p2-${i}` })),
-        pagination: { page: 2, page_size: 100, has_next: false, has_prev: true },
-      });
-    getOne.mockImplementation((path: string) => journalWire({ id: path.split("/").pop() }));
-
-    const journals = await financeApiHttp.getJournals();
-
-    expect(journals).toHaveLength(130);
-    expect(getList).toHaveBeenCalledTimes(2);
-    expect(getList.mock.calls[0][1]).toMatchObject({ page: 1 });
-    expect(getList.mock.calls[1][1]).toMatchObject({ page: 2 });
-  });
-
-  it("stops after one page when the server says there is no next", async () => {
+  // Regression 2026-11-02: the list walked at most 20 pages and stopped there
+  // without a word; it is now one server page at a time, with a pager.
+  it("reads the requested page and says whether more exist", async () => {
     getList.mockResolvedValueOnce({
-      items: [journalWire()],
-      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+      items: Array.from({ length: 50 }, (_, i) => journalWire({ id: `p3-${i}` })),
+      pagination: { page: 3, page_size: 50, has_next: true, has_prev: true, total_items: 2_400 },
     });
-    getOne.mockResolvedValueOnce(journalWire());
 
-    const journals = await financeApiHttp.getJournals();
+    const journals = await financeApiHttp.getJournals(undefined, undefined, 3);
 
-    expect(journals).toHaveLength(1);
     expect(getList).toHaveBeenCalledTimes(1);
+    expect(getList.mock.calls[0][1]).toMatchObject({ page: 3, pageSize: 50 });
+    expect(journals.items).toHaveLength(50);
+    expect(journals.hasNext).toBe(true);
+    expect(journals.totalItems).toBe(2_400);
   });
 
   it("reads each journal's lines and source off the list, with no request per journal", async () => {
@@ -564,7 +548,7 @@ describe("journals", () => {
       pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
     });
 
-    const [journal] = await financeApiHttp.getJournals();
+    const { items: [journal] } = await financeApiHttp.getJournals();
 
     expect(getOne).not.toHaveBeenCalled();
     expect(journal.lines).toHaveLength(2);
@@ -582,7 +566,7 @@ describe("journals", () => {
       ],
       pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
     });
-    const journals = await financeApiHttp.getJournals();
+    const { items: journals } = await financeApiHttp.getJournals();
     // Read as "manual" these were offered the reverse action, which the
     // backend then refused.
     expect(journals.map((j) => j.sourceType)).toEqual(["expense", "transportationClaim", "assetAcquisition", "assetDisposal"]);
@@ -593,7 +577,7 @@ describe("journals", () => {
       items: [journalWire({ branch_id: "br-1", branch_name: "Pool Salatiga" })],
       pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
     });
-    const [journal] = await financeApiHttp.getJournals({ from: "2026-10-01", to: "2026-10-31" }, { search: " JV-0018 ", accountId: "a-9" });
+    const { items: [journal] } = await financeApiHttp.getJournals({ from: "2026-10-01", to: "2026-10-31" }, { search: " JV-0018 ", accountId: "a-9" });
     const params = getList.mock.calls[0][1];
     expect(params.search).toBe("JV-0018");
     expect(params.filters).toContainEqual({ field: "account_id", operator: "eq", value: "a-9" });
