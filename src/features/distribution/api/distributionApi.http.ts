@@ -990,7 +990,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
   printDocument(
     `${plan.kode} · Lembar Rute`,
     `
-    <p class="eyebrow">${settings.namaPerusahaan} · Agen ${settings.nomorAgen}</p>
+    <p class="eyebrow">${settings.namaPerusahaan || "—"} · Agen ${settings.nomorAgen || "—"}</p>
     <h1>Lembar Rute Distribusi</h1>
     <hr class="rule" />
     <div class="meta">

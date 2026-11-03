@@ -7,12 +7,16 @@ import { isoDate, startOfToday } from "@/lib/date";
  */
 
 const getAllPages = vi.fn();
+const getOne = vi.fn();
 vi.mock("@/lib/api", () => ({
   getAllPages: (...args: unknown[]) => getAllPages(...args),
-  getOne: vi.fn(),
+  getOne: (...args: unknown[]) => getOne(...args),
   send: vi.fn(),
   upload: vi.fn(),
 }));
+
+const holds = vi.fn<(permission: string) => boolean>(() => true);
+vi.mock("@/features/rbac/holds", () => ({ holds: (p: string) => holds(p) }));
 
 const getOutletList = vi.fn();
 vi.mock("@/features/outlet/api/outletApi", () => ({
@@ -37,6 +41,11 @@ vi.mock("@/features/orders/api/orderApi", () => ({
 }));
 
 const getQuotaSummary = vi.fn();
+const getSettings = vi.fn();
+vi.mock("@/features/settings/api/settingsApi", () => ({
+  getSettings: (...args: unknown[]) => getSettings(...args),
+}));
+
 vi.mock("@/features/sa/api/saApi", () => ({
   getQuotaSummary: (...args: unknown[]) => getQuotaSummary(...args),
 }));
@@ -89,6 +98,7 @@ function mockDeliveries(byDate: Record<string, unknown[]>) {
 
 beforeEach(() => {
   getAllPages.mockReset();
+  getSettings.mockReset().mockResolvedValue({ targetHarian: 0 });
   getOutletList.mockReset().mockResolvedValue([
     { id: OUTLET_ID, nama: "Pangkalan Ahmad", kecamatan: "Sidorejo", status: "Aktif" },
   ]);
@@ -100,6 +110,18 @@ beforeEach(() => {
 });
 
 describe("getKpiSummary", () => {
+  // Regression 2026-11-02: Target harian was saved nowhere, so a day with
+  // nothing dispatched yet showed a target of 0.
+  it("measures a day with nothing dispatched against the tenant's Target harian", async () => {
+    mockDeliveries({ [TODAY]: [], [YESTERDAY]: [] });
+    getSettings.mockResolvedValue({ targetHarian: 1320 });
+    expect((await dashboardApiHttp.getKpiSummary()).dailyTarget).toBe(1320);
+  });
+  it("takes what went out as the target once a run has left", async () => {
+    mockDeliveries({ [TODAY]: [delivery({ dispatched_qty: 500 })], [YESTERDAY]: [] });
+    getSettings.mockResolvedValue({ targetHarian: 1320 });
+    expect((await dashboardApiHttp.getKpiSummary()).dailyTarget).toBe(500);
+  });
   it.each([undefined, false])("never requests manual-order totals when intake is external or unknown (%s)", async (includeOrders) => {
     mockDeliveries({ [TODAY]: [], [YESTERDAY]: [] });
     const kpi = await dashboardApiHttp.getKpiSummary(includeOrders);
@@ -259,5 +281,27 @@ describe("every function useDashboard.ts passes bare to queryFn", () => {
     ["getRecentActivities", dashboardApiHttp.getRecentActivities],
   ])("%s takes no parameters", (_name, fn) => {
     expect(fn.length).toBe(0);
+  });
+});
+
+// Regression 2026-11-02: "Jejak aktivitas" was always empty -- nothing served
+// the audit trail the middleware writes.
+describe("getRecentAudit", () => {
+  it("reads the tenant's recent writes and says them in words", async () => {
+    holds.mockReturnValue(true);
+    getOne.mockReset().mockResolvedValue([
+      { occurred_at: "2026-11-02T03:00:00Z", actor: "finance", module: "payments", action: "create", entity: "verify" },
+    ]);
+    const rows = await dashboardApiHttp.getRecentAudit(5);
+    expect(getOne).toHaveBeenCalledWith("/audit-trails/recent?limit=5");
+    expect(rows[0]).toMatchObject({ actor: "finance", summary: "Penerimaan kas diverifikasi", at: "2026-11-02T03:00:00Z" });
+  });
+
+  it("does not ask for a trail the role may not read", async () => {
+    holds.mockImplementation((p) => p !== "audit.read.audit_trails");
+    getOne.mockReset();
+    expect(await dashboardApiHttp.getRecentAudit(5)).toEqual([]);
+    expect(getOne).not.toHaveBeenCalled();
+    holds.mockReturnValue(true);
   });
 });

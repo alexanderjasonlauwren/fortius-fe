@@ -1,3 +1,5 @@
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import { holds } from "@/features/rbac/holds";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -86,6 +88,8 @@ export function DashboardPage() {
     isLoadingActivities,
     refetch,
   } = useDashboard();
+  // The panel reads the audit trail; a role that may not is not offered it.
+  const canSeeActivity = holds(PERMISSIONS.AUDIT_VIEW);
 
   const delta = kpi ? formatDelta(kpi.dailyDistributed, kpi.previousDayDistributed) : null;
   const quotaUsed = kpi ? kpi.monthlyQuotaTotal - kpi.monthlyQuotaRemaining : 0;
@@ -263,7 +267,7 @@ export function DashboardPage() {
 
       {/* ── Today's stops and the audit trail ── */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Panel className="xl:col-span-2">
+        <Panel className={cn(canSeeActivity ? "xl:col-span-2" : "xl:col-span-3")}>
           <PanelHeader
             title="Surat jalan hari ini"
             hint="Delapan pemberhentian terakhir menurut jadwal"
@@ -293,27 +297,29 @@ export function DashboardPage() {
           />
         </Panel>
 
-        <Panel>
-          <PanelHeader title="Jejak aktivitas" hint="Perubahan terakhir di sistem" />
-          {audit.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-ink-muted">
-              Belum ada aktivitas tercatat pada sesi ini. Setiap konfirmasi,
-              verifikasi, dan perubahan data induk akan muncul di sini.
-            </p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {audit.map((entry) => (
-                <li key={entry.id} className="px-5 py-3">
-                  <p className="text-sm leading-snug text-ink">{entry.summary}</p>
-                  <p className="mt-1 text-2xs text-ink-muted">
-                    {entry.actor} ·{" "}
-                    <span className="data">{relativeTime(entry.at)}</span>
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+        {canSeeActivity && (
+          <Panel>
+            <PanelHeader title="Jejak aktivitas" hint="Perubahan terakhir di sistem" />
+            {audit.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-ink-muted">
+                Belum ada perubahan dalam 30 hari terakhir. Setiap konfirmasi,
+                verifikasi, dan perubahan data induk akan muncul di sini.
+              </p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {audit.map((entry) => (
+                  <li key={entry.id} className="px-5 py-3">
+                    <p className="text-sm leading-snug text-ink">{entry.summary}</p>
+                    <p className="mt-1 text-2xs text-ink-muted">
+                      {entry.actor} ·{" "}
+                      <span className="data">{relativeTime(entry.at)}</span>
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        )}
       </div>
     </div>
   );

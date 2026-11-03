@@ -29,6 +29,8 @@ export const DEFAULT_SETTINGS: SettingsEntity = {
   pkp: false,
   tarifPajakDefault: 0,
   zonaWaktu: "Asia/Jakarta",
+  penandatanganNama: "",
+  penandatanganJabatan: "",
   jamOperasionalMulai: "06:00",
   jamOperasionalSelesai: "18:00",
   istilah: { satuan: "unit", outlet: "outlet", pemasok: "pemasok" },

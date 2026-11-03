@@ -371,7 +371,7 @@ async function printReport(range: ReportRange): Promise<void> {
   printDocument(
     `Laporan ${RANGE_LABEL[range]}`,
     `
-    <p class="eyebrow">${settings.namaPerusahaan} · Agen ${settings.nomorAgen}</p>
+    <p class="eyebrow">${settings.namaPerusahaan || "—"} · Agen ${settings.nomorAgen || "—"}</p>
     <h1>Rekapitulasi Distribusi &amp; Keuangan</h1>
     <hr class="rule" />
     <div class="meta">

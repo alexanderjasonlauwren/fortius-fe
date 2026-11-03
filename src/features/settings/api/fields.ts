@@ -21,12 +21,13 @@ import type { SettingsEntity } from "@/types/domain";
  * happens to work. The console was offering to inherit it while the backend
  * refused to, which is the two disagreeing about a rule rather than a value.
  *
- * `targetHarian` has no backend home at all. It is a console-side commercial
- * goal, so it inherits in the mock and could not in the API build.
+ * `targetHarian` is `daily_target_qty` (since 2026-11-02), inherited per
+ * column like the others.
  */
 export const INHERITABLE_FIELDS = [
   "jamOperasionalMulai",
   "jamOperasionalSelesai",
+  "targetHarian",
   "istilah",
   "operasi",
 ] as const satisfies readonly (keyof SettingsEntity)[];
