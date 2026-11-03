@@ -18,6 +18,22 @@ export interface Column<T> {
   headerClassName?: string;
 }
 
+/**
+ * One page of a server-paged list. The table renders `data` as that page and
+ * asks for another through `onPageChange`; it never slices or re-sorts, since
+ * sorting one page in the browser would present a partial order as the whole.
+ */
+export interface ServerPaging {
+  /** 1-based, as the API counts. */
+  page: number;
+  hasNext: boolean;
+  /** Absent when the server did not count; a floor when `totalIsFloor`. */
+  totalItems?: number;
+  totalIsFloor?: boolean;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}
+
 interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
@@ -34,6 +50,8 @@ interface DataTableProps<T> {
   spineFor?: (row: T) => string | undefined;
   /** Rows per page. Omit for no pagination. */
   pageSize?: number;
+  /** Server-paged instead: `data` is one page of a longer list. */
+  server?: ServerPaging;
   /** Column key to sort by on first render. */
   defaultSortKey?: string;
   defaultSortDir?: "asc" | "desc";
@@ -55,6 +73,7 @@ export function DataTable<T>({
   onRowClick,
   spineFor,
   pageSize,
+  server,
   defaultSortKey,
   defaultSortDir = "asc",
   dense = false,
@@ -72,7 +91,7 @@ export function DataTable<T>({
 
   const sorted = useMemo(() => {
     const col = columns.find((c) => c.key === sortKey);
-    if (!col?.sortValue) return data;
+    if (server || !col?.sortValue) return data;
     const dir = sortDir === "asc" ? 1 : -1;
     return [...data].sort((a, b) => {
       const av = col.sortValue!(a);
@@ -80,16 +99,17 @@ export function DataTable<T>({
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       return String(av).localeCompare(String(bv), "id") * dir;
     });
-  }, [columns, data, sortKey, sortDir]);
+  }, [columns, data, sortKey, sortDir, server]);
 
   const pageCount = pageSize ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1;
   const safePage = Math.min(page, pageCount - 1);
-  const visible = pageSize
+  const visible = pageSize && !server
     ? sorted.slice(safePage * pageSize, safePage * pageSize + pageSize)
     : sorted;
+  const sortable = (col: Column<T>) => !server && Boolean(col.sortValue);
 
   function toggleSort(col: Column<T>) {
-    if (!col.sortValue) return;
+    if (!sortable(col)) return;
     if (sortKey === col.key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -116,7 +136,7 @@ export function DataTable<T>({
                     scope="col"
                     style={col.width ? { width: col.width } : undefined}
                     aria-sort={
-                      !col.sortValue
+                      !sortable(col)
                         ? undefined
                         : active
                           ? sortDir === "asc"
@@ -132,7 +152,7 @@ export function DataTable<T>({
                       col.headerClassName,
                     )}
                   >
-                    {col.sortValue ? (
+                    {sortable(col) ? (
                       <button
                         type="button"
                         onClick={() => toggleSort(col)}
@@ -161,7 +181,7 @@ export function DataTable<T>({
 
           <tbody>
             {isLoading ? (
-              Array.from({ length: pageSize ? Math.min(pageSize, 6) : 6 }).map((_, r) => (
+              Array.from({ length: Math.min(server?.pageSize ?? pageSize ?? 6, 6) }).map((_, r) => (
                 <tr key={r} className="border-b border-line">
                   {columns.map((col) => (
                     <td key={col.key} className={cellPad}>
@@ -242,7 +262,11 @@ export function DataTable<T>({
         </table>
       </div>
 
-      {pageSize && !isLoading && sorted.length > pageSize && (
+      {server && !isLoading && (server.page > 1 || server.hasNext) && (
+        <ServerPager paging={server} shown={visible.length} />
+      )}
+
+      {pageSize && !server && !isLoading && sorted.length > pageSize && (
         <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-2.5">
           <p className="text-xs text-ink-muted">
             <span className="data">{safePage * pageSize + 1}</span>–
@@ -276,6 +300,52 @@ export function DataTable<T>({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const pagerButton =
+  "rounded-sm border border-line-strong p-1 text-ink-muted transition-colors hover:border-ink hover:text-ink disabled:pointer-events-none disabled:opacity-40";
+
+function ServerPager({ paging, shown }: { paging: ServerPaging; shown: number }) {
+  const first = (paging.page - 1) * paging.pageSize + 1;
+  const last = first + shown - 1;
+  const total =
+    paging.totalItems === undefined
+      ? null
+      : `${paging.totalItems.toLocaleString("id-ID")}${paging.totalIsFloor ? "+" : ""}`;
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-2.5">
+      <p className="text-xs text-ink-muted">
+        <span className="data">{first}</span>–<span className="data">{last}</span>
+        {total && (
+          <>
+            {" "}dari <span className="data">{total}</span>
+          </>
+        )}{" "}
+        baris
+      </p>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => paging.onPageChange(paging.page - 1)}
+          disabled={paging.page <= 1}
+          aria-label="Halaman sebelumnya"
+          className={pagerButton}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="data px-2 text-xs text-ink-muted">Hal. {paging.page}</span>
+        <button
+          type="button"
+          onClick={() => paging.onPageChange(paging.page + 1)}
+          disabled={!paging.hasNext}
+          aria-label="Halaman berikutnya"
+          className={pagerButton}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

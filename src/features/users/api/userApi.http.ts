@@ -7,7 +7,7 @@
  * keeps the backend consistent with its published contract and leaves every
  * component untouched — see technical-gaps 2.4, which chose this direction.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import type { UserEntity, UserStatusEntity } from "@/types/domain";
 import type { GrantableRole, RoleGrant, UserFilters, UsersApi } from "./contract";
 import type { UserRole } from "@/types/auth";
@@ -115,7 +115,7 @@ function toDomain(row: UserResponse): UserEntity {
 }
 
 export async function getUsers(filters?: UserFilters): Promise<UserEntity[]> {
-  const page = await getList<UserResponse>("/users", {
+  const page = await getAllPages<UserResponse>("/users", {
     search: filters?.search,
     pageSize: 100,
   });
@@ -125,7 +125,7 @@ export async function getUsers(filters?: UserFilters): Promise<UserEntity[]> {
 export async function getUsersWithAccess(filters?: UserFilters): Promise<UserEntity[]> {
   const roleCodes =
     filters?.role && filters.role !== "Semua" ? ROLE_CODES[filters.role] : undefined;
-  const page = await getList<UserResponse>("/users/access", {
+  const page = await getAllPages<UserResponse>("/users/access", {
     search: filters?.search,
     pageSize: 100,
     filters: roleCodes

@@ -22,7 +22,7 @@
  * an alert with no trip carries no driver — an alert can be raised against a
  * depot fence with no run involved at all.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getList, getOne, send } from "@/lib/api";
 import type {
   GeofenceAlertFilters,
   GeofenceAlertStatusEntity,
@@ -205,7 +205,7 @@ function shapeToWire(shape: GeofenceShapeEntity): Record<string, unknown> {
 }
 
 async function getGeofenceRules(): Promise<GeofenceRuleView[]> {
-  const page = await getList<RuleResponse>("/geofence-rules", {
+  const page = await getAllPages<RuleResponse>("/geofence-rules", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "code" }],
     // Never show soft-deleted fences: the row survives a delete so past alerts

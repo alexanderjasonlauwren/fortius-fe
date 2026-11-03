@@ -18,6 +18,8 @@ vi.mock("@/lib/scope", () => ({ scopeKey: () => scopeState.key }));
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  // getAllPages walks pages through getList; one mocked call is one page.
+  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),

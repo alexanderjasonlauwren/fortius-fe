@@ -20,7 +20,7 @@
  * decision: every product this build creates lands in one category until
  * the form is extended to choose.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { financeApiHttp } from "@/features/finance/api/financeApi.http";
 import { leafAccounts } from "@/features/finance/lib/accounts";
@@ -162,7 +162,7 @@ async function syncPricing(
 }
 
 async function getProducts(filters?: ProductFilters): Promise<ProductView[]> {
-  const page = await getList<ProductResponse>("/products", {
+  const page = await getAllPages<ProductResponse>("/products", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "name" }],
     search: filters?.search,

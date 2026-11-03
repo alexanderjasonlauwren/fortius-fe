@@ -10,6 +10,8 @@ const send = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  // getAllPages walks pages through getList; one mocked call is one page.
+  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
   getOne: vi.fn(),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),

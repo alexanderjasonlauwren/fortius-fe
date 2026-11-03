@@ -359,6 +359,40 @@ export async function getList<T>(path: string, params: ListParams = {}): Promise
   }
 }
 
+/**
+ * One page of a server-paged list, already mapped to the console's view type.
+ * Shaped for `DataTable`'s `server` prop: the table pages through the server
+ * instead of slicing what it holds.
+ */
+export interface Paged<T> {
+  items: T[];
+  /** 1-based. */
+  page: number;
+  pageSize: number;
+  hasNext: boolean;
+  totalItems?: number;
+  totalIsFloor?: boolean;
+}
+
+/** GET page `page` of a collection and map its rows. */
+export async function getPage<Wire, View>(
+  path: string,
+  params: Omit<ListParams, "cursor">,
+  map: (row: Wire) => View,
+): Promise<Paged<View>> {
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 50;
+  const result = await getList<Wire>(path, { ...params, page, pageSize });
+  return {
+    items: result.items.map(map),
+    page,
+    pageSize,
+    hasNext: result.pagination.has_next,
+    totalItems: result.pagination.total_items,
+    totalIsFloor: result.pagination.total_is_floor,
+  };
+}
+
 /** Every page of a collection, and whether the walk stopped short. */
 export interface AllPages<T> {
   items: T[];

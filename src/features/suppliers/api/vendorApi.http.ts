@@ -4,7 +4,7 @@
  * Every field is a straight snake_case-to-camelCase rename of
  * fortius-backend's internal/entities/supplier response shapes.
  */
-import { getList, send } from "@/lib/api";
+import { getAllPages, send } from "@/lib/api";
 import type { CreateVendorInput, UpdateVendorInput, VendorApi, VendorView } from "./contract";
 
 interface SupplierResponse {
@@ -61,7 +61,7 @@ function paymentDetails(input: CreateVendorInput | UpdateVendorInput) {
 }
 
 async function getVendors(): Promise<VendorView[]> {
-  const page = await getList<SupplierResponse>("/suppliers", {
+  const page = await getAllPages<SupplierResponse>("/suppliers", {
     pageSize: 100,
     sort: [{ field: "name" }],
   });

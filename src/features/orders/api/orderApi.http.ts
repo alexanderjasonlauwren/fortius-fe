@@ -31,7 +31,7 @@
  * interface parity with the mock and silently has nowhere to go, matching
  * `OrderListPage`'s own call site, which never actually passes one.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { outletLabelTitle, unitLabel, unitLabelTitle } from "@/lib/lexicon";
 import { isoDate, startOfToday } from "@/lib/date";
@@ -225,7 +225,7 @@ async function addOrdersToPlan(planId: string, orderIds: string[]): Promise<numb
  * two-way feature import would be a real cycle, not just an inconvenient one).
  */
 async function defaultProductId(): Promise<string> {
-  const page = await getList<{ id: string }>("/products", {
+  const page = await getAllPages<{ id: string }>("/products", {
     pageSize: 1,
     filters: [{ field: "status", operator: "eq", value: "atv" }],
   });
@@ -261,9 +261,16 @@ async function createOrder(input: {
  * back from distribution.
  */
 async function getSchedulablePlans() {
-  const page = await getList<{ id: string; order_number: string; planned_delivery_date: string; order_status: string }>(
+  // Drafts only, from the server, through every page. This read the 100
+  // oldest plans of any status and kept the future drafts among them, so
+  // once a tenant had 100 past plans no plan could be picked at all
+  // (fixed 2026-11-02).
+  const page = await getAllPages<{ id: string; order_number: string; planned_delivery_date: string; order_status: string }>(
     "/distribution/orders",
-    { pageSize: 100, sort: [{ field: "planned_delivery_date" }] },
+    {
+      sort: [{ field: "planned_delivery_date" }],
+      filters: [{ field: "order_status", operator: "eq" as const, value: "draft" }],
+    },
   );
   const today = isoDate(startOfToday());
   return page.items

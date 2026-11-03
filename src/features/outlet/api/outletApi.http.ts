@@ -20,7 +20,7 @@
  * alike — the server's SearchableColumns say so, and asking anyway is a 422
  * rather than an empty result that looks like "no such outlet".
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { outletLabel } from "@/lib/lexicon";
 import type { BankNameEntity, OutletEntity, OutletStatus } from "@/types/domain";
@@ -201,7 +201,7 @@ async function fetchAll(filters?: OutletFilters): Promise<OutletResponse[]> {
   const wireStatus =
     filters?.status && filters.status !== "Semua" ? toWireStatus(filters.status) : undefined;
 
-  const page = await getList<OutletResponse>("/outlets", {
+  const page = await getAllPages<OutletResponse>("/outlets", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "name" }],
     search: filters?.search,

@@ -13,7 +13,7 @@
  * file used to paper over with "—" and a synthetic line, closed by the
  * accounting parity plan's P2.
  */
-import { getAllPages, getList, getOne, send } from "@/lib/api";
+import { getAllPages, getList, getOne, getPage, send, type Paged } from "@/lib/api";
 import { toApiTimestamp, todayIso } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import type { OutletView } from "@/features/outlet/api/contract";
@@ -203,48 +203,61 @@ async function getInvoice(id: string): Promise<InvoiceDetailView> {
   };
 }
 
-/** 100 is every list definition's MaxPageSize; the server refuses more. */
-async function fetchInvoices(filters?: { outletId?: string; search?: string }) {
-  const page = await getList<InvoiceResponse>("/invoices", {
-    pageSize: PAGE_SIZE,
-    sort: [{ field: "issued_at", direction: "desc" }],
-    search: filters?.search,
-    filters:
-      filters?.outletId && filters.outletId !== "Semua"
-        ? [{ field: "outlet_id", operator: "eq" as const, value: filters.outletId }]
-        : [],
-  });
-  return page.items;
+/** The wire statuses each console status covers. */
+const WIRE_STATUSES: Record<string, string> = {
+  "Belum lunas": "unpaid,partial,overdue",
+  Terbit: "unpaid",
+  Sebagian: "partial",
+  "Jatuh Tempo": "overdue",
+  Lunas: "paid,waived,credited",
+  Batal: "void",
+};
+const OPEN_STATUSES = WIRE_STATUSES["Belum lunas"];
+
+function statusFilter(statuses: string) {
+  return { field: "payment_status", operator: statuses.includes(",") ? "in" as const : "eq" as const, value: statuses };
 }
 
-async function getInvoices(filters?: InvoiceFilters): Promise<InvoiceView[]> {
-  const [rows, outlets] = await Promise.all([
-    fetchInvoices({ outletId: filters?.outletId, search: filters?.search }),
+/**
+ * One server page of invoices. Status, outlet and search all go to the server
+ * now that payment_status takes a set: this used to fetch the newest 100 and
+ * filter them here, so an older invoice could not be found at all once a
+ * tenant had issued 100 newer ones (fixed 2026-11-02).
+ */
+async function getInvoices(filters: InvoiceFilters = {}, page = 1): Promise<Paged<InvoiceView>> {
+  const statuses = filters.status && filters.status !== "Semua" ? WIRE_STATUSES[filters.status] : undefined;
+  const [result, outlets] = await Promise.all([
+    getPage<InvoiceResponse, InvoiceResponse>("/invoices", {
+      page,
+      pageSize: 50,
+      // Open tabs read oldest-due first, the order collections works in;
+      // settled and "Semua" read newest first.
+      sort: statuses && statuses !== WIRE_STATUSES.Lunas && statuses !== WIRE_STATUSES.Batal
+        ? [{ field: "due_date", direction: "asc" }]
+        : [{ field: "issued_at", direction: "desc" }],
+      search: filters.search?.trim() || undefined,
+      filters: [
+        ...(statuses ? [statusFilter(statuses)] : []),
+        ...(filters.outletId && filters.outletId !== "Semua"
+          ? [{ field: "outlet_id", operator: "eq" as const, value: filters.outletId }]
+          : []),
+      ],
+    }, (row) => row),
     outletsById(),
   ]);
   const today = new Date().toISOString().slice(0, 10);
-  let views = rows.map((r) => toInvoiceView(r, outlets, today));
-
-  // payment_status only supports `eq` server-side (see
-  // fortius-backend/internal/repository/invoice/list_definition.go), so
-  // "Belum lunas" and bucket filtering both happen here, the same as the
-  // mock does over its own in-memory rows.
-  views = views.filter((inv) => {
-    if (filters?.status === "Belum lunas") {
-      if (inv.sisa <= 0 || inv.status === "Batal") return false;
-    } else if (filters?.status && filters.status !== "Semua") {
-      if (inv.status !== filters.status) return false;
-    }
-    if (filters?.bucket && filters.bucket !== "Semua" && inv.bucket !== filters.bucket) {
-      return false;
-    }
-    return true;
-  });
-  return views.sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+  return { ...result, items: result.items.map((row) => toInvoiceView(row, outlets, today)) };
 }
 
+/** Every open invoice of one outlet, for the allocation picker. */
 async function getOpenInvoices(outletId: string): Promise<InvoiceView[]> {
-  const [rows, outlets] = await Promise.all([fetchInvoices({ outletId }), outletsById()]);
+  const [{ items: rows }, outlets] = await Promise.all([
+    getAllPages<InvoiceResponse>("/invoices", {
+      sort: [{ field: "due_date", direction: "asc" }],
+      filters: [statusFilter(OPEN_STATUSES), { field: "outlet_id", operator: "eq" as const, value: outletId }],
+    }),
+    outletsById(),
+  ]);
   const today = new Date().toISOString().slice(0, 10);
   return rows
     .map((r) => toInvoiceView(r, outlets, today))
@@ -276,22 +289,18 @@ async function createManualInvoice(input: CreateManualInvoiceInput): Promise<Inv
 /* ── ageing ────────────────────────────────────────────────────────────── */
 
 /**
- * Every invoice still open: one fully paged read per open status, since the
- * status filter is equality only. This used to be the newest 100 invoices of
- * any status, so an older unpaid invoice fell off the aging view as soon as
- * a tenant had issued 100 newer ones (fixed 2026-11-02). Open invoices stay
- * few -- pangkalan pay H-1 -- so the set is small even when the ledger is not.
+ * Every invoice still open, through every page. This used to be the newest
+ * 100 invoices of any status, so an older unpaid invoice fell off the aging
+ * view as soon as a tenant had issued 100 newer ones (fixed 2026-11-02). Open
+ * invoices stay few -- pangkalan pay H-1 -- so the set is small even when the
+ * ledger is not.
  */
 async function fetchOpenInvoices(): Promise<{ rows: InvoiceResponse[]; complete: boolean }> {
-  const pages = await Promise.all(
-    ["unpaid", "partial", "overdue"].map((status) =>
-      getAllPages<InvoiceResponse>("/invoices", {
-        sort: [{ field: "due_date", direction: "asc" }],
-        filters: [{ field: "payment_status", operator: "eq" as const, value: status }],
-      }),
-    ),
-  );
-  return { rows: pages.flatMap((page) => page.items), complete: pages.every((page) => !page.truncated) };
+  const { items, truncated } = await getAllPages<InvoiceResponse>("/invoices", {
+    sort: [{ field: "due_date", direction: "asc" }],
+    filters: [statusFilter(OPEN_STATUSES)],
+  });
+  return { rows: items, complete: !truncated };
 }
 
 async function getAgingReport(): Promise<AgingReport> {
@@ -434,7 +443,7 @@ async function getPayments(status?: string, search?: string): Promise<PaymentVie
 }
 
 async function getPaymentMethods(): Promise<PaymentMethodView[]> {
-  const page = await getList<PaymentMethodResponse>("/payment-methods", { pageSize: PAGE_SIZE });
+  const page = await getAllPages<PaymentMethodResponse>("/payment-methods", { pageSize: PAGE_SIZE });
   return page.items
     .filter((m) => m.status !== "ina")
     .sort((x, y) => x.sort_order - y.sort_order)
@@ -847,7 +856,7 @@ function toAccountEntity(row: AccountResponse, idToCode: Map<string, string>): A
  */
 async function fetchAccounts(): Promise<AccountResponse[]> {
   try {
-    const page = await getList<AccountResponse>("/accounts", {
+    const page = await getAllPages<AccountResponse>("/accounts", {
       pageSize: PAGE_SIZE,
       sort: [{ field: "code" }],
     });

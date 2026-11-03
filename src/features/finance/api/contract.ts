@@ -1,3 +1,4 @@
+import type { Paged } from "@/lib/api";
 /**
  * What every finance adapter must provide.
  *
@@ -323,7 +324,8 @@ export interface ProfitAndLossView {
 }
 
 export interface FinanceApi {
-  getInvoices(filters?: InvoiceFilters): Promise<InvoiceView[]>;
+  /** One server page; `page` is 1-based. */
+  getInvoices(filters?: InvoiceFilters, page?: number): Promise<Paged<InvoiceView>>;
   getAgingReport(): Promise<AgingReport>;
   getPayments(status?: string, search?: string): Promise<PaymentView[]>;
   /** Open invoices for the allocation picker. */

@@ -2,7 +2,7 @@ import { scopeKey } from "@/lib/scope";
 import { AttachmentsButton } from "@/features/attachments/components/AttachmentsButton";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FilePlus, FileSpreadsheet, Receipt, ShieldAlert, StickyNote } from "lucide-react";
 import {
   exportAging,
@@ -18,6 +18,7 @@ import { useAuthStore } from "@/features/auth/store/authStore";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
+import { useResettableState } from "@/hooks/useResettableState";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader, Meter } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
@@ -282,9 +283,11 @@ function InvoiceSection() {
   const [manualInvoiceOpen, setManualInvoiceOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  const [page, setPage] = useResettableState([status, search], () => 1);
   const invoices = useQuery({
-    queryKey: [...scopeKey(), "invoices", status, search],
-    queryFn: () => getInvoices({ status: status as never, search }),
+    queryKey: [...scopeKey(), "invoices", status, search, page],
+    queryFn: () => getInvoices({ status: status as never, search }, page),
+    placeholderData: keepPreviousData,
   });
 
   const columns: Column<InvoiceView>[] = [
@@ -425,7 +428,11 @@ function InvoiceSection() {
       <Panel>
         <PanelHeader
           title="Daftar tagihan"
-          hint={`${(invoices.data ?? []).length} baris`}
+          hint={
+            invoices.data?.totalItems !== undefined
+              ? `${formatNumber(invoices.data.totalItems)}${invoices.data.totalIsFloor ? "+" : ""} baris`
+              : undefined
+          }
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <SearchInput
@@ -457,12 +464,11 @@ function InvoiceSection() {
         />
         <DataTable
           columns={columns}
-          data={invoices.data ?? []}
+          data={invoices.data?.items ?? []}
           isLoading={invoices.isLoading}
           rowKey={(row) => row.id}
           spineFor={(row) => spineFor(row.status)}
-          pageSize={15}
-          defaultSortKey="jatuhTempo"
+          server={invoices.data && { ...invoices.data, onPageChange: setPage }}
           emptyIcon={Receipt}
           emptyMessage="Tidak ada tagihan"
           emptyDescription="Tagihan terbit otomatis saat surat jalan ditutup."

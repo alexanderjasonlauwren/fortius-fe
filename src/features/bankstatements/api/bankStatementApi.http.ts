@@ -5,7 +5,7 @@
  * Every field is a straight snake_case-to-camelCase rename of
  * fortius-backend's internal/entities/bankstatement response shapes.
  */
-import { getList, getOne, send, upload } from "@/lib/api";
+import { getAllPages, getList, getOne, send, upload } from "@/lib/api";
 import type {
   AutoMatchResult,
   BankStatementApi,
@@ -183,7 +183,7 @@ async function getReconciliation(bankAccountId: string, asOf: string): Promise<R
 }
 
 async function listRules(): Promise<BankStatementRule[]> {
-  const page = await getList<RuleResponse>("/bank-statement-rules", {
+  const page = await getAllPages<RuleResponse>("/bank-statement-rules", {
     pageSize: 100,
     sort: [{ field: "sort_order" }],
   });

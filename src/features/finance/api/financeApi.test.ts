@@ -14,6 +14,15 @@ const send = vi.fn();
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
   getAllPages: (...args: unknown[]) => getAllPages(...args),
+  // getPage is one getList call plus a mapping; built on the mocked getList
+  // so the invoice tests below can keep serving rows through it.
+  getPage: async (path: string, params: { page?: number; pageSize?: number }, map: (row: unknown) => unknown) => {
+    const result = await getList(path, params);
+    return {
+      items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50,
+      hasNext: Boolean(result.pagination?.has_next),
+    };
+  },
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),
@@ -82,7 +91,10 @@ function invoiceWire(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   getList.mockReset();
-  getAllPages.mockReset();
+  // By default a walk is one page served by getList; the aging tests override.
+  getAllPages.mockReset().mockImplementation(async (...args: unknown[]) => ({
+    items: (await getList(...args)).items, truncated: false,
+  }));
   getOne.mockReset();
   send.mockReset();
   getOutletList.mockReset();
@@ -100,7 +112,7 @@ describe("invoice status", () => {
       items: [invoiceWire({ payment_status: "waived", outstanding_amount: 0 })],
       pagination: {},
     });
-    const [inv] = await financeApiHttp.getInvoices();
+    const { items: [inv] } = await financeApiHttp.getInvoices();
     expect(inv.status).toBe("Lunas");
   });
 
@@ -112,7 +124,7 @@ describe("invoice status", () => {
       ],
       pagination: {},
     });
-    const [delivery, other] = await financeApiHttp.getInvoices();
+    const { items: [delivery, other] } = await financeApiHttp.getInvoices();
     expect(delivery.suratJalan).toBe("SJ-SLT-20261001-0004");
     expect(other.suratJalan).toBe("—");
   });
@@ -122,11 +134,26 @@ describe("invoice status", () => {
       items: [invoiceWire({ payment_status: "void", void_reason: "salah outlet", outstanding_amount: 100_000 })],
       pagination: {},
     });
-    const [inv] = await financeApiHttp.getInvoices({ status: "Semua" });
+    const { items: [inv] } = await financeApiHttp.getInvoices({ status: "Semua" });
     expect(inv.status).toBe("Batal");
     expect(inv.alasanBatal).toBe("salah outlet");
-    // A void invoice is never open, whatever its outstanding column says.
-    expect(await financeApiHttp.getInvoices({ status: "Belum lunas" })).toEqual([]);
+  });
+
+  // Regression 2026-11-02: status was filtered in the browser over the newest
+  // 100 invoices, so an older open invoice could not be found at all.
+  it("asks the server for each tab's statuses, a void one never among the open", async () => {
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    const statusSent = async (status: string) => {
+      getList.mockClear();
+      await financeApiHttp.getInvoices({ status: status as never }, 3);
+      const [, params] = getList.mock.calls[0];
+      expect(params.page).toBe(3);
+      return params.filters.find((f: { field: string }) => f.field === "payment_status");
+    };
+    expect(await statusSent("Belum lunas")).toEqual({ field: "payment_status", operator: "in", value: "unpaid,partial,overdue" });
+    expect(await statusSent("Lunas")).toEqual({ field: "payment_status", operator: "in", value: "paid,waived,credited" });
+    expect(await statusSent("Jatuh Tempo")).toEqual({ field: "payment_status", operator: "eq", value: "overdue" });
+    expect(await statusSent("Semua")).toBeUndefined();
   });
 
   it("sends a manual invoice's due date, branch and reference, and leaves blanks to the backend", async () => {
@@ -161,13 +188,13 @@ describe("invoice status", () => {
       items: [invoiceWire({ payment_status: "overdue" })],
       pagination: {},
     });
-    expect((await financeApiHttp.getInvoices())[0].status).toBe("Jatuh Tempo");
+    expect((await financeApiHttp.getInvoices()).items[0].status).toBe("Jatuh Tempo");
 
     getList.mockResolvedValue({
       items: [invoiceWire({ payment_status: "partial" })],
       pagination: {},
     });
-    expect((await financeApiHttp.getInvoices())[0].status).toBe("Sebagian");
+    expect((await financeApiHttp.getInvoices()).items[0].status).toBe("Sebagian");
   });
 });
 
@@ -186,23 +213,22 @@ describe("aging", () => {
       ],
       pagination: {},
     });
-    const [inv] = await financeApiHttp.getInvoices();
+    const { items: [inv] } = await financeApiHttp.getInvoices();
     expect(inv.bucket).toBe("31–60 hari");
   });
 
   /** blokirOtomatis only flags an outlet blocked when it is actually overdue. */
-  /** Serves `byStatus[status]` for each open-status read the aging view makes. */
-  function serveOpen(byStatus: Record<string, unknown[]>, truncated: string[] = []) {
-    getAllPages.mockImplementation((path: string, params: { filters: { value: string }[] }) => {
+  /** Serves the aging view's open-invoice read. */
+  function serveOpen(items: unknown[], truncated = false) {
+    getAllPages.mockImplementation((path: string) => {
       if (path !== "/invoices") throw new Error(`unexpected path: ${path}`);
-      const status = params.filters[0].value;
-      return Promise.resolve({ items: byStatus[status] ?? [], truncated: truncated.includes(status) });
+      return Promise.resolve({ items, truncated });
     });
   }
 
   it("only marks an outlet blocked when it is both auto-block and overdue", async () => {
     const overdue = new Date(Date.now() - 5 * 86_400_000).toISOString();
-    serveOpen({ overdue: [invoiceWire({ payment_status: "overdue", due_date: overdue, outstanding_amount: 20_000 })] });
+    serveOpen([invoiceWire({ payment_status: "overdue", due_date: overdue, outstanding_amount: 20_000 })]);
     getOutletList.mockResolvedValue([outlet({ blokirOtomatis: true })]);
     const report = await financeApiHttp.getAgingReport();
     expect(report.rows[0].terblokir).toBe(true);
@@ -214,19 +240,19 @@ describe("aging", () => {
 
   // Regression 2026-11-02: aging read the newest 100 invoices of any status,
   // so an older unpaid one dropped off once 100 newer invoices existed.
-  it("reads every open invoice by status, through every page, not the newest page", async () => {
-    serveOpen({ unpaid: [invoiceWire({ payment_status: "unpaid", outstanding_amount: 70_000 })] });
+  it("reads every open invoice through every page, not the newest page", async () => {
+    serveOpen([invoiceWire({ payment_status: "unpaid", outstanding_amount: 70_000 })]);
     const report = await financeApiHttp.getAgingReport();
 
-    const statuses = getAllPages.mock.calls.map(([, params]) => params.filters[0].value).sort();
-    expect(statuses).toEqual(["overdue", "partial", "unpaid"]);
+    const [, params] = getAllPages.mock.calls[0];
+    expect(params.filters).toEqual([{ field: "payment_status", operator: "in", value: "unpaid,partial,overdue" }]);
     expect(getList).not.toHaveBeenCalledWith("/invoices", expect.anything());
     expect(report.grandTotal).toBe(70_000);
     expect(report.lengkap).toBe(true);
   });
 
   it("says the aging totals are a floor when an open-invoice list hit the ceiling", async () => {
-    serveOpen({ partial: [] }, ["partial"]);
+    serveOpen([], true);
     expect((await financeApiHttp.getAgingReport()).lengkap).toBe(false);
   });
 });

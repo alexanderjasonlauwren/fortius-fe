@@ -6,7 +6,7 @@
  * unlike manual journal's own `journal_date` (a Go `time.Time`) -- no
  * RFC 3339 conversion needed here.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getList, getOne, send } from "@/lib/api";
 import type {
   PayPurchaseInput,
   PurchaseApi,
@@ -19,7 +19,7 @@ import type {
 
 /** The tenant's default branch, for a caller with none in scope. */
 async function defaultBranchID(): Promise<string> {
-  const page = await getList<{ id: string; is_default: boolean }>("/branches", { pageSize: 100 });
+  const page = await getAllPages<{ id: string; is_default: boolean }>("/branches", { pageSize: 100 });
   const preferred = page.items.find((b) => b.is_default) ?? page.items[0];
   if (!preferred) {
     throw new Error("Perusahaan ini belum punya cabang, jadi pembelian belum bisa dicatat.");
