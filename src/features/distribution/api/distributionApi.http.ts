@@ -30,7 +30,7 @@
  * `driver_id` moved to `core.dispatch_trips` because a driver is a property of
  * the run rather than of one line.
  */
-import { getAllPages, getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import { printDocument } from "@/lib/export";
 import { outletLabelTitle, unitLabelTitle } from "@/lib/lexicon";
 import { scopeKey } from "@/lib/scope";
@@ -467,7 +467,7 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
 /* ── the adapter ───────────────────────────────────────────────────────── */
 
 async function getPlanList(): Promise<DistributionPlan[]> {
-  const page = await getList<OrderResponse>("/distribution/orders", {
+  const page = await getAllPages<OrderResponse>("/distribution/orders", {
     pageSize: OPTION_PAGE_SIZE,
     sort: [{ field: "planned_delivery_date", direction: "desc" }],
   });

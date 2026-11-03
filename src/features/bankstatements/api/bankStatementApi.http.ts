@@ -5,7 +5,7 @@
  * Every field is a straight snake_case-to-camelCase rename of
  * fortius-backend's internal/entities/bankstatement response shapes.
  */
-import { getAllPages, getList, getOne, send, upload } from "@/lib/api";
+import { getAllPages, getOne, send, upload } from "@/lib/api";
 import type {
   AutoMatchResult,
   BankStatementApi,
@@ -132,7 +132,7 @@ async function importStatement(input: ImportBankStatementInput): Promise<BankSta
 }
 
 async function listImports(bankAccountId?: string): Promise<BankStatementImport[]> {
-  const page = await getList<ImportResponse>("/bank-statements", {
+  const page = await getAllPages<ImportResponse>("/bank-statements", {
     filters: bankAccountId ? [{ field: "bank_account_id", operator: "eq", value: bankAccountId }] : undefined,
     pageSize: 100,
     sort: [{ field: "period_to", direction: "desc" }],

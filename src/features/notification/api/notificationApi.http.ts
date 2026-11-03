@@ -28,9 +28,9 @@
  * per notification on a list screen. A notification's title and message
  * carry the content; "Buka" has nowhere to go yet.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getList, getOne, send } from "@/lib/api";
 import type { Notification, NotificationSettings, ReminderRule, ReminderRuleKey } from "../types";
-import type { NotificationApi } from "./contract";
+import type { InboxPage, InboxTab, NotificationApi } from "./contract";
 
 /** Mirrors the backend's notification.NotificationResponse. */
 interface NotificationResponse {
@@ -95,12 +95,37 @@ function toNotification(row: NotificationResponse): Notification {
   };
 }
 
-async function getNotifications(): Promise<Notification[]> {
+/** The wire types each inbox tab covers. */
+const TAB_TYPES: Record<string, string> = {
+  Pengingat: "reminder",
+  Alert: "alert,approval,delivery,payment,quota",
+  Sistem: "system",
+};
+
+/**
+ * One inbox tab. Unread is read whole -- it is what must not be missed, and
+ * users clear it -- and every other tab is the newest 100 of its own types,
+ * with `more` saying older ones exist. Both used to be filters over the
+ * newest 100 of everything, so an older unread notice could not be found
+ * (fixed 2026-11-02).
+ */
+async function getNotifications(tab: InboxTab = "Semua"): Promise<InboxPage> {
+  const sort = [{ field: "created_at", direction: "desc" as const }];
+  if (tab === "Belum dibaca") {
+    const { items, truncated } = await getAllPages<NotificationResponse>("/notifications", {
+      sort, filters: [{ field: "is_read", operator: "eq", value: "false" }],
+    });
+    return { items: items.map(toNotification), more: truncated };
+  }
+  const types = TAB_TYPES[tab];
   const page = await getList<NotificationResponse>("/notifications", {
     pageSize: 100,
-    sort: [{ field: "created_at", direction: "desc" }],
+    sort,
+    filters: types
+      ? [{ field: "type", operator: types.includes(",") ? "in" : "eq", value: types }]
+      : undefined,
   });
-  return page.items.map(toNotification);
+  return { items: page.items.map(toNotification), more: page.pagination.has_next };
 }
 
 async function getUnreadCount(): Promise<number> {

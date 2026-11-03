@@ -17,7 +17,7 @@ import { cn, getInitials } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import {
-  getNotifications,
+  getNotifications, getUnreadCount,
   markAllAsRead,
 } from "@/features/notification/api/notificationApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
@@ -45,11 +45,19 @@ export function Header({ onMenuClick }: HeaderProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const notifications = useQuery({
-    queryKey: [...scopeKey(), "notifications"],
-    queryFn: getNotifications,
+    queryKey: [...scopeKey(), "notifications", "Semua"],
+    queryFn: () => getNotifications("Semua"),
+    refetchInterval: 60_000,
+    select: (page) => page.items,
+  });
+  // The server's count, the same query key the sidebar badge uses: counting
+  // the loaded notices stopped at 100.
+  const unreadCount = useQuery({
+    queryKey: [...scopeKey(), "unread-count"],
+    queryFn: getUnreadCount,
     refetchInterval: 60_000,
   });
-  const unread = (notifications.data ?? []).filter((n) => !n.isRead);
+  const unread = { length: unreadCount.data ?? 0 };
 
   const markAll = useDeskMutation({
     mutationFn: markAllAsRead,
