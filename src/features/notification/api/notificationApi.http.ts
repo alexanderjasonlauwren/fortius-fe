@@ -1,35 +1,23 @@
 /**
  * Notifications and reminder configuration, against the real API.
  *
- * `internal/controller/notification` over `notify.notifications` and
- * `notify.reminder_settings`.
+ * `internal/controller/notification`: the inbox over `notify.notifications`,
+ * the rules over `notify.reminder_settings` with each rule's recipients and
+ * channels (`routes`), and the outside channels over
+ * `notify.channel_settings` (`/notification-channels`).
  *
- * # What the real reminder settings do not carry
- *
- * The mock's `NotificationSettings.rules` has seven keys, each with its own
- * `penerima` (which roles receive it) and `kanal` (in-app/WhatsApp/email).
- * `notify.reminder_settings` has five toggles and one tenant-wide
- * `channels` array -- no per-rule recipients, no per-rule channels. Saving
- * here writes only the five real toggle/threshold pairs; `penerima` and
- * `kanal` on every rule are always the same placeholder on read and are
- * silently not persisted on write. `planUnconfirmed` and `orderPending`
- * have no column at all -- they read as permanently disabled and saving
- * them changes nothing server-side.
- *
- * `whatsapp` and `email` sender configuration and `sendTestNotification`
- * have no backend behind them either -- WhatsApp is explicitly out of
- * scope for this build (D3's own decision to skip it), and there is no
- * email-sending infrastructure. Both stay mock-only.
- *
- * # `href` is absent
- *
- * `NotificationResponse.subject_id` is the row's internal numeric id, not
- * a UUID any console route can link to -- resolving one would be a lookup
- * per notification on a list screen. A notification's title and message
- * carry the content; "Buka" has nowhere to go yet.
+ * The rules panel saves to two resources, channels first: a channel the
+ * installation cannot send over is refused there (CHANNEL_NOT_CONFIGURED)
+ * before any rule is written.
  */
 import { getAllPages, getList, getOne, send } from "@/lib/api";
-import type { Notification, NotificationSettings, ReminderRule, ReminderRuleKey } from "../types";
+import type {
+  Notification,
+  NotificationSettings,
+  OutsideChannel,
+  ReminderRule,
+  ReminderRuleKey,
+} from "../types";
 import type { InboxPage, InboxTab, NotificationApi } from "./contract";
 
 /** Mirrors the backend's notification.NotificationResponse. */
@@ -47,6 +35,13 @@ interface NotificationResponse {
   created_at: string;
 }
 
+/** Mirrors the backend's notification.ReminderRuleRoute. */
+interface RouteWire {
+  rule: string;
+  role_codes: string[];
+  channels: string[];
+}
+
 /** Mirrors the backend's notification.ReminderSettingsResponse. */
 interface ReminderSettingsResponse {
   sa_expiry_enabled: boolean;
@@ -59,7 +54,18 @@ interface ReminderSettingsResponse {
   delivery_delay_minutes: number;
   quota_low_enabled: boolean;
   quota_low_threshold_pct: number;
-  channels: string[];
+  plan_unconfirmed_enabled: boolean;
+  plan_unconfirmed_hour: number;
+  order_pending_enabled: boolean;
+  order_pending_threshold: number;
+  routes: RouteWire[];
+  version: number;
+}
+
+/** Mirrors the backend's notification.ChannelSettingsResponse. */
+interface ChannelSettingsResponse {
+  email: { enabled: boolean; sender_name: string; available: boolean };
+  whatsapp: { enabled: boolean; sender_number: string; template: string; available: boolean };
   version: number;
 }
 
@@ -75,12 +81,48 @@ const TYPE_TO_DOMAIN: Record<string, Notification["type"]> = {
   quota: "Alert",
 };
 
-/** The only rule this build's job actually raises -- see reminders.go's
- *  own header for why the other four are deferred. */
-function ruleFor(row: NotificationResponse): ReminderRuleKey | undefined {
-  if (row.type === "reminder" && row.subject_table === "schedule_agreements") return "saExpiry";
-  return undefined;
-}
+/** Each rule's wire name, toggle and threshold fields. */
+const RULE_WIRE: Record<
+  ReminderRuleKey,
+  { rule: string; enabled: keyof ReminderSettingsResponse; threshold: keyof ReminderSettingsResponse }
+> = {
+  saExpiry: { rule: "sa_expiry", enabled: "sa_expiry_enabled", threshold: "sa_expiry_days_before" },
+  quotaLow: { rule: "quota_low", enabled: "quota_low_enabled", threshold: "quota_low_threshold_pct" },
+  stockLow: { rule: "stock_low", enabled: "stock_low_enabled", threshold: "stock_threshold_pct" },
+  paymentPending: {
+    rule: "payment_pending",
+    enabled: "payment_pending_enabled",
+    threshold: "payment_pending_days",
+  },
+  deliveryDelay: {
+    rule: "delivery_delay",
+    enabled: "delivery_delay_enabled",
+    threshold: "delivery_delay_minutes",
+  },
+  planUnconfirmed: {
+    rule: "plan_unconfirmed",
+    enabled: "plan_unconfirmed_enabled",
+    threshold: "plan_unconfirmed_hour",
+  },
+  orderPending: {
+    rule: "order_pending",
+    enabled: "order_pending_enabled",
+    threshold: "order_pending_threshold",
+  },
+};
+
+const RULE_KEYS = Object.keys(RULE_WIRE) as ReminderRuleKey[];
+
+/** Which rule raised a notification, from what it is about. */
+const SUBJECT_RULE: Record<string, ReminderRuleKey> = {
+  "reminder:schedule_agreements": "saExpiry",
+  "quota:branches": "quotaLow",
+  "alert:products": "stockLow",
+  "payment:payments": "paymentPending",
+  "delivery:deliveries": "deliveryDelay",
+  "reminder:distribution_orders": "planUnconfirmed",
+  "approval:orders": "orderPending",
+};
 
 function toNotification(row: NotificationResponse): Notification {
   return {
@@ -90,8 +132,10 @@ function toNotification(row: NotificationResponse): Notification {
     message: row.message,
     timestamp: row.created_at,
     isRead: row.is_read,
-    href: undefined,
-    rule: ruleFor(row),
+    // Only a console path: an absolute or protocol-relative ("//host") URL in
+    // a notification is not ours to follow.
+    href: row.action_url && /^\/(?!\/)/.test(row.action_url) ? row.action_url : undefined,
+    rule: SUBJECT_RULE[`${row.type}:${row.subject_table ?? ""}`],
   };
 }
 
@@ -155,56 +199,85 @@ async function clearReadNotifications(): Promise<number> {
   return count;
 }
 
-/** The console's placeholder for a rule the schema has no recipients or
- *  channels concept for -- see this file's own header. */
-function placeholderRule(aktif: boolean, ambang: number): ReminderRule {
-  return { aktif, ambang, penerima: [], kanal: ["app"] };
-}
+const OUTSIDE: OutsideChannel[] = ["whatsapp", "email"];
 
-function toSettings(row: ReminderSettingsResponse): NotificationSettings {
+function toSettings(rules: ReminderSettingsResponse, channels: ChannelSettingsResponse): NotificationSettings {
+  const routes = new Map(rules.routes.map((r) => [r.rule, r]));
+  const out = {} as Record<ReminderRuleKey, ReminderRule>;
+  for (const key of RULE_KEYS) {
+    const wire = RULE_WIRE[key];
+    const route = routes.get(wire.rule);
+    out[key] = {
+      aktif: rules[wire.enabled] as boolean,
+      ambang: rules[wire.threshold] as number,
+      penerima: route?.role_codes ?? [],
+      kanal: (route?.channels ?? []).filter((c): c is OutsideChannel =>
+        OUTSIDE.includes(c as OutsideChannel),
+      ),
+    };
+  }
   return {
-    rules: {
-      saExpiry: placeholderRule(row.sa_expiry_enabled, row.sa_expiry_days_before),
-      quotaLow: placeholderRule(row.quota_low_enabled, row.quota_low_threshold_pct),
-      stockLow: placeholderRule(row.stock_low_enabled, row.stock_threshold_pct),
-      paymentPending: placeholderRule(row.payment_pending_enabled, row.payment_pending_days),
-      deliveryDelay: placeholderRule(row.delivery_delay_enabled, row.delivery_delay_minutes),
-      // No column in notify.reminder_settings -- always off, and saving
-      // them changes nothing server-side. See this file's own header.
-      planUnconfirmed: placeholderRule(false, 8),
-      orderPending: placeholderRule(false, 10),
+    rules: out,
+    whatsapp: {
+      aktif: channels.whatsapp.enabled,
+      nomorPengirim: channels.whatsapp.sender_number,
+      templatePengingat: channels.whatsapp.template,
+      tersedia: channels.whatsapp.available,
     },
-    // No sender config exists server-side; mock-shaped defaults so the
-    // settings screen has something to render. sendTestNotification and
-    // the channel toggles below stay mock-only regardless of what a
-    // caller sets here.
-    whatsapp: { aktif: false, nomorPengirim: "", templatePengingat: "" },
-    email: { aktif: false, pengirim: "" },
+    email: {
+      aktif: channels.email.enabled,
+      pengirim: channels.email.sender_name,
+      tersedia: channels.email.available,
+    },
+    versi: { aturan: rules.version, kanal: channels.version },
   };
 }
 
 async function getNotificationSettings(): Promise<NotificationSettings> {
-  return toSettings(await getOne<ReminderSettingsResponse>("/reminder-settings"));
+  const [rules, channels] = await Promise.all([
+    getOne<ReminderSettingsResponse>("/reminder-settings"),
+    getOne<ChannelSettingsResponse>("/notification-channels"),
+  ]);
+  return toSettings(rules, channels);
 }
 
+/**
+ * Saves at the versions read. A save from a stale screen is refused
+ * (STALE_VERSION) instead of silently replacing someone else's.
+ */
 async function saveNotificationSettings(settings: NotificationSettings): Promise<NotificationSettings> {
-  const current = await getOne<ReminderSettingsResponse>("/reminder-settings");
-  const { rules } = settings;
-  const saved = await send<ReminderSettingsResponse>("put", "/reminder-settings", {
-    version: current.version,
-    sa_expiry_enabled: rules.saExpiry.aktif,
-    sa_expiry_days_before: rules.saExpiry.ambang,
-    stock_low_enabled: rules.stockLow.aktif,
-    stock_threshold_pct: rules.stockLow.ambang,
-    payment_pending_enabled: rules.paymentPending.aktif,
-    payment_pending_days: rules.paymentPending.ambang,
-    delivery_delay_enabled: rules.deliveryDelay.aktif,
-    delivery_delay_minutes: rules.deliveryDelay.ambang,
-    quota_low_enabled: rules.quotaLow.aktif,
-    quota_low_threshold_pct: rules.quotaLow.ambang,
-    channels: current.channels,
+  const channels = await send<ChannelSettingsResponse>("put", "/notification-channels", {
+    version: settings.versi.kanal,
+    email_enabled: settings.email.aktif,
+    email_sender_name: settings.email.pengirim,
+    whatsapp_enabled: settings.whatsapp.aktif,
+    whatsapp_sender_number: settings.whatsapp.nomorPengirim,
+    whatsapp_template: settings.whatsapp.templatePengingat,
   });
-  return toSettings(saved);
+
+  const body: Record<string, unknown> = { version: settings.versi.aturan };
+  for (const key of RULE_KEYS) {
+    const wire = RULE_WIRE[key];
+    body[wire.enabled] = settings.rules[key].aktif;
+    body[wire.threshold] = settings.rules[key].ambang;
+  }
+  body.routes = RULE_KEYS.map((key) => ({
+    rule: RULE_WIRE[key].rule,
+    role_codes: settings.rules[key].penerima,
+    channels: settings.rules[key].kanal,
+  }));
+  const rules = await send<ReminderSettingsResponse>("put", "/reminder-settings", body);
+  return toSettings(rules, channels);
+}
+
+/** Sends a test over one channel to the caller's own address; answers where it went. */
+async function sendTestNotification(channel: OutsideChannel): Promise<string> {
+  const { sent_to } = await send<{ channel: string; sent_to: string }>(
+    "post",
+    "/notification-channels/test",
+    { channel },
+  );
+  return sent_to;
 }
 
 export const notificationApiHttp: NotificationApi = {
@@ -217,4 +290,5 @@ export const notificationApiHttp: NotificationApi = {
   clearReadNotifications,
   getNotificationSettings,
   saveNotificationSettings,
+  sendTestNotification,
 };

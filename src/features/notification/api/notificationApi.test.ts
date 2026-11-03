@@ -49,10 +49,33 @@ function settingsWire(overrides: Record<string, unknown> = {}) {
     delivery_delay_minutes: 60,
     quota_low_enabled: true,
     quota_low_threshold_pct: 15,
-    channels: ["in_app"],
+    plan_unconfirmed_enabled: false,
+    plan_unconfirmed_hour: 15,
+    order_pending_enabled: true,
+    order_pending_threshold: 10,
+    routes: [
+      { rule: "sa_expiry", role_codes: [], channels: [] },
+      { rule: "payment_pending", role_codes: ["finance_officer"], channels: ["email"] },
+    ],
     version: 1,
     ...overrides,
   };
+}
+
+function channelsWire(overrides: Record<string, unknown> = {}) {
+  return {
+    email: { enabled: true, sender_name: "PT Agen", available: true },
+    whatsapp: { enabled: false, sender_number: "0812", template: "", available: false },
+    version: 2,
+    ...overrides,
+  };
+}
+
+/** getOne answers each settings resource by its path. */
+function settingsReads(rules = settingsWire(), channels = channelsWire()) {
+  getOne.mockImplementation((path: string) =>
+    Promise.resolve(path === "/notification-channels" ? channels : rules),
+  );
 }
 
 beforeEach(() => {
@@ -86,9 +109,32 @@ describe("getNotifications", () => {
     expect((await notificationApiHttp.getNotifications()).items[0].rule).toBeUndefined();
   });
 
-  it("has no href -- subject_id is an internal id, not a routable UUID", async () => {
-    getList.mockResolvedValue({ pagination: { has_next: false }, items: [wire()] });
-    expect((await notificationApiHttp.getNotifications()).items[0].href).toBeUndefined();
+  it("tags each generated reminder with the rule that raised it", async () => {
+    getList.mockResolvedValue({
+      pagination: { has_next: false },
+      items: [
+        wire({ type: "alert", subject_table: "products" }),
+        wire({ type: "quota", subject_table: "branches" }),
+        wire({ type: "reminder", subject_table: "distribution_orders" }),
+        wire({ type: "approval", subject_table: "orders" }),
+      ],
+    });
+    const { items } = await notificationApiHttp.getNotifications();
+    expect(items.map((n) => n.rule)).toEqual(["stockLow", "quotaLow", "planUnconfirmed", "orderPending"]);
+  });
+
+  it("links Buka to the reminder's console path, and to nothing outside the console", async () => {
+    getList.mockResolvedValue({
+      pagination: { has_next: false },
+      items: [
+        wire({ action_url: "/inventory" }),
+        wire({ action_url: "https://evil.test/" }),
+        wire({ action_url: "//evil.test/" }),
+        wire(),
+      ],
+    });
+    const { items } = await notificationApiHttp.getNotifications();
+    expect(items.map((n) => n.href)).toEqual(["/inventory", undefined, undefined, undefined]);
   });
 });
 
@@ -142,37 +188,63 @@ describe("unread count and inbox actions", () => {
 });
 
 describe("reminder settings", () => {
-  it("maps the five real rules and disables the two the schema has no column for", async () => {
-    getOne.mockResolvedValue(settingsWire());
+  it("maps all seven rules with their routes; an unrouted rule has no recipients or channels", async () => {
+    settingsReads();
     const settings = await notificationApiHttp.getNotificationSettings();
 
-    expect(settings.rules.saExpiry).toEqual({ aktif: true, ambang: 7, penerima: [], kanal: ["app"] });
-    expect(settings.rules.planUnconfirmed.aktif).toBe(false);
-    expect(settings.rules.orderPending.aktif).toBe(false);
+    expect(settings.rules.saExpiry).toEqual({ aktif: true, ambang: 7, penerima: [], kanal: [] });
+    expect(settings.rules.paymentPending).toEqual({
+      aktif: true, ambang: 3, penerima: ["finance_officer"], kanal: ["email"],
+    });
+    expect(settings.rules.orderPending).toEqual({ aktif: true, ambang: 10, penerima: [], kanal: [] });
+    expect(settings.rules.planUnconfirmed.ambang).toBe(15);
+    expect(settings.versi).toEqual({ aturan: 1, kanal: 2 });
   });
 
-  it("has no sender configuration -- whatsapp and email stay off", async () => {
-    getOne.mockResolvedValue(settingsWire());
+  it("reads each channel's availability, so an unavailable one can be shown as such", async () => {
+    settingsReads();
     const settings = await notificationApiHttp.getNotificationSettings();
-    expect(settings.whatsapp.aktif).toBe(false);
-    expect(settings.email.aktif).toBe(false);
+    expect(settings.email).toEqual({ aktif: true, pengirim: "PT Agen", tersedia: true });
+    expect(settings.whatsapp).toMatchObject({ aktif: false, nomorPengirim: "0812", tersedia: false });
   });
 
-  it("reads the current version before saving and sends only the five real fields", async () => {
-    getOne.mockResolvedValue(settingsWire({ version: 6 }));
-    send.mockResolvedValue(settingsWire({ version: 7, sa_expiry_days_before: 14 }));
+  it("saves channels first, then every rule with its route, at the versions read", async () => {
+    settingsReads(settingsWire({ version: 6 }), channelsWire({ version: 4 }));
+    send.mockImplementation((_method: string, path: string) =>
+      Promise.resolve(path === "/notification-channels" ? channelsWire({ version: 5 }) : settingsWire({ version: 7 })),
+    );
 
     const settings = await notificationApiHttp.getNotificationSettings();
     settings.rules.saExpiry.ambang = 14;
-    await notificationApiHttp.saveNotificationSettings(settings);
+    settings.rules.stockLow.penerima = ["warehouse_staff"];
+    settings.rules.stockLow.kanal = ["email"];
+    const saved = await notificationApiHttp.saveNotificationSettings(settings);
 
-    const [method, path, body] = send.mock.calls[0];
-    expect(method).toBe("put");
-    expect(path).toBe("/reminder-settings");
+    expect(send.mock.calls.map((c) => c[1])).toEqual(["/notification-channels", "/reminder-settings"]);
+    expect(send.mock.calls[0][2]).toMatchObject({ version: 4, email_enabled: true, email_sender_name: "PT Agen" });
+    const body = send.mock.calls[1][2];
     expect(body.version).toBe(6);
     expect(body.sa_expiry_days_before).toBe(14);
-    // penerima/kanal have nowhere to go -- confirm they are not sent.
-    expect(body.penerima).toBeUndefined();
-    expect(body.kanal).toBeUndefined();
+    expect(body.order_pending_enabled).toBe(true);
+    expect(body.routes).toHaveLength(7);
+    expect(body.routes).toContainEqual({ rule: "stock_low", role_codes: ["warehouse_staff"], channels: ["email"] });
+    expect(saved.versi).toEqual({ aturan: 7, kanal: 5 });
+  });
+
+  it("does not fetch a fresher version before saving: a stale screen must be refused", async () => {
+    settingsReads();
+    send.mockImplementation((_method: string, path: string) =>
+      Promise.resolve(path === "/notification-channels" ? channelsWire() : settingsWire()),
+    );
+    const settings = await notificationApiHttp.getNotificationSettings();
+    getOne.mockClear();
+    await notificationApiHttp.saveNotificationSettings(settings);
+    expect(getOne).not.toHaveBeenCalled();
+  });
+
+  it("sends a test over a channel and answers where it went", async () => {
+    send.mockResolvedValue({ channel: "email", sent_to: "admin@agen.test" });
+    expect(await notificationApiHttp.sendTestNotification("email")).toBe("admin@agen.test");
+    expect(send.mock.calls[0]).toEqual(["post", "/notification-channels/test", { channel: "email" }]);
   });
 });

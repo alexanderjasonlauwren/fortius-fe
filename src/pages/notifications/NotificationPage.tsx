@@ -20,8 +20,8 @@ import {
   RULE_META,
   type NotifChannel,
   type NotificationSettings,
+  type OutsideChannel,
 } from "@/features/notification/types";
-import { ROLE_LABEL } from "@/features/users/api/userApi";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -35,7 +35,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateId, formatDateTimeId, relativeTime } from "@/lib/format";
-import type { UserEntity } from "@/types/domain";
 import { outletLabel } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
 
@@ -51,14 +50,7 @@ const CHANNEL_ICON: Record<NotifChannel, typeof Monitor> = {
   email: Mail,
 };
 
-const ROLES: UserEntity["role"][] = [
-  "admin",
-  "manager",
-  "finance",
-  "staff",
-  "viewer",
-  "driver",
-];
+const OUTSIDE_CHANNELS: OutsideChannel[] = ["whatsapp", "email"];
 
 /** Groups the inbox the way people scan it: today, yesterday, then older. */
 function dayBucket(iso: string): string {
@@ -87,9 +79,13 @@ export function NotificationPage() {
     markAllAsReadMutation,
     deleteMutation,
     clearReadMutation,
+    canViewRules,
+    canEditRules,
     notificationSettings,
     isLoadingSettings,
+    roles,
     saveSettingsMutation,
+    testChannelMutation,
   } = useNotification();
 
   const [form, setForm] = useResettableState<NotificationSettings | null>(
@@ -310,13 +306,14 @@ export function NotificationPage() {
         </div>
 
         {/* ── Rules and channels, together ── */}
+        {canViewRules && (
         <div className="space-y-4 xl:col-span-2">
-          <Panel className="xl:sticky xl:top-[4.75rem]">
+          <Panel>
             <PanelHeader
               title="Aturan notifikasi"
               hint="Menentukan kapan peringatan dibuat, siapa yang menerimanya, dan lewat kanal apa"
               actions={
-                dirty && (
+                dirty && canEditRules && (
                   <>
                     <Button
                       variant="ghost"
@@ -388,16 +385,22 @@ export function NotificationPage() {
                               Penerima
                             </p>
                             <div className="flex flex-wrap gap-1.5">
-                              {ROLES.map((role) => {
-                                const on = rule.penerima.includes(role);
+                              {[
+                                ...roles.map((r) => ({ code: r.code, name: r.name })),
+                                // A chosen role the list did not return still shows.
+                                ...rule.penerima
+                                  .filter((code) => !roles.some((r) => r.code === code))
+                                  .map((code) => ({ code, name: code })),
+                              ].map((role) => {
+                                const on = rule.penerima.includes(role.code);
                                 return (
                                   <button
-                                    key={role}
+                                    key={role.code}
                                     type="button"
                                     aria-pressed={on}
                                     onClick={() =>
                                       patchRule(meta.key, {
-                                        penerima: toggleIn(rule.penerima, role),
+                                        penerima: toggleIn(rule.penerima, role.code),
                                       })
                                     }
                                     className={cn(
@@ -407,58 +410,60 @@ export function NotificationPage() {
                                         : "border-line text-ink-muted hover:border-line-strong hover:text-ink",
                                     )}
                                   >
-                                    {ROLE_LABEL[role]}
+                                    {role.name}
                                   </button>
                                 );
                               })}
                             </div>
-                            {rule.penerima.length === 0 && (
-                              <p className="mt-1.5 text-2xs font-medium text-rust-ink">
-                                Belum ada penerima, jadi peringatan ini tidak akan terkirim ke siapa pun.
-                              </p>
-                            )}
+                            <p className="mt-1.5 text-2xs text-ink-muted">
+                              {rule.penerima.length === 0
+                                ? "Semua pengguna yang berwenang melihat isinya."
+                                : "Hanya pemegang peran terpilih yang juga berwenang melihat isinya. Peran tanpa pemegang tidak menerima apa pun."}
+                            </p>
                           </div>
 
                           <div>
                             <p className="label mb-1.5 text-2xs text-ink-muted">Kanal</p>
                             <div className="flex flex-wrap gap-1.5">
-                              {(["app", "whatsapp", "email"] as NotifChannel[]).map(
-                                (ch) => {
-                                  const on = rule.kanal.includes(ch);
-                                  const ChIcon = CHANNEL_ICON[ch];
-                                  const available =
-                                    ch === "app" ||
-                                    (ch === "whatsapp" && form.whatsapp.aktif) ||
-                                    (ch === "email" && form.email.aktif);
-                                  return (
-                                    <button
-                                      key={ch}
-                                      type="button"
-                                      aria-pressed={on}
-                                      disabled={!available}
-                                      title={
-                                        available
-                                          ? undefined
-                                          : "Kanal ini sedang nonaktif di bawah"
-                                      }
-                                      onClick={() =>
-                                        patchRule(meta.key, {
-                                          kanal: toggleIn(rule.kanal, ch),
-                                        })
-                                      }
-                                      className={cn(
-                                        "flex items-center gap-1.5 rounded-sm border px-2 py-1 text-2xs font-medium transition-colors disabled:opacity-45",
-                                        on
-                                          ? "border-signal bg-signal-soft text-signal-ink"
-                                          : "border-line text-ink-muted hover:border-line-strong hover:text-ink",
-                                      )}
-                                    >
-                                      <ChIcon className="h-3 w-3" />
-                                      {CHANNEL_LABEL[ch]}
-                                    </button>
-                                  );
-                                },
-                              )}
+                              <span
+                                title="Setiap peringatan selalu masuk ke kotak notifikasi"
+                                className="flex items-center gap-1.5 rounded-sm border border-signal bg-signal-soft px-2 py-1 text-2xs font-medium text-signal-ink"
+                              >
+                                <Monitor className="h-3 w-3" />
+                                {CHANNEL_LABEL.app}
+                              </span>
+                              {OUTSIDE_CHANNELS.map((ch) => {
+                                const on = rule.kanal.includes(ch);
+                                const ChIcon = CHANNEL_ICON[ch];
+                                const available = form[ch].aktif;
+                                return (
+                                  <button
+                                    key={ch}
+                                    type="button"
+                                    aria-pressed={on}
+                                    disabled={!available && !on}
+                                    title={
+                                      available
+                                        ? undefined
+                                        : "Kanal ini nonaktif di Kanal pengiriman"
+                                    }
+                                    onClick={() =>
+                                      patchRule(meta.key, {
+                                        kanal: toggleIn(rule.kanal, ch),
+                                      })
+                                    }
+                                    className={cn(
+                                      "flex items-center gap-1.5 rounded-sm border px-2 py-1 text-2xs font-medium transition-colors disabled:opacity-45",
+                                      on
+                                        ? "border-signal bg-signal-soft text-signal-ink"
+                                        : "border-line text-ink-muted hover:border-line-strong hover:text-ink",
+                                    )}
+                                  >
+                                    <ChIcon className="h-3 w-3" />
+                                    {CHANNEL_LABEL[ch]}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
@@ -479,70 +484,72 @@ export function NotificationPage() {
                 <div className="divide-y divide-line">
                   <Toggle
                     label="WhatsApp"
-                    description={`Pesan otomatis ke ${outletLabel()} dan tim lapangan.`}
+                    description={
+                      form.whatsapp.tersedia
+                        ? `Pesan otomatis ke ${outletLabel()} dan tim lapangan.`
+                        : "Belum terhubung ke penyedia WhatsApp. Nomor dan templat bisa disimpan lebih dulu."
+                    }
                     checked={form.whatsapp.aktif}
+                    disabled={!form.whatsapp.tersedia && !form.whatsapp.aktif}
                     onChange={(aktif) =>
                       setForm({ ...form, whatsapp: { ...form.whatsapp, aktif } })
                     }
                   />
                   <Toggle
                     label="Email"
-                    description="Ringkasan dan peringatan ke alamat tim kantor."
+                    description={
+                      form.email.tersedia
+                        ? "Salinan peringatan ke alamat email penerimanya."
+                        : "Server email (SMTP) belum dikonfigurasi pada instalasi ini."
+                    }
                     checked={form.email.aktif}
+                    disabled={!form.email.tersedia && !form.email.aktif}
                     onChange={(aktif) =>
                       setForm({ ...form, email: { ...form.email, aktif } })
                     }
                   />
                 </div>
 
-                {form.whatsapp.aktif && (
-                  <>
-                    <Field label="Nomor pengirim WhatsApp" htmlFor="wa-nomor">
-                      <TextInput
-                        id="wa-nomor"
-                        mono
-                        value={form.whatsapp.nomorPengirim}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            whatsapp: {
-                              ...form.whatsapp,
-                              nomorPengirim: e.target.value,
-                            },
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field
-                      label="Templat pesan"
-                      htmlFor="wa-templat"
-                      hint={`Penanda isian: {${outletLabel()}}, {jumlah}, {tanggal}, {jam}.`}
-                    >
-                      <TextareaInput
-                        id="wa-templat"
-                        rows={3}
-                        value={form.whatsapp.templatePengingat}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            whatsapp: {
-                              ...form.whatsapp,
-                              templatePengingat: e.target.value,
-                            },
-                          })
-                        }
-                      />
-                    </Field>
-                  </>
-                )}
+                <Field label="Nomor pengirim WhatsApp" htmlFor="wa-nomor">
+                  <TextInput
+                    id="wa-nomor"
+                    mono
+                    value={form.whatsapp.nomorPengirim}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        whatsapp: { ...form.whatsapp, nomorPengirim: e.target.value },
+                      })
+                    }
+                  />
+                </Field>
+                <Field
+                  label="Templat pesan WhatsApp"
+                  htmlFor="wa-templat"
+                  hint={`Penanda isian: {${outletLabel()}}, {jumlah}, {tanggal}, {jam}.`}
+                >
+                  <TextareaInput
+                    id="wa-templat"
+                    rows={3}
+                    value={form.whatsapp.templatePengingat}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        whatsapp: { ...form.whatsapp, templatePengingat: e.target.value },
+                      })
+                    }
+                  />
+                </Field>
 
-                {form.email.aktif && (
-                  <>
-                    <Field label="Alamat pengirim email" htmlFor="mail-from">
+                {form.email.tersedia && (
+                  <Field
+                    label="Nama pengirim email"
+                    htmlFor="mail-from"
+                    hint="Tampil sebagai pengirim; alamatnya alamat instalasi ini."
+                  >
+                    <div className="flex gap-2">
                       <TextInput
                         id="mail-from"
-                        type="email"
-                        mono
                         value={form.email.pengirim}
                         onChange={(e) =>
                           setForm({
@@ -551,8 +558,20 @@ export function NotificationPage() {
                           })
                         }
                       />
-                    </Field>
-                  </>
+                      {canEditRules && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => testChannelMutation.mutate("email")}
+                          disabled={testChannelMutation.isPending}
+                          title="Kirim email uji ke alamat Anda sendiri"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          Kirim uji
+                        </Button>
+                      )}
+                    </div>
+                  </Field>
                 )}
 
                 {dirty && (
@@ -565,6 +584,7 @@ export function NotificationPage() {
             </Panel>
           )}
         </div>
+        )}
       </div>
     </div>
   );

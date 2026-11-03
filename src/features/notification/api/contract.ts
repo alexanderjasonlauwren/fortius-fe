@@ -6,7 +6,7 @@
  * `notify.notifications` and `notify.reminder_settings`) with a lifecycle
  * -- same reasoning as every other feature's contract.
  */
-import type { Notification, NotificationSettings, NotificationType } from "../types";
+import type { Notification, NotificationSettings, NotificationType, OutsideChannel } from "../types";
 
 export interface NotificationApi {
   /** One inbox tab: unread in full, every other tab its newest 100. */
@@ -19,6 +19,8 @@ export interface NotificationApi {
   clearReadNotifications(): Promise<number>;
   getNotificationSettings(): Promise<NotificationSettings>;
   saveNotificationSettings(settings: NotificationSettings): Promise<NotificationSettings>;
+  /** A test message to the caller's own address; resolves to that address. */
+  sendTestNotification(channel: OutsideChannel): Promise<string>;
 }
 
 export type InboxTab = "Semua" | "Belum dibaca" | NotificationType;

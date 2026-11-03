@@ -393,6 +393,11 @@ export const PERMISSIONS = {
   // holds it -- kept as a real constant for usesDriverConsole (layouts/nav.ts)
   // rather than a bare string literal there.
   NOTIFICATIONS_VIEW: "notification.read.notifications",
+  // The rules panel and its channels, one screen on the backend too.
+  REMINDER_SETTINGS_VIEW: "notification.read.reminder_settings",
+  REMINDER_SETTINGS_EDIT: "notification.update.reminder_settings",
+  // The recipient picker lists the tenant's roles.
+  ROLES_VIEW: "iam.read.roles",
 
   // ---------------------------------------------------------------------
   // Console-only, because the backend has no code for them yet.

@@ -97,6 +97,10 @@ const FRIENDLY: Record<string, string> = {
   PAYMENT_REFUNDED:
     "Penerimaan ini punya pengembalian dana yang diajukan atau disetujui. Selesaikan pengembalian itu dulu.",
   CONTAINER_NOT_TRADED: "Tabung kosong hanya dihitung jumlahnya; tidak dibeli atau dijual.",
+  CHANNEL_NOT_CONFIGURED:
+    "Kanal ini belum terhubung pada instalasi ini (email: server SMTP; WhatsApp: penyedia). Hubungi operator.",
+  CHANNEL_SEND_FAILED:
+    "Server email menolak atau tidak dapat dihubungi. Rinciannya ada di log server; hubungi operator.",
 };
 
 /**
