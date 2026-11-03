@@ -171,6 +171,15 @@ describe("filtering", () => {
     ]);
   });
 
+  // Regression 2026-11-02: "Ditangguhkan" was saved and filtered as 'ina', so a
+  // suspension read back as Nonaktif and its filter listed every inactive outlet.
+  it("reads, filters and writes a suspended outlet as 'sus'", async () => {
+    getList.mockResolvedValue({ items: [wire({ status: "sus" })], pagination: {} });
+    const [row] = await outletApiHttp.getOutletList({ status: "Ditangguhkan" });
+    expect(row.status).toBe("Ditangguhkan");
+    expect(getList.mock.calls[0][1].filters).toEqual([{ field: "status", operator: "eq", value: "sus" }]);
+  });
+
   /** "Semua" is the absence of a filter, not a value to send. */
   it("sends no filter for Semua", async () => {
     getList.mockResolvedValue({ items: [], pagination: {} });
