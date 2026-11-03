@@ -427,19 +427,36 @@ function toPaymentView(row: PaymentResponse, outlets: Map<string, OutletView>): 
   };
 }
 
-async function getPayments(status?: string, search?: string): Promise<PaymentView[]> {
-  const [page, outlets] = await Promise.all([
-    getList<PaymentResponse>("/payments", {
-      pageSize: PAGE_SIZE,
+/**
+ * One server page of receipts. Status goes to the server: it was filtered
+ * here over the newest 100, so an older receipt still waiting for
+ * verification never appeared under "Menunggu Verifikasi" (fixed 2026-11-02).
+ */
+async function getPayments(status?: string, search?: string, page = 1): Promise<Paged<PaymentView>> {
+  const wireStatus = status && status !== "Semua" ? PAYMENT_STATUS_CODE[status] : undefined;
+  const [result, outlets] = await Promise.all([
+    getPage<PaymentResponse, PaymentResponse>("/payments", {
+      page,
+      pageSize: 50,
       sort: [{ field: "payment_date", direction: "desc" }],
-      search,
+      search: search?.trim() || undefined,
+      filters: wireStatus ? [{ field: "payment_status", operator: "eq" as const, value: wireStatus }] : [],
+    }, (row) => row),
+    outletsById(),
+  ]);
+  return { ...result, items: result.items.map((r) => toPaymentView(r, outlets)) };
+}
+
+/** Every receipt waiting for verification: few by nature, read whole. */
+async function getPendingPayments(): Promise<PaymentView[]> {
+  const [{ items }, outlets] = await Promise.all([
+    getAllPages<PaymentResponse>("/payments", {
+      sort: [{ field: "payment_date", direction: "desc" }],
+      filters: [{ field: "payment_status", operator: "eq" as const, value: "pending" }],
     }),
     outletsById(),
   ]);
-  const wireStatus = status && status !== "Semua" ? PAYMENT_STATUS_CODE[status] : undefined;
-  return page.items
-    .filter((r) => !wireStatus || r.payment_status === wireStatus)
-    .map((r) => toPaymentView(r, outlets));
+  return items.map((r) => toPaymentView(r, outlets));
 }
 
 async function getPaymentMethods(): Promise<PaymentMethodView[]> {
@@ -1057,6 +1074,7 @@ export const financeApiHttp: FinanceApi = {
   getInvoices,
   getAgingReport,
   getPayments,
+  getPendingPayments,
   getOpenInvoices,
   createManualInvoice,
   getPaymentMethods,

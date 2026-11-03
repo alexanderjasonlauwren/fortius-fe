@@ -25,10 +25,10 @@ vi.mock("@/features/vehicles/api/vehicleApi", () => ({
 }));
 
 const getAgingReport = vi.fn();
-const getPayments = vi.fn();
+const getPendingPayments = vi.fn();
 vi.mock("@/features/finance/api/financeApi", () => ({
   getAgingReport: (...args: unknown[]) => getAgingReport(...args),
-  getPayments: (...args: unknown[]) => getPayments(...args),
+  getPendingPayments: (...args: unknown[]) => getPendingPayments(...args),
 }));
 
 const getOrderTotals = vi.fn();
@@ -94,7 +94,7 @@ beforeEach(() => {
   ]);
   getVehicles.mockReset().mockResolvedValue([{ id: VEHICLE_ID, armada: "Isuzu Elf NMR", kapasitas: 120 }]);
   getAgingReport.mockReset().mockResolvedValue({ grandTotal: 500_000, jatuhTempoTotal: 200_000 });
-  getPayments.mockReset().mockResolvedValue([{ jumlah: 300_000 }, { jumlah: 100_000 }]);
+  getPendingPayments.mockReset().mockResolvedValue([{ jumlah: 300_000 }, { jumlah: 100_000 }]);
   getOrderTotals.mockReset().mockResolvedValue({ baru: 3 });
   getQuotaSummary.mockReset().mockResolvedValue(quotaSummary());
 });
@@ -127,7 +127,7 @@ describe("getKpiSummary", () => {
     expect(kpi.openOrders).toBe(3);
     expect(kpi.monthlyQuotaTotal).toBe(10_000);
     expect(kpi.monthlyQuotaRemaining).toBe(4_000);
-    expect(getPayments).toHaveBeenCalledWith("Menunggu Verifikasi");
+    expect(getPendingPayments).toHaveBeenCalled();
   });
 
   // The Beranda tile and the SA page's Kuota cabang card must not disagree:

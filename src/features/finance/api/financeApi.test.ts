@@ -280,7 +280,7 @@ describe("payments", () => {
   /** The plaintext account number never leaves the server -- only the last 4. */
   it("shows the masked account number, never a full one", async () => {
     getList.mockResolvedValue({ items: [paymentWire()], pagination: {} });
-    const [p] = await financeApiHttp.getPayments();
+    const { items: [p] } = await financeApiHttp.getPayments();
     expect(p.noRekening).toBe("•••• 6789");
   });
 
@@ -290,7 +290,7 @@ describe("payments", () => {
       items: [paymentWire({ amount: 100_000, allocated: 40_000 })],
       pagination: {},
     });
-    const [p] = await financeApiHttp.getPayments();
+    const { items: [p] } = await financeApiHttp.getPayments();
     expect(p.belumDialokasikan).toBe(60_000);
   });
 
@@ -300,7 +300,7 @@ describe("payments", () => {
       items: [paymentWire({ amount: 1_000_000, allocated: 500_000, refunded: 300_000 })],
       pagination: {},
     });
-    const [p] = await financeApiHttp.getPayments();
+    const { items: [p] } = await financeApiHttp.getPayments();
     expect(p.belumDialokasikan).toBe(200_000);
     expect(p.dikembalikan).toBe(300_000);
   });
@@ -321,7 +321,7 @@ describe("payments", () => {
       ],
       pagination: {},
     });
-    const [applied, unapplied] = await financeApiHttp.getPayments();
+    const { items: [applied, unapplied] } = await financeApiHttp.getPayments();
     expect(applied.alokasi).toEqual([
       { invoiceId: "inv-1", nomor: "INV-SLT-0001", jumlah: 50_000 },
       { invoiceId: "inv-2", nomor: "INV-SLT-0002", jumlah: 20_000 },
@@ -329,32 +329,30 @@ describe("payments", () => {
     expect(unapplied.alokasi).toEqual([]);
   });
 
-  /**
-   * payment_status only supports `eq` server-side and the console's tabs are
-   * Indonesian labels, not the wire's pending/verified/rejected -- filtering
-   * happens here, after the fetch, translating one vocabulary into the other.
-   */
-  it("filters the Indonesian status tab against the wire's own codes", async () => {
-    getList.mockResolvedValue({
-      items: [
-        paymentWire({ id: "p1", payment_status: "pending" }),
-        paymentWire({ id: "p2", payment_status: "verified" }),
-      ],
-      pagination: {},
-    });
+  // Regression 2026-11-02: the tab filtered the newest 100 receipts in the
+  // browser, so an older pending receipt never showed as waiting.
+  it("sends the tab's status to the server in the wire's own codes", async () => {
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    const statusFor = async (tab?: string) => {
+      getList.mockClear();
+      await financeApiHttp.getPayments(tab, undefined, 2);
+      const [path, params] = getList.mock.calls[0];
+      expect(path).toBe("/payments");
+      expect(params.page).toBe(2);
+      return params.filters;
+    };
+    expect(await statusFor("Terverifikasi")).toEqual([{ field: "payment_status", operator: "eq", value: "verified" }]);
+    expect(await statusFor("Menunggu Verifikasi")).toEqual([{ field: "payment_status", operator: "eq", value: "pending" }]);
+    expect(await statusFor("Semua")).toEqual([]);
+  });
 
-    const verified = await financeApiHttp.getPayments("Terverifikasi");
-    expect(verified.map((p) => p.id)).toEqual(["p2"]);
-
-    getList.mockResolvedValue({
-      items: [
-        paymentWire({ id: "p1", payment_status: "pending" }),
-        paymentWire({ id: "p2", payment_status: "verified" }),
-      ],
-      pagination: {},
-    });
-    const pending = await financeApiHttp.getPayments("Menunggu Verifikasi");
+  it("reads every pending receipt for the count, through every page", async () => {
+    getAllPages.mockResolvedValue({ items: [paymentWire({ id: "p1", payment_status: "pending" })], truncated: false });
+    const pending = await financeApiHttp.getPendingPayments();
     expect(pending.map((p) => p.id)).toEqual(["p1"]);
+    expect(getAllPages).toHaveBeenCalledWith("/payments", expect.objectContaining({
+      filters: [{ field: "payment_status", operator: "eq", value: "pending" }],
+    }));
   });
 
   describe("verify and reject", () => {

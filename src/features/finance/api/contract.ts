@@ -327,7 +327,10 @@ export interface FinanceApi {
   /** One server page; `page` is 1-based. */
   getInvoices(filters?: InvoiceFilters, page?: number): Promise<Paged<InvoiceView>>;
   getAgingReport(): Promise<AgingReport>;
-  getPayments(status?: string, search?: string): Promise<PaymentView[]>;
+  /** One server page; `page` is 1-based. */
+  getPayments(status?: string, search?: string, page?: number): Promise<Paged<PaymentView>>;
+  /** Every receipt waiting for verification. */
+  getPendingPayments(): Promise<PaymentView[]>;
   /** Open invoices for the allocation picker. */
   getOpenInvoices(outletId: string): Promise<InvoiceView[]>;
   /** "Buat tagihan" (financial-statements plan P5 / gap-closing plan

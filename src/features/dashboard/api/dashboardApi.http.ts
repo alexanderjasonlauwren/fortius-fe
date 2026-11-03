@@ -35,7 +35,7 @@
 import { getAllPages } from "@/lib/api";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getVehicles } from "@/features/vehicles/api/vehicleApi";
-import { getAgingReport, getPayments } from "@/features/finance/api/financeApi";
+import { getAgingReport, getPendingPayments } from "@/features/finance/api/financeApi";
 import { getOrderTotals } from "@/features/orders/api/orderApi";
 import { getQuotaSummary } from "@/features/sa/api/saApi";
 import { currentJakartaMonth } from "@/features/sa/lib/period";
@@ -113,7 +113,7 @@ async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
       fetchDeliveries(yesterday, yesterday),
       getOutletList(),
       getQuotaSummary(currentJakartaMonth()),
-      getPayments("Menunggu Verifikasi"),
+      getPendingPayments(),
       getAgingReport(),
       includeManualOrders ? getOrderTotals() : Promise.resolve({ baru: 0 }),
     ]);
