@@ -30,7 +30,7 @@ older notices exist), and an outlet's recent deliveries.
 | --- | --- |
 | assets | No void for an acquisition or a disposal (`open-findings.md` #12). The disposal preview uses depreciation posted to date; the backend uses what is posted through the disposal date, and refuses a disposal dated before a posted run's journal (409). The attachments panel is not mounted on assets, though the backend supports owner type `asset`. |
 | cashvouchers | Deleting a draft leaves a gap in the KB series (`business-gaps.md` G8). |
-| dashboard | **Jejak aktivitas is always empty:** `getRecentAudit` returns `[]` — the audit trail is written but has no list endpoint. The dispatch rail has no clock: no planned time of day exists in the schema. |
+| dashboard | The dispatch rail has no clock: no planned time of day exists in the schema. Jejak aktivitas is shown only to roles with `audit.read.audit_trails`, and only writes of the last 30 days. |
 | depreciationruns | The "preview before posting" is computed in the browser (`lib/depreciation.ts`, a port of the backend's straight-line formula) because the backend has no dry-run endpoint; the two can drift. |
 | distribution | A plan's stops show address "—", outlet receivable and remaining quota `0` (the receivable badge never appears), and "dibuat oleh" "—": none is on the order-item response. The route sheet prints the company as "—" (see settings). Credit-limit override: the second-approver picker lists every active user, and the outlet a breach names is matched from the error text. Re-uploading a source plan does not update drafts made from the previous upload. |
 | drivers | A driver's schedule shows `jam` and `kecamatan` as placeholders (no planned time of day; the delivery carries the outlet's name, not its district). |
@@ -43,12 +43,12 @@ older notices exist), and an outlet's recent deliveries.
 | ocr | No OCR engine: what is "read" off a receipt is typed by hand. Uploaded files are not malware-scanned (`technical-gaps.md` T5). |
 | openingbalance | The refusal path for a deliberately broken workbook has not been verified against the real API (no scratch tenant without ledger activity existed); it is covered by unit tests only. |
 | orders | `sisaKuotaOutlet` and `kecamatan` are not on `OrderResponse`. An approval note (`catatan`) has no field server-side and is dropped. Scheduling several orders onto a plan is one request per order, not atomic; a failure partway leaves the earlier ones scheduled. |
-| outlet | **Status "Ditangguhkan" is saved as inactive** (the backend has `atv`/`ina` only), reads back as Nonaktif, and the list filter for it returns every inactive outlet (`business-gaps.md` C6). |
-| products | **Stock is hidden and "adjust stock" throws**, although `GET /inventory/stock` exists; the adapter's header still says nothing serves stock. A new product always lands in the tenant's first category (no category picker). |
+| outlet | "Ditangguhkan" is the backend's `sus` (since 2026-11-02): listed and billable, refused at dispatch. What else a suspension should block is the client's call (`business-gaps.md` C6). |
+| products | Stock shows only for roles with `finance.read.inventory`; others see "Stok belum tersedia". Quantities are tenant-wide (`technical-gaps.md` T9). |
 | purchases | No form for an SA *tebus* purchase (`POST /purchases`); it can only be recorded as a general bill from vendor PERTAMINA, which loses the agreement link. |
 | reports (Laporan recap) | The printed recap shows the company and agent number as "—" (see settings). Figures use the UTC day, as the ledger does (`open-findings.md` #23). |
 | sa | SA amendment and cancellation have no endpoint or screen (`business-gaps.md` C8). The source plant is free text (`supplier_name`, B6). |
-| settings | **Profil agen saves nothing:** company name, agent number, phone, email, address, legal name, NIB, NPWP, timezone, PKP, default PPN and office coordinates are not sent; `PUT /tenants/:id/profile` exists and is never called. **Target harian** has no backend column. Document-number prefixes are read-only by design. |
+| settings | Document-number prefixes are read-only by design. Profil agen saves to the tenant profile at the version it was read at; a save over someone else's newer edit is refused (409) and the page must be reloaded. City, province and postal code are kept as stored (not on the form). |
 | sopir | Filings and photos need a connection (no offline queue); GPS stops while the tab is in the background (`technical-gaps.md` T7). |
 | transactions | `jamRencana` is always empty; an unbilled delivery shows `nominal` 0. |
 | transportation | Per-trip pricing is not built (tariffs are per kg or per tabung). |
