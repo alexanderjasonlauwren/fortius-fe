@@ -1,4 +1,4 @@
-import { getList, getOne, send } from "@/lib/api";
+import { type Paged, getAllPages, getOne, getPage, send } from "@/lib/api";
 import type {
   CreateExpenseInput,
   ExpenseApi,
@@ -63,9 +63,11 @@ function toView(row: ExpenseResponse): ExpenseView {
   };
 }
 
-async function getExpenses(filters?: ExpenseFilters): Promise<ExpenseView[]> {
-  const list = await getList<ExpenseResponse>("/expenses", {
-    pageSize: 100,
+/** One server page of expenses; every filter is already the server's. */
+async function getExpenses(filters?: ExpenseFilters, page = 1): Promise<Paged<ExpenseView>> {
+  return getPage<ExpenseResponse, ExpenseView>("/expenses", {
+    page,
+    pageSize: 50,
     search: filters?.search,
     sort: [{ field: "incurred_at", direction: "desc" }],
     filters: [
@@ -78,8 +80,15 @@ async function getExpenses(filters?: ExpenseFilters): Promise<ExpenseView[]> {
       ...(filters?.from ? [{ field: "date", operator: "gte" as const, value: filters.from }] : []),
       ...(filters?.to ? [{ field: "date", operator: "lte" as const, value: filters.to }] : []),
     ],
+  }, toView);
+}
+
+/** Every expense waiting for approval, for the pending total. */
+async function getPendingExpenses(): Promise<ExpenseView[]> {
+  const { items } = await getAllPages<ExpenseResponse>("/expenses", {
+    filters: [{ field: "approval_status", operator: "eq" as const, value: "pending" }],
   });
-  return list.items.map(toView);
+  return items.map(toView);
 }
 
 async function getExpense(id: string): Promise<ExpenseView> {
@@ -131,5 +140,5 @@ async function rejectExpense(input: ExpenseDecisionInput): Promise<ExpenseView> 
 }
 
 export const expenseApiHttp: ExpenseApi = {
-  getExpenses, getExpense, createExpense, updateExpense, cancelExpense, approveExpense, rejectExpense,
+  getExpenses, getPendingExpenses, getExpense, createExpense, updateExpense, cancelExpense, approveExpense, rejectExpense,
 };

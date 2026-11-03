@@ -6,7 +6,7 @@
  * unlike manual journal's own `journal_date` (a Go `time.Time`) -- no
  * RFC 3339 conversion needed here.
  */
-import { getAllPages, getList, getOne, send } from "@/lib/api";
+import { type Paged, getAllPages, getOne, getPage, send } from "@/lib/api";
 import type {
   PayPurchaseInput,
   PurchaseApi,
@@ -140,25 +140,42 @@ function toView(row: PurchaseResponse): PurchaseView {
   };
 }
 
-async function getPurchases(filters?: PurchaseFilters): Promise<PurchaseView[]> {
-  const wire: { field: string; operator: "eq" | "gte" | "lte"; value: string }[] = [];
+/** "open" is what is still owed: two statuses, asked of the server as a set. */
+const OPEN_STATUSES = "unpaid,partial";
+
+function purchaseFilters(filters?: PurchaseFilters) {
+  const wire: { field: string; operator: "eq" | "in" | "gte" | "lte"; value: string }[] = [];
   const status = filters?.paymentStatus;
-  if (status && status !== "Semua" && status !== "open") {
-    wire.push({ field: "payment_status", operator: "eq", value: status });
-  }
+  if (status === "open") wire.push({ field: "payment_status", operator: "in", value: OPEN_STATUSES });
+  else if (status && status !== "Semua") wire.push({ field: "payment_status", operator: "eq", value: status });
   if (filters?.supplierId) wire.push({ field: "supplier_id", operator: "eq", value: filters.supplierId });
   if (filters?.from) wire.push({ field: "redeemed_at", operator: "gte", value: filters.from });
   if (filters?.to) wire.push({ field: "redeemed_at", operator: "lte", value: filters.to });
-  const page = await getList<PurchaseResponse>("/purchases", {
-    pageSize: 100,
+  return wire;
+}
+
+/**
+ * One server page of bills. Every filter, "open" included, goes to the
+ * server: "open" used to be the newest 100 bills filtered here, so an older
+ * unpaid bill could not be found or paid (fixed 2026-11-02).
+ */
+async function getPurchases(filters?: PurchaseFilters, page = 1): Promise<Paged<PurchaseView>> {
+  return getPage<PurchaseResponse, PurchaseView>("/purchases", {
+    page,
+    pageSize: 50,
     sort: [{ field: "redeemed_at", direction: "desc" }],
     search: filters?.search || undefined,
-    filters: wire,
+    filters: purchaseFilters(filters),
+  }, toView);
+}
+
+/** Every bill still owed (optionally one vendor's): few, and read whole. */
+async function getOpenPurchases(supplierId?: string): Promise<PurchaseView[]> {
+  const { items } = await getAllPages<PurchaseResponse>("/purchases", {
+    sort: [{ field: "redeemed_at", direction: "desc" }],
+    filters: purchaseFilters({ paymentStatus: "open", supplierId }),
   });
-  const rows = page.items.map(toView);
-  // "open" is two statuses; the list filters only by one, so the second
-  // half of the question is answered here.
-  return status === "open" ? rows.filter((r) => r.paymentStatus === "unpaid" || r.paymentStatus === "partial") : rows;
+  return items.map(toView);
 }
 
 async function getPurchase(id: string): Promise<PurchaseView> {
@@ -206,6 +223,6 @@ async function payPurchase(input: PayPurchaseInput): Promise<PurchaseView> {
 }
 
 export const purchaseApiHttp: PurchaseApi = {
-  getPurchases, getPurchase, recordGeneralPurchase, recordPurchasePayment,
+  getPurchases, getOpenPurchases, getPurchase, recordGeneralPurchase, recordPurchasePayment,
   payPurchase,
 };

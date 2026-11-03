@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getBankAccounts } from "@/features/bankaccounts/api/bankAccountApi";
 import { getVendors } from "@/features/suppliers/api/vendorApi";
-import { getPurchases } from "@/features/purchases/api/purchaseApi";
+import { getOpenPurchases } from "@/features/purchases/api/purchaseApi";
 import { payBillsInTurn } from "@/features/purchases/lib/payBills";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { useResettableState } from "@/hooks/useResettableState";
@@ -39,7 +39,7 @@ export function PayBillsDialog({ open, onClose, onPaid }: PayBillsDialogProps) {
   const accounts = useQuery({ queryKey: [...scopeKey(), "bank-accounts"], queryFn: getBankAccounts, enabled: open });
   const bills = useQuery({
     queryKey: [...scopeKey(), "purchases", "open", supplierId],
-    queryFn: () => getPurchases({ paymentStatus: "open", supplierId }),
+    queryFn: () => getOpenPurchases(supplierId),
     enabled: open && !!supplierId,
   });
   const open_ = [...(bills.data ?? [])].sort((a, b) => a.dueDate.localeCompare(b.dueDate));

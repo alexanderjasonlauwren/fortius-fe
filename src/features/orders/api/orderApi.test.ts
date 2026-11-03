@@ -13,6 +13,13 @@ vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
   // getAllPages walks pages through getList; one mocked call is one page.
   getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
+  getPage: async (path: string, params: { page?: number; pageSize?: number }, map: (row: unknown) => unknown) => {
+    const result = await getList(path, params);
+    return {
+      items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50,
+      hasNext: Boolean(result.pagination?.has_next), totalItems: result.pagination?.total_items,
+    };
+  },
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),
@@ -63,7 +70,7 @@ describe("getOrders", () => {
         wire({ id: "5", order_status: "rejected" }),
       ],
     });
-    const rows = await orderApiHttp.getOrders();
+    const rows = (await orderApiHttp.getOrders()).items;
     expect(rows.map((r) => r.status)).toEqual([
       "Baru",
       "Disetujui",
@@ -75,7 +82,7 @@ describe("getOrders", () => {
 
   it("falls back to Baru for a status the console has no vocabulary for", async () => {
     getList.mockResolvedValue({ items: [wire({ order_status: "cancelled" })] });
-    expect((await orderApiHttp.getOrders())[0].status).toBe("Baru");
+    expect(((await orderApiHttp.getOrders()).items)[0].status).toBe("Baru");
   });
 
   it("translates a status filter into the wire's own status string", async () => {
@@ -98,12 +105,12 @@ describe("toView mapping", () => {
     getList.mockResolvedValue({
       items: [wire({ order_status: "rejected", notes: "catatan asli", rejection_reason: "melebihi limit" })],
     });
-    expect((await orderApiHttp.getOrders())[0].catatan).toBe("melebihi limit");
+    expect(((await orderApiHttp.getOrders()).items)[0].catatan).toBe("melebihi limit");
   });
 
   it("falls back to the note when there is no rejection", async () => {
     getList.mockResolvedValue({ items: [wire({ notes: "catatan asli" })] });
-    expect((await orderApiHttp.getOrders())[0].catatan).toBe("catatan asli");
+    expect(((await orderApiHttp.getOrders()).items)[0].catatan).toBe("catatan asli");
   });
 
   it("carries the plan link's code as kodeRencana", async () => {
@@ -116,7 +123,7 @@ describe("toView mapping", () => {
         }),
       ],
     });
-    expect((await orderApiHttp.getOrders())[0].kodeRencana).toBe("RD-SLT-20260911-0001");
+    expect(((await orderApiHttp.getOrders()).items)[0].kodeRencana).toBe("RD-SLT-20260911-0001");
   });
 
   it("sums requested_qty across lines for jumlahUnit", async () => {
@@ -130,19 +137,19 @@ describe("toView mapping", () => {
         }),
       ],
     });
-    expect((await orderApiHttp.getOrders())[0].jumlahUnit).toBe(10);
+    expect(((await orderApiHttp.getOrders()).items)[0].jumlahUnit).toBe(10);
   });
 
   it("does not carry a processed-at timestamp for a still-requested order", async () => {
     getList.mockResolvedValue({ items: [wire({ order_status: "requested" })] });
-    expect((await orderApiHttp.getOrders())[0].diprosesPada).toBeUndefined();
+    expect(((await orderApiHttp.getOrders()).items)[0].diprosesPada).toBeUndefined();
   });
 
   it("uses updated_at as the processed-at timestamp once decided", async () => {
     getList.mockResolvedValue({
       items: [wire({ order_status: "approved", updated_at: "2026-09-11T05:00:00Z" })],
     });
-    expect((await orderApiHttp.getOrders())[0].diprosesPada).toBe("2026-09-11T05:00:00Z");
+    expect(((await orderApiHttp.getOrders()).items)[0].diprosesPada).toBe("2026-09-11T05:00:00Z");
   });
 });
 

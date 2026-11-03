@@ -4,7 +4,7 @@
  * Every field is a straight snake_case-to-camelCase rename of
  * fortius-backend's internal/entities/cashvoucher response shapes.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { type Paged, getOne, getPage, send } from "@/lib/api";
 import type {
   CashVoucher,
   CashVoucherApi,
@@ -110,7 +110,8 @@ function sharedFields(input: CreateCashVoucherInput | UpdateCashVoucherInput) {
   };
 }
 
-async function listCashVouchers(filters?: CashVoucherFilters): Promise<CashVoucher[]> {
+/** One server page of vouchers; every filter is already the server's. */
+async function listCashVouchers(filters?: CashVoucherFilters, page = 1): Promise<Paged<CashVoucher>> {
   const apiFilters: { field: string; operator: "eq" | "gte" | "lte"; value: string }[] = [];
   if (filters?.voucherType) apiFilters.push({ field: "voucher_type", operator: "eq", value: filters.voucherType });
   if (filters?.status) apiFilters.push({ field: "status", operator: "eq", value: filters.status });
@@ -120,12 +121,12 @@ async function listCashVouchers(filters?: CashVoucherFilters): Promise<CashVouch
   if (filters?.bankAccountId) apiFilters.push({ field: "bank_account_id", operator: "eq", value: filters.bankAccountId });
   if (filters?.from) apiFilters.push({ field: "date", operator: "gte", value: filters.from });
   if (filters?.to) apiFilters.push({ field: "date", operator: "lte", value: filters.to });
-  const page = await getList<CashVoucherResponse>("/cash-vouchers", {
-    pageSize: 100,
+  return getPage<CashVoucherResponse, CashVoucher>("/cash-vouchers", {
+    page,
+    pageSize: 50,
     search: filters?.search?.trim() || undefined,
     filters: apiFilters.length ? apiFilters : undefined,
-  });
-  return page.items.map(toVoucher);
+  }, toVoucher);
 }
 
 async function getCashVoucher(id: string): Promise<CashVoucher> {

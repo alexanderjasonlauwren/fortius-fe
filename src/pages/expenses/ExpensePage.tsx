@@ -8,14 +8,16 @@ import { ExpenseCategorySection } from "@/features/settings/components/ExpenseCa
 import { SegmentedControl } from "@/components/common/Field";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Ban, Check, Pencil, Plus, ReceiptText, Undo2, X } from "lucide-react";
 import { scopeKey } from "@/lib/scope";
+import { useResettableState } from "@/hooks/useResettableState";
 import {
   approveExpense,
   cancelExpense,
   EXPENSE_STATUS_LABEL,
   getExpenses,
+  getPendingExpenses,
   rejectExpense,
   type ExpenseView,
 } from "@/features/expenses/api/expenseApi";
@@ -63,10 +65,14 @@ export function ExpensePage() {
   const [withdrawing, setWithdrawing] = useState<ExpenseView | null>(null);
   const [voiding, setVoiding] = useState<ExpenseView | null>(null);
 
+  const [page, setPage] = useResettableState([search, status, from, to], () => 1);
   const list = useQuery({
-    queryKey: [...scopeKey(), "expenses", search, status, from, to],
-    queryFn: () => getExpenses({ search, approvalStatus: status, from: from || undefined, to: to || undefined }),
+    queryKey: [...scopeKey(), "expenses", search, status, from, to, page],
+    queryFn: () => getExpenses({ search, approvalStatus: status, from: from || undefined, to: to || undefined }, page),
+    placeholderData: keepPreviousData,
   });
+  // The pending total is of every pending expense, not of the visible page.
+  const pending = useQuery({ queryKey: [...scopeKey(), "expenses", "pending"], queryFn: getPendingExpenses });
   const users = useQuery({
     queryKey: [...scopeKey(), "expense-approvers"],
     queryFn: () => getUsers(),
@@ -94,8 +100,8 @@ export function ExpensePage() {
     onDone: () => setWithdrawing(null),
   });
 
-  const rows = list.data ?? [];
-  const pendingTotal = rows.filter((r) => r.approvalStatus === "pending").reduce((s, r) => s + r.amount, 0);
+  const rows = list.data?.items ?? [];
+  const pendingTotal = (pending.data ?? []).reduce((s, r) => s + r.amount, 0);
   const columns: Column<ExpenseView>[] = [
     {
       key: "number",
@@ -175,7 +181,7 @@ export function ExpensePage() {
         title="Pengeluaran & Kas Kecil"
         description="Catat biaya operasional. Persetujuan memposting debit biaya per kategori dan kredit kas atau bank dalam satu transaksi."
         actions={<CanAccess permission={PERMISSIONS.EXPENSES_CREATE}><Button onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-3.5 w-3.5" />Catat pengeluaran</Button></CanAccess>}
-        meta={<span className="text-xs text-ink-muted"><span className="data">{rows.length}</span> catatan · menunggu persetujuan <span className="data font-semibold text-ink">{formatRupiah(pendingTotal)}</span></span>}
+        meta={<span className="text-xs text-ink-muted"><span className="data">{pending.data?.length ?? "–"}</span> menunggu persetujuan senilai <span className="data font-semibold text-ink">{formatRupiah(pendingTotal)}</span></span>}
       />
       {canSeeMaster && (
         <SegmentedControl<"daftar" | "kategori">
@@ -193,7 +199,11 @@ export function ExpensePage() {
       <Panel>
         <PanelHeader
           title="Daftar pengeluaran"
-          hint={`${rows.length} baris`}
+          hint={
+            list.data?.totalItems !== undefined
+              ? `${list.data.totalItems.toLocaleString("id-ID")}${list.data.totalIsFloor ? "+" : ""} baris`
+              : undefined
+          }
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <SearchInput value={search} onChange={setSearch} placeholder="Nomor, no. nota, penerima" className="w-60" />
@@ -206,7 +216,7 @@ export function ExpensePage() {
             </div>
           }
         />
-        <DataTable columns={columns} data={rows} isLoading={list.isLoading} rowKey={(row) => row.id} spineFor={(row) => spineFor(EXPENSE_STATUS_LABEL[row.approvalStatus])} pageSize={12} defaultSortKey="date" defaultSortDir="desc" dense emptyIcon={ReceiptText} emptyMessage="Belum ada pengeluaran" emptyDescription="Catat bahan bakar, tol, pemeliharaan, kas kecil, atau biaya operasional lainnya." />
+        <DataTable columns={columns} data={rows} isLoading={list.isLoading} rowKey={(row) => row.id} spineFor={(row) => spineFor(EXPENSE_STATUS_LABEL[row.approvalStatus])} server={list.data && { ...list.data, onPageChange: setPage }} dense emptyIcon={ReceiptText} emptyMessage="Belum ada pengeluaran" emptyDescription="Catat bahan bakar, tol, pemeliharaan, kas kecil, atau biaya operasional lainnya." />
       </Panel>
 
       <ExpenseFormDialog open={formOpen} editing={editing} onClose={() => { setFormOpen(false); setEditing(null); }} />
