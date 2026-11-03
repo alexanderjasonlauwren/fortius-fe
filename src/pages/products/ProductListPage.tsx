@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Fuel, Pencil, Plus, Trash2 } from "lucide-react";
 import {
-  changeStock,
   exportProducts,
   getProducts,
   getStockSummary,
@@ -17,19 +16,11 @@ import { Panel, PanelHeader, Meter } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Field, SearchInput, SegmentedControl, TextInput } from "@/components/common/Field";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { SearchInput, SegmentedControl } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatNumber, formatPercentId, formatRupiah, formatRupiahShort } from "@/lib/format";
-import { supplierLabel, unitLabel } from "@/lib/lexicon";
+import { unitLabel } from "@/lib/lexicon";
 
 type Filter = "Semua" | "Aktif" | "Stok rendah";
 
@@ -38,9 +29,6 @@ export function ProductListPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("Semua");
   const [pendingDelete, setPendingDelete] = useState<ProductView | null>(null);
-  const [adjusting, setAdjusting] = useState<ProductView | null>(null);
-  const [delta, setDelta] = useState(0);
-  const [alasan, setAlasan] = useState("");
 
   const list = useQuery({
     queryKey: [...scopeKey(), "products", search, filter],
@@ -60,21 +48,6 @@ export function ProductListPage() {
     onDone: () => setPendingDelete(null),
   });
 
-  const stockMutation = useDeskMutation({
-    mutationFn: ({ id, amount, reason }: { id: string; amount: number; reason: string }) =>
-      changeStock(id, amount, reason),
-    errorTitle: "Penyesuaian stok gagal",
-    success: (p) => ({
-      title: `Stok ${p.nama} kini ${formatNumber(p.stok)}`,
-      description: p.stokRendah ? "Masih di bawah stok minimum." : undefined,
-      tone: p.stokRendah ? "warning" : "success",
-    }),
-    onDone: () => {
-      setAdjusting(null);
-      setDelta(0);
-      setAlasan("");
-    },
-  });
 
   const exportMutation = useDeskMutation({
     mutationFn: () => exportProducts(),
@@ -188,16 +161,11 @@ export function ProductListPage() {
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
           {row.stokTersedia && (
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => {
-                setDelta(0);
-                setAlasan("");
-                setAdjusting(row);
-              }}
-            >
-              Sesuaikan stok
+            // Stock moves only through the ledger: a stock count (stok opname)
+            // posts the difference at the moving average. A bare "+N" here would
+            // change the quantity without its value, so it lives on Persediaan.
+            <Button variant="outline" size="xs" asChild>
+              <Link to="/inventory">Stok opname</Link>
             </Button>
           )}
           <Button
@@ -315,74 +283,6 @@ export function ProductListPage() {
       </Panel>
 
       {/* Stock adjustment */}
-      <Dialog open={!!adjusting} onOpenChange={(open) => !open && setAdjusting(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Sesuaikan stok {adjusting?.nama}</DialogTitle>
-            <DialogDescription>
-              Gunakan angka positif untuk barang masuk dan negatif untuk barang
-              keluar. Setiap penyesuaian tercatat pada jejak aktivitas.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="rounded-md border border-line bg-panel-sunk px-4 py-3 text-xs text-ink-muted">
-            Stok saat ini{" "}
-            <span className="data font-semibold text-ink">
-              {formatNumber(adjusting?.stok ?? 0)}
-            </span>
-            {delta !== 0 && (
-              <>
-                {" → "}
-                <span
-                  className={cn(
-                    "data font-semibold",
-                    (adjusting?.stok ?? 0) + delta < (adjusting?.stokMinimum ?? 0)
-                      ? "text-rust-ink"
-                      : "text-ink",
-                  )}
-                >
-                  {formatNumber((adjusting?.stok ?? 0) + delta)}
-                </span>
-              </>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <Field label="Jumlah penyesuaian" htmlFor="delta" required>
-              <TextInput
-                id="delta"
-                type="number"
-                mono
-                value={delta}
-                onChange={(e) => setDelta(Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Alasan" htmlFor="alasan" required>
-              <TextInput
-                id="alasan"
-                value={alasan}
-                placeholder={`Contoh: penerimaan dari ${supplierLabel()}`}
-                onChange={(e) => setAlasan(e.target.value)}
-              />
-            </Field>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjusting(null)}>
-              Batal
-            </Button>
-            <Button
-              disabled={delta === 0 || !alasan.trim() || stockMutation.isPending}
-              onClick={() =>
-                adjusting &&
-                stockMutation.mutate({ id: adjusting.id, amount: delta, reason: alasan })
-              }
-            >
-              Simpan penyesuaian
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ConfirmDialog
         isOpen={!!pendingDelete}

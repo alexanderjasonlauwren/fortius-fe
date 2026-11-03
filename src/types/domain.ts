@@ -952,6 +952,8 @@ export interface ProductEntity {
   id: ID;
   kode: string;
   nama: string;
+  /** Category code from the tenant's business type (GET /products/categories). */
+  kategori?: string;
   ukuran: string;
   /**
    * The counting noun for one unit: tabung, botol, dus, sak.
@@ -1471,6 +1473,15 @@ export interface SettingsEntity {
   kantorLat?: number;
   kantorLng?: number;
   zonaWaktu: string;
+  /** Who signs the tenant's outgoing paperwork; the BA LO prints both. */
+  penandatanganNama?: string;
+  penandatanganJabatan?: string;
+  /**
+   * The profile version this copy was read at. Saving sends it back, so a save
+   * over someone else's edit is refused (409 STALE_VERSION) instead of
+   * silently undoing it.
+   */
+  profilVersi?: number;
   jamOperasionalMulai: string;
   jamOperasionalSelesai: string;
   /** The tenant's own vocabulary. See `LexiconEntity`. */

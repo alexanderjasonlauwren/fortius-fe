@@ -1,31 +1,25 @@
 /**
  * The catalogue, against the real API.
  *
- * `internal/controller/product` is real and mounted. Stock quantity still has
- * no write route at all in this build -- stock lives in `core.stock_levels`,
- * which nothing serves yet -- but cost/sell pricing now does: `POST
- * /products/:id/pricing`. `stokTersedia: false` on every row this adapter
- * returns is how the console screens know to hide the stock panels that
- * still have nothing behind them; pricing carries no such flag because it is
- * fully live here.
+ * `internal/controller/product` is the catalogue and its pricing. Stock comes
+ * from the inventory module (`GET /inventory/stock`) when the role may read
+ * it -- see contract.ts on `stokTersedia`.
  *
- * # The category this build always picks
+ * # Category
  *
- * `CreateProductRequest.category` is required server-side, but the
- * console's `ProductEntity` has no category field at all — the form was
- * built before the backend's category-per-business-type model existed.
- * Rather than block every create until the form grows a picker, this
- * adapter fetches the tenant's own categories on every create and always uses the
- * first one returned. This is a real, temporary limitation, not a design
- * decision: every product this build creates lands in one category until
- * the form is extended to choose.
+ * The form picks it from GET /products/categories (2026-11-02). Until then
+ * every product the console created landed in the tenant's first category;
+ * that first category is still the fallback for a caller that names none.
  */
 import { getAllPages, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { financeApiHttp } from "@/features/finance/api/financeApi.http";
+import { getStock, type StockRow } from "@/features/inventory/api/inventoryApi";
+import { holds } from "@/features/rbac/holds";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { leafAccounts } from "@/features/finance/lib/accounts";
 import type { ProductEntity } from "@/types/domain";
-import type { NewTransportTariff, ProductApi, ProductFilters, ProductView, StockSummary, TransportTariff, UnitOption } from "./contract";
+import type { CategoryOption, NewTransportTariff, ProductApi, ProductFilters, ProductView, StockSummary, TransportTariff, UnitOption } from "./contract";
 
 const PAGE_SIZE = 100;
 
@@ -62,6 +56,12 @@ interface CategoryResponse {
   code: string;
   name: string;
   sort_order: number;
+}
+
+/** The tenant's product categories, in their sort order. */
+async function getCategories(): Promise<CategoryOption[]> {
+  const rows = await getOne<CategoryResponse[]>("/products/categories");
+  return (rows ?? []).map((c) => ({ code: c.code, name: c.name }));
 }
 
 async function resolveDefaultCategory(): Promise<string> {
@@ -105,6 +105,7 @@ function toView(row: ProductResponse): ProductView {
     id: row.id,
     kode: row.code,
     nama: row.name,
+    kategori: row.category,
     ukuran: toUkuran(row.weight_kg),
     satuan: row.unit_abbreviation ?? row.unit_name ?? "—",
     // Not modeled server-side; nothing reads this in the console today.
@@ -129,6 +130,19 @@ function toView(row: ProductResponse): ProductView {
     stokRendah: false,
     nilaiStok: 0,
     stokTersedia: false,
+  };
+}
+
+/** Lays the inventory module's quantity and value over a catalogue row. */
+function withStock(view: ProductView, stock: StockRow | undefined): ProductView {
+  const quantity = stock?.quantity ?? 0;
+  return {
+    ...view,
+    stok: quantity,
+    nilaiStok: stock?.amount ?? 0,
+    // A minimum of 0 means "no minimum set", not "never low".
+    stokRendah: view.stokMinimum > 0 && quantity <= view.stokMinimum,
+    stokTersedia: true,
   };
 }
 
@@ -173,11 +187,13 @@ async function getProducts(filters?: ProductFilters): Promise<ProductView[]> {
           ? [{ field: "status", operator: "eq" as const, value: "atv" }]
           : [],
   });
-  // onlyLowStock cannot be honoured -- stock has no service behind it in this
-  // build (see contract.ts). Every row already carries stokTersedia: false so
-  // the screen hides the tab that would offer this filter rather than
-  // silently ignoring it here.
-  return page.items.map(toView);
+  const views = page.items.map(toView);
+  // Stock is the inventory module's; a role that may not read it gets the
+  // catalogue alone, flagged stokTersedia: false.
+  if (!holds(PERMISSIONS.INVENTORY_VIEW)) return views;
+  const stockById = new Map((await getStock()).map((row) => [row.productId, row]));
+  const rows = views.map((view) => withStock(view, stockById.get(view.id)));
+  return filters?.onlyLowStock ? rows.filter((row) => row.stokRendah) : rows;
 }
 
 async function getProductDetail(id: string): Promise<ProductView> {
@@ -258,7 +274,7 @@ async function createOrUpdateProduct(
       : input.ukuran ? parseWeightKg(input.ukuran) : undefined;
 
   if (!input.id) {
-    const category = await resolveDefaultCategory();
+    const category = input.kategori || (await resolveDefaultCategory());
     const [inventoryAccountId, revenueAccountId, cogsAccountId] = await Promise.all([
       resolveAccountId(input.inventoryAccountCode),
       resolveAccountId(input.revenueAccountCode),
@@ -297,6 +313,7 @@ async function createOrUpdateProduct(
     version: current.version,
     code: input.kode,
     name: input.nama,
+    category: input.kategori || undefined,
     weight_kg: weightKg,
     min_stock: input.stokMinimum,
     ...descriptiveFields(input, true),
@@ -322,27 +339,15 @@ async function removeProduct(id: string): Promise<void> {
   await send("delete", `/products/${id}`);
 }
 
-/**
- * Mock-only: `core.stock_levels` has no service in this build, so there is
- * nowhere to send a stock adjustment. Thrown rather than silently
- * succeeding — ProductListPage only offers this action when
- * `row.stokTersedia` is true, so reaching this is already a bug elsewhere,
- * not a normal path.
- */
-async function changeStock(): Promise<ProductView> {
-  throw new Error("Penyesuaian stok belum tersedia di sini. Koreksi stok lewat stok opname di menu Persediaan.");
-}
-
 async function getStockSummary(): Promise<StockSummary> {
-  // total/aktif are real counts off the catalogue itself; only the two
-  // stock-derived figures are unavailable (see this file's header).
   const rows = await getProducts();
+  const stokTersedia = rows.some((row) => row.stokTersedia);
   return {
     total: rows.length,
     aktif: rows.filter((p) => p.aktif).length,
-    stokRendah: 0,
-    nilaiStok: 0,
-    stokTersedia: false,
+    stokRendah: rows.filter((p) => p.aktif && p.stokRendah).length,
+    nilaiStok: rows.reduce((sum, p) => sum + p.nilaiStok, 0),
+    stokTersedia,
   };
 }
 
@@ -394,10 +399,10 @@ export const productApiHttp: ProductApi = {
   getProductDetail,
   createOrUpdateProduct,
   removeProduct,
-  changeStock,
   getStockSummary,
   exportProducts,
   getUnits,
+  getCategories,
   getTariffs,
   createTariff,
 };
