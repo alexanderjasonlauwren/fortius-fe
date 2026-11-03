@@ -38,7 +38,7 @@
  * per-delivery unit price to estimate from, and 0 is honest about what has
  * actually been billed so far.
  */
-import { getList } from "@/lib/api";
+import { type Paged, getAllPages, getPage } from "@/lib/api";
 import { addDays, isoDate } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getDrivers } from "@/features/drivers/api/driverApi";
@@ -56,7 +56,6 @@ import { holds } from "@/features/rbac/holds";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 
 /** 100 is every list definition's MaxPageSize; the server refuses more. */
-const PAGE_SIZE = 100;
 
 /** Mirrors the backend's TransactionResponse. */
 interface TransactionResponse {
@@ -156,56 +155,67 @@ function toRow(r: TransactionResponse): TransactionRow {
  * exclusive `lt` bound one day later is the only one that reads "through the
  * end of `to`" correctly.
  */
-async function fetchRows(filters?: TransactionFilters): Promise<TransactionRow[]> {
-  const exclusiveEnd = filters?.to ? isoDate(addDays(new Date(`${filters.to}T00:00:00Z`), 1)) : undefined;
-  const page = await getList<TransactionResponse>("/transactions", {
-    pageSize: PAGE_SIZE,
-    sort: [{ field: "created_at", direction: "desc" }],
-    filters: [
-      ...(filters?.from ? [{ field: "date", operator: "gte" as const, value: filters.from }] : []),
-      ...(exclusiveEnd ? [{ field: "date", operator: "lt" as const, value: exclusiveEnd }] : []),
-      ...(filters?.outletId && filters.outletId !== "Semua"
-        ? [{ field: "outlet_id", operator: "eq" as const, value: filters.outletId }]
-        : []),
-      ...(filters?.driverId && filters.driverId !== "Semua"
-        ? [{ field: "driver_id", operator: "eq" as const, value: filters.driverId }]
-        : []),
-    ],
-  });
-  let rows = page.items.map(toRow);
+/** The wire statuses each console bucket covers. */
+const KIRIM_WIRE: Record<string, string> = {
+  Selesai: "delivered,partial",
+  Proses: "on_route",
+  Tertunda: "failed",
+  Antrian: "pending,cancelled",
+};
+const BAYAR_WIRE: Record<string, string> = {
+  Lunas: "paid,waived,credited",
+  Sebagian: "partial",
+  "Jatuh Tempo": "overdue",
+  Terbit: "unpaid,void",
+};
 
-  // Bucket statuses and free-text outlet/driver/plate search have no
-  // eq-only server-side equivalent -- see this file's header.
-  if (filters?.statusKirim && filters.statusKirim !== "Semua") {
-    rows = rows.filter((r) => r.statusKirim === filters.statusKirim);
-  }
-  if (filters?.statusBayar && filters.statusBayar !== "Semua") {
-    rows = rows.filter((r) => r.statusBayar === filters.statusBayar);
-  }
-  if (filters?.kecamatan && filters.kecamatan !== "Semua") {
-    rows = rows.filter((r) => r.kecamatan === filters.kecamatan);
-  }
-  if (filters?.search) {
-    const q = filters.search.toLowerCase();
-    rows = rows.filter(
-      (r) =>
-        r.suratJalan.toLowerCase().includes(q) ||
-        r.invoice.toLowerCase().includes(q) ||
-        r.outlet.toLowerCase().includes(q) ||
-        r.kodeOutlet.toLowerCase().includes(q) ||
-        r.driver.toLowerCase().includes(q) ||
-        r.plat.toLowerCase().includes(q),
-    );
-  }
-  return rows;
+type WireFilter = { field: string; operator: "eq" | "in" | "gte" | "lt" | "is_null"; value: string };
+
+function setFilter(field: string, statuses: string): WireFilter {
+  return { field, operator: statuses.includes(",") ? "in" : "eq", value: statuses };
 }
 
-async function getTransactions(filters?: TransactionFilters): Promise<TransactionRow[]> {
-  return fetchRows(filters);
+/**
+ * Every filter the screen offers, as the server reads it. The buckets,
+ * district and search used to run here over one page of 100, so a busy
+ * period showed only its newest rows and searched only those (fixed
+ * 2026-11-02).
+ */
+function listParams(filters?: TransactionFilters) {
+  const exclusiveEnd = filters?.to ? isoDate(addDays(new Date(`${filters.to}T00:00:00Z`), 1)) : undefined;
+  const wire: WireFilter[] = [];
+  if (filters?.from) wire.push({ field: "date", operator: "gte", value: filters.from });
+  if (exclusiveEnd) wire.push({ field: "date", operator: "lt", value: exclusiveEnd });
+  if (filters?.outletId && filters.outletId !== "Semua") wire.push({ field: "outlet_id", operator: "eq", value: filters.outletId });
+  if (filters?.driverId && filters.driverId !== "Semua") wire.push({ field: "driver_id", operator: "eq", value: filters.driverId });
+  if (filters?.kecamatan && filters.kecamatan !== "Semua") wire.push({ field: "outlet_district", operator: "eq", value: filters.kecamatan });
+  const kirim = filters?.statusKirim && KIRIM_WIRE[filters.statusKirim];
+  if (kirim) wire.push(setFilter("delivery_status", kirim));
+  if (filters?.statusBayar === "Belum ditagih") {
+    wire.push({ field: "payment_status", operator: "is_null", value: "true" });
+  } else if (filters?.statusBayar && BAYAR_WIRE[filters.statusBayar]) {
+    wire.push(setFilter("payment_status", BAYAR_WIRE[filters.statusBayar]));
+  }
+  return {
+    sort: [{ field: "created_at", direction: "desc" as const }],
+    search: filters?.search?.trim() || undefined,
+    filters: wire,
+  };
+}
+
+/** Every row matching the filters, for the summary and the exports. */
+async function fetchAllRows(filters?: TransactionFilters): Promise<{ rows: TransactionRow[]; complete: boolean }> {
+  const { items, truncated } = await getAllPages<TransactionResponse>("/transactions", listParams(filters));
+  return { rows: items.map(toRow), complete: !truncated };
+}
+
+/** One server page of transactions. */
+async function getTransactions(filters?: TransactionFilters, page = 1): Promise<Paged<TransactionRow>> {
+  return getPage<TransactionResponse, TransactionRow>("/transactions", { ...listParams(filters), page, pageSize: 50 }, toRow);
 }
 
 async function getTransactionSummary(filters?: TransactionFilters): Promise<TransactionSummary> {
-  const rows = await fetchRows(filters);
+  const { rows, complete } = await fetchAllRows(filters);
   const sumWhere = (status: string) =>
     rows.filter((r) => r.statusBayar === status).reduce((s, r) => s + r.nominal, 0);
 
@@ -218,6 +228,7 @@ async function getTransactionSummary(filters?: TransactionFilters): Promise<Tran
     ditolak: sumWhere("Jatuh Tempo"),
     belumDitagih: sumWhere("Belum ditagih"),
     outlet: new Set(rows.map((r) => r.outletId)).size,
+    lengkap: complete,
   };
 }
 
@@ -282,13 +293,13 @@ const EXPORT_COLUMNS: ExcelColumn<TransactionRow>[] = [
 ];
 
 async function exportTransactionsExcel(filters?: TransactionFilters): Promise<number> {
-  const rows = await fetchRows(filters);
+  const { rows } = await fetchAllRows(filters);
   exportExcel(`daftar-penjualan-${timestampSuffix()}`, "Daftar Penjualan", EXPORT_COLUMNS, rows);
   return rows.length;
 }
 
 async function exportTransactionsCsv(filters?: TransactionFilters): Promise<number> {
-  const rows = await fetchRows(filters);
+  const { rows } = await fetchAllRows(filters);
   exportCsv(
     `daftar-penjualan-${timestampSuffix()}`,
     EXPORT_COLUMNS.map((c) => c.header),
