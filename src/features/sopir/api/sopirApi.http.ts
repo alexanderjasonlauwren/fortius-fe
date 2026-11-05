@@ -20,12 +20,25 @@
  * before the request, so a slow GPS delays the submission rather than losing
  * it — same order as the mock, for the same reason.
  */
-import { uploadAttachment } from "@/features/attachments/api/attachmentApi";
 import { downscaleImage } from "@/lib/image";
 import { getOne, send } from "@/lib/api";
 import { capturePosition } from "@/lib/geo";
 import { unitLabel } from "@/lib/lexicon";
 import type { CompleteStopInput, GpsFixInput, SopirApi, StopReceipt } from "./contract";
+import {
+  buildRequest,
+  indexedDbOutbox,
+  isOffline,
+  memoryOutbox,
+  nextSeq,
+  replay,
+  type Filing,
+  type FilingKind,
+  type OutboxStore,
+  type ReplayResult,
+  type Transport,
+  type Versions,
+} from "../lib/outbox";
 import type { DriverOption, DriverRun, RunStop, StopLine } from "../types";
 
 /** Mirrors the backend's DeliveryResponse. */
@@ -151,6 +164,9 @@ function toStop(stop: StopResponse, urutan: number): RunStop {
   // it survives a reload and it is one the server would recognise.
   const id = rows[0]?.id ?? `stop-${stop.sequence_no}`;
   stopIndex.set(id, rows);
+  // The server's version is the truth for whatever has been applied; a
+  // filing still in the outbox has not been, and is built on this.
+  for (const row of rows) versions.set(row.id, row.version);
 
   const sum = (pick: (r: DeliveryResponse) => number) =>
     rows.reduce((total, r) => total + pick(r), 0);
@@ -270,16 +286,95 @@ function receipt(rows: DeliveryResponse[], realisasi: number): StopReceipt {
   return { kode: rows.map((r) => r.delivery_number).join(", "), realisasi };
 }
 
+/* ------------------------------------------------------------------------- *
+ * Filings, through the outbox
+ *
+ * Every filing is written to the outbox, sent, and removed once the server
+ * has answered (lib/outbox.ts). One the network did not carry stays, and is
+ * replayed when the phone is back online -- with its own Idempotency-Key, so
+ * a first attempt that did reach the server is not filed twice.
+ * ------------------------------------------------------------------------- */
+
+const outbox: OutboxStore = typeof indexedDB === "undefined" ? memoryOutbox() : indexedDbOutbox;
+const versions: Versions = new Map();
+
+const transport: Transport = async (filing, request) => {
+  const path =
+    filing.kind === "photo"
+      ? `/attachments/delivery/${filing.documentId}`
+      : `/deliveries/${filing.documentId}/${filing.kind}`;
+  const answer = await send<{ version?: number }>("post", path, request.body, {
+    idempotencyKey: filing.id,
+    contentType: request.contentType,
+    timeout: filing.kind === "photo" ? 60_000 : undefined,
+  });
+  return filing.kind === "photo" ? undefined : answer?.version;
+};
+
+/**
+ * Files one kind of filing for each document, in order.
+ *
+ * Sent at once unless something for the same document is already waiting:
+ * then it queues behind it, unbuilt, because the version it needs is the one
+ * the waiting filing's answer will carry. A document with this same filing
+ * already waiting is skipped -- the driver tapping twice, offline, files once.
+ * The network failing part way queues the rest; a refusal is thrown, as it
+ * always was, and the screen shows it.
+ */
+async function file(
+  stopId: string,
+  kind: FilingKind,
+  rows: DeliveryResponse[],
+  extra: (row: DeliveryResponse) => Pick<Filing, "fields" | "photo">,
+): Promise<{ queued: boolean }> {
+  const waiting = (await outbox.all()).filter((f) => f.state === "pending");
+  let queued = false;
+  for (const row of rows) {
+    if (waiting.some((f) => f.documentId === row.id && f.kind === kind)) {
+      queued = true;
+      continue;
+    }
+    const filing: Filing = {
+      id: crypto.randomUUID(),
+      seq: nextSeq(),
+      documentId: row.id,
+      stopId,
+      kind,
+      state: "pending",
+      ...extra(row),
+    };
+    const behind = queued || waiting.some((f) => f.documentId === row.id);
+    if (!behind) filing.sent = await buildRequest(filing, versions);
+    await outbox.put(filing);
+    if (behind || !filing.sent) {
+      queued = true;
+      continue;
+    }
+    try {
+      const version = await transport(filing, filing.sent);
+      if (version !== undefined) versions.set(row.id, version);
+      await outbox.remove(filing.id);
+    } catch (error) {
+      if (isOffline(error)) {
+        queued = true;
+        continue;
+      }
+      await outbox.remove(filing.id);
+      throw error;
+    }
+  }
+  return { queued };
+}
+
 async function departStop(deliveryId: string): Promise<StopReceipt> {
   const rows = documentsFor(deliveryId);
   const at = await position();
   // Sequential, not concurrent: each call carries the version it read, and the
   // server's own error is more useful than whichever of five parallel
   // rejections happened to land first.
-  for (const row of rows.filter((r) => isOpen(r) && !r.departed_at)) {
-    await send("post", `/deliveries/${row.id}/depart`, { version: row.version, ...at });
-  }
-  return receipt(rows, 0);
+  const { queued } = await file(deliveryId, "depart",
+    rows.filter((r) => isOpen(r) && !r.departed_at), () => ({ fields: { ...at } }));
+  return { ...receipt(rows, 0), tertunda: queued };
 }
 
 /**
@@ -297,10 +392,9 @@ async function departStop(deliveryId: string): Promise<StopReceipt> {
 async function arriveStop(deliveryId: string): Promise<StopReceipt> {
   const rows = documentsFor(deliveryId);
   const at = await position();
-  for (const row of rows.filter((r) => isOpen(r) && !r.arrived_at)) {
-    await send("post", `/deliveries/${row.id}/arrive`, { version: row.version, ...at });
-  }
-  return receipt(rows, 0);
+  const { queued } = await file(deliveryId, "arrive",
+    rows.filter((r) => isOpen(r) && !r.arrived_at), () => ({ fields: { ...at } }));
+  return { ...receipt(rows, 0), tertunda: queued };
 }
 
 /**
@@ -318,32 +412,44 @@ async function completeStop(input: CompleteStopInput): Promise<StopReceipt> {
   const filed = new Map(input.lines.map((l) => [l.productId, l]));
 
   let realisasi = 0;
-  for (const row of rows.filter(isOpen)) {
+  const open = rows.filter(isOpen);
+  const delivered = new Map(open.map((row) => {
     const line = filed.get(row.product_id ?? "");
     // A document the driver did not file against is closed at what it carried:
     // leaving it open would hold the whole stop open, and the count they did
     // not change is the count that left the yard.
-    const delivered = line ? line.realisasi : row.dispatched_qty;
-    realisasi += delivered;
-    await send("post", `/deliveries/${row.id}/complete`, {
-      version: row.version,
-      delivered_qty: delivered,
-      returned_qty: Math.max(0, row.dispatched_qty - delivered),
-      empties_collected: line?.kembali ?? 0,
-      recipient_name: input.diterimaOleh,
-      note: input.catatan,
-      ...at,
-    });
-  }
-  const closed = receipt(rows, realisasi);
+    return [row.id, line ? line.realisasi : row.dispatched_qty] as const;
+  }));
+  for (const qty of delivered.values()) realisasi += qty;
+
+  const { queued } = await file(input.deliveryId, "complete", open, (row) => {
+    const qty = delivered.get(row.id) ?? row.dispatched_qty;
+    const line = filed.get(row.product_id ?? "");
+    return {
+      fields: {
+        delivered_qty: qty,
+        returned_qty: Math.max(0, row.dispatched_qty - qty),
+        empties_collected: line?.kembali ?? 0,
+        recipient_name: input.diterimaOleh,
+        note: input.catatan,
+        ...at,
+      },
+    };
+  });
+  const closed: StopReceipt = { ...receipt(rows, realisasi), tertunda: queued };
 
   // After the completion, not before: the photo is evidence of the drop, and
   // a failed upload on a weak signal must not leave the delivery itself
   // unrecorded. One photo per stop, on its first surat jalan; the office
-  // reads every surat jalan of the stop.
+  // reads every surat jalan of the stop. Queued like the filings, so a photo
+  // taken with no signal is not lost.
   if (input.foto) {
     try {
-      await uploadAttachment("delivery", rows[0].id, await downscaleImage(input.foto));
+      const blob = await downscaleImage(input.foto);
+      const photo = await file(input.deliveryId, "photo", rows.slice(0, 1), () => ({
+        photo: { blob, name: blob.name || input.foto!.name },
+      }));
+      closed.tertunda = closed.tertunda || photo.queued;
     } catch (error) {
       closed.fotoGagal = error instanceof Error ? error.message : "Foto gagal diunggah";
     }
@@ -354,14 +460,25 @@ async function completeStop(input: CompleteStopInput): Promise<StopReceipt> {
 async function holdStop(input: { deliveryId: string; catatan: string }): Promise<StopReceipt> {
   const rows = documentsFor(input.deliveryId);
   const at = await position();
-  for (const row of rows.filter(isOpen)) {
-    await send("post", `/deliveries/${row.id}/fail`, {
-      version: row.version,
-      failure_reason: input.catatan,
-      ...at,
-    });
-  }
-  return receipt(rows, 0);
+  const { queued } = await file(input.deliveryId, "fail", rows.filter(isOpen), () => ({
+    fields: { failure_reason: input.catatan, ...at },
+  }));
+  return { ...receipt(rows, 0), tertunda: queued };
+}
+
+/** What is still waiting on this device, oldest first. */
+async function pendingFilings(): Promise<Filing[]> {
+  return (await outbox.all()).sort((a, b) => a.seq - b.seq);
+}
+
+/** Sends what is waiting. Safe to call at any time, and repeatedly. */
+async function replayFilings(): Promise<ReplayResult> {
+  return replay(outbox, transport, versions);
+}
+
+/** Drops a filing the server refused, once the driver has seen why. */
+async function discardFiling(id: string): Promise<void> {
+  await outbox.remove(id);
 }
 
 /**
@@ -400,6 +517,9 @@ export const sopirApiHttp: SopirApi = {
   arriveStop,
   completeStop,
   holdStop,
+  pendingFilings,
+  replayFilings,
+  discardFiling,
   getDriverOptions,
   postGpsFixes,
 };

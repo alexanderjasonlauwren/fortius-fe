@@ -12,3 +12,6 @@ export const completeStop = api.completeStop.bind(api);
 export const holdStop = api.holdStop.bind(api);
 export const getDriverOptions = api.getDriverOptions.bind(api);
 export const postGpsFixes = api.postGpsFixes.bind(api);
+export const pendingFilings = api.pendingFilings.bind(api);
+export const replayFilings = api.replayFilings.bind(api);
+export const discardFiling = api.discardFiling.bind(api);
