@@ -11,6 +11,25 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // The framework changes far less often than the console, so it gets
+        // chunks whose hashes survive an app-only deploy and stay cached.
+        //
+        // Maps and charts are deliberately not named here: only lazy pages
+        // import them, so Rollup already keeps them out of the entry. Forcing
+        // them into a named chunk let Rollup park a shared CommonJS helper in
+        // it, which made the entry preload all of Recharts.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/.test(id)) return "vendor-react";
+          if (/[\\/]node_modules[\\/]@tanstack[\\/]/.test(id)) return "vendor-query";
+          return undefined;
+        },
+      },
+    },
+  },
   test: {
     // Node, not jsdom, deliberately.
     //
