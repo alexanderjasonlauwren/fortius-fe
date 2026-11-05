@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { PERMISSIONS } from "@/features/rbac/permissions";
@@ -14,6 +14,7 @@ import { getSettings } from "@/features/settings/api/settingsApi";
 import { hydrateLexicon, setLexicon } from "@/lib/lexicon";
 import { getActingTenant, scopeKey } from "@/lib/scope";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/common/Panel";
 
 export function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -123,9 +124,24 @@ export function DashboardLayout() {
           className="flex-1 px-4 pb-14 pt-6 sm:px-6 lg:px-7"
         >
           <LinkTenantBanner />
-          <Outlet />
+          {/* Pages are lazy chunks (App.tsx). The boundary sits inside the
+              shell, so the sidebar and header stay put while one loads. */}
+          <Suspense fallback={<PageFallback />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
+    </div>
+  );
+}
+
+/** Shown for the moment a page's chunk is still downloading. */
+function PageFallback() {
+  return (
+    <div role="status" aria-busy="true" aria-label="Memuat halaman" className="space-y-4">
+      <Skeleton className="h-8 w-64" />
+      <Skeleton className="h-4 w-96 max-w-full" />
+      <Skeleton className="h-72 w-full" />
     </div>
   );
 }
