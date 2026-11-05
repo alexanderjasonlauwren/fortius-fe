@@ -97,6 +97,9 @@ const FRIENDLY: Record<string, string> = {
   PAYMENT_REFUNDED:
     "Penerimaan ini punya pengembalian dana yang diajukan atau disetujui. Selesaikan pengembalian itu dulu.",
   CONTAINER_NOT_TRADED: "Tabung kosong hanya dihitung jumlahnya; tidak dibeli atau dijual.",
+  CURRENT_PASSWORD_INCORRECT: "Kata sandi saat ini salah. Periksa lalu coba lagi.",
+  AGREEMENT_INACTIVE: "SA ini belum aktif atau sudah berakhir. Hanya SA aktif yang kuotanya bisa direncanakan.",
+  AGREEMENT_LAPSED: "Penawaran SA ini sudah lewat batas tebus, jadi kuotanya tidak bisa direncanakan.",
   CHANNEL_NOT_CONFIGURED:
     "Kanal ini belum terhubung pada instalasi ini (email: server SMTP; WhatsApp: penyedia). Hubungi operator.",
   CHANNEL_SEND_FAILED:

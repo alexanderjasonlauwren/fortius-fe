@@ -32,7 +32,7 @@ older notices exist), and an outlet's recent deliveries.
 | cashvouchers | Deleting a draft leaves a gap in the KB series (`business-gaps.md` G8). |
 | dashboard | The dispatch rail has no clock: no planned time of day exists in the schema. Jejak aktivitas is shown only to roles with `audit.read.audit_trails`, and only writes of the last 30 days. |
 | depreciationruns | The "preview before posting" is computed in the browser (`lib/depreciation.ts`, a port of the backend's straight-line formula) because the backend has no dry-run endpoint; the two can drift. |
-| distribution | A plan's stops show address "—", outlet receivable and remaining quota `0` (the receivable badge never appears), and "dibuat oleh" "—": none is on the order-item response. The route sheet prints the company as "—" (see settings). Credit-limit override: the second-approver picker lists every active user, and the outlet a breach names is matched from the error text. Re-uploading a source plan does not update drafts made from the previous upload. |
+| distribution | A plan's stops show address "—", outlet receivable and remaining quota `0` (the receivable badge never appears), and "dibuat oleh" "—": none is on the order-item response. Credit-limit override: the second-approver picker lists every active user, and the outlet a breach names is matched from the error text. Re-uploading a source plan does not update drafts made from the previous upload. |
 | drivers | A driver's schedule shows `jam` and `kecamatan` as placeholders (no planned time of day; the delivery carries the outlet's name, not its district). |
 | finance (Piutang, Penerimaan, Buku Besar) | Penerimaan's header no longer counts "belum dialokasikan" receipts: unallocated money cannot be filtered on the server, and the old count covered one tab's first page; the row spine still marks them. |
 | financedashboard | Tenant-wide, not per branch. A tenant still on the 2025 layout shows "—" for `laba_rugi_v2` lines it lacks. The 12-month trend is 12 requests. |
@@ -45,15 +45,13 @@ older notices exist), and an outlet's recent deliveries.
 | orders | `sisaKuotaOutlet` and `kecamatan` are not on `OrderResponse`. An approval note (`catatan`) has no field server-side and is dropped. Scheduling several orders onto a plan is one request per order, not atomic; a failure partway leaves the earlier ones scheduled. |
 | outlet | "Ditangguhkan" is the backend's `sus` (since 2026-11-02): listed and billable, refused at dispatch. What else a suspension should block is the client's call (`business-gaps.md` C6). |
 | products | Stock shows only for roles with `finance.read.inventory`; others see "Stok belum tersedia". Quantities are tenant-wide (`technical-gaps.md` T9). |
-| purchases | No form for an SA *tebus* purchase (`POST /purchases`); it can only be recorded as a general bill from vendor PERTAMINA, which loses the agreement link. |
-| reports (Laporan recap) | The printed recap shows the company and agent number as "—" (see settings). Figures use the UTC day, as the ledger does (`open-findings.md` #23). |
+| purchases | "Catat tebus" (SA detail, active agreements only) bills the whole granted quota at today's cost price; a partial tebus is not possible. |
 | sa | SA amendment and cancellation have no endpoint or screen (`business-gaps.md` C8). The source plant is free text (`supplier_name`, B6). |
 | settings | Document-number prefixes are read-only by design. Profil agen saves to the tenant profile at the version it was read at; a save over someone else's newer edit is refused (409) and the page must be reloaded. City, province and postal code are kept as stored (not on the form). |
 | sopir | Filings and photos need a connection (no offline queue); GPS stops while the tab is in the background (`technical-gaps.md` T7). |
 | transactions | `jamRencana` is always empty; an unbilled delivery shows `nominal` 0. |
 | transportation | Per-trip pricing is not built (tariffs are per kg or per tabung). |
-| users | No change-password screen (`POST /auth/change-password` is unused) and no "log out all devices". No invitation flow; the "Diundang" status is dead code. No user export or audit-trail read. |
-| tenancy | A tenant cannot be edited after creation (`PUT /tenants/:id` is unused). |
+| users | No invitation flow; the "Diundang" status is dead code. No user export or audit-trail read. |
 
 ## No gaps recorded
 
@@ -63,4 +61,5 @@ on 2026-11-02 beyond the checks above.
 accountingperiods · approvals · attachments · auth · bankaccounts ·
 bankstatements · expensecategories · expenses · externalstatements ·
 fiscalyears · geofence · monitoring · outletwarnings · registrationpackages ·
-sim3lonlive · suppliers (see `sa` for the SPBE lexicon) · system · vehicles
+reports · sim3lonlive · suppliers (see `sa` for the SPBE lexicon) · system ·
+tenancy · vehicles

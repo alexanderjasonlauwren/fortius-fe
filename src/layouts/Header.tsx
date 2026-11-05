@@ -5,7 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
   Check,
+  KeyRound,
   LogOut,
+  MonitorSmartphone,
   Menu,
   Moon,
   Search,
@@ -26,6 +28,9 @@ import { sectionFor, titleFor } from "./nav";
 import { CommandPalette } from "./CommandPalette";
 import { ScopeSwitcher } from "@/features/tenancy/ScopeSwitcher";
 import { describeRoles } from "@/features/rbac/access";
+import { ChangePasswordDialog } from "@/features/auth/components/ChangePasswordDialog";
+import { authApi } from "@/features/auth/api/authApi";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -41,6 +46,21 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [logoutAllOpen, setLogoutAllOpen] = useState(false);
+  // The server ends every session, this one included, so the console signs
+  // out locally too rather than failing on its next token refresh.
+  const logoutAllMutation = useDeskMutation({
+    mutationFn: () => authApi.logoutAll(),
+    errorTitle: "Gagal mengakhiri sesi",
+    success: (count) => ({ title: `${count} sesi diakhiri` }),
+    invalidate: [],
+    onDone: async () => {
+      setLogoutAllOpen(false);
+      await logout();
+      navigate("/login", { replace: true });
+    },
+  });
   const bellRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -324,6 +344,26 @@ export function Header({ onMenuClick }: HeaderProps) {
                 </button>
                 <button
                   onClick={() => {
+                    setMenuOpen(false);
+                    setPasswordOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 border-t border-line px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-panel-sunk hover:text-ink"
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Ubah kata sandi
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setLogoutAllOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-panel-sunk hover:text-ink"
+                >
+                  <MonitorSmartphone className="h-4 w-4" />
+                  Keluar dari semua perangkat
+                </button>
+                <button
+                  onClick={() => {
                     logout();
                     navigate("/login", { replace: true });
                   }}
@@ -337,6 +377,18 @@ export function Header({ onMenuClick }: HeaderProps) {
           </div>
         </div>
       </header>
+
+      <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
+      <ConfirmDialog
+        isOpen={logoutAllOpen}
+        title="Keluar dari semua perangkat?"
+        message="Semua sesi Anda berakhir, di perangkat ini dan di perangkat lain. Masuk kembali untuk melanjutkan."
+        details="Gunakan ini jika perangkat hilang atau kata sandi mungkin diketahui orang lain; lalu ubah kata sandi."
+        confirmLabel="Keluar dari semua perangkat"
+        isPending={logoutAllMutation.isPending}
+        onCancel={() => setLogoutAllOpen(false)}
+        onConfirm={() => logoutAllMutation.mutate(undefined as never)}
+      />
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </>

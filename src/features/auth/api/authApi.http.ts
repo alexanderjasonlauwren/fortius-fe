@@ -118,6 +118,18 @@ export const authApiHttp: AuthApi = {
     }
   },
 
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await send<null>("post", "/auth/change-password", {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  },
+
+  async logoutAll(): Promise<number> {
+    const { sessions_revoked } = await send<{ sessions_revoked: number }>("post", "/auth/logout-all");
+    return sessions_revoked;
+  },
+
   async listSwitchableTenants(): Promise<SwitchableTenant[]> {
     const rows = await getOne<SwitchableTenantRow[]>("/auth/switchable-tenants");
     return rows.map((row) => ({

@@ -11,6 +11,12 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { getStatusVariant } from "@/lib/status";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { useDeskMutation } from "@/hooks/useDeskMutation";
+import { holds } from "@/features/rbac/holds";
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import { recordSAPurchase } from "@/features/purchases/api/purchaseApi";
+import { useState } from "react";
 import { formatDateId, formatNumber } from "@/lib/format";
 import { unitLabel } from "@/lib/lexicon";
 
@@ -167,6 +173,19 @@ export function SADetailPage() {
     queryFn: () => getSADetail(id),
   });
 
+  // The tebus: the bill to the supplier for this agreement's whole quota,
+  // linked to it. Paid on the bill's own page, like any other bill.
+  const [confirmingPurchase, setConfirmingPurchase] = useState(false);
+  const purchase = useDeskMutation({
+    mutationFn: () => recordSAPurchase(id),
+    errorTitle: "Tebus tidak dicatat",
+    success: (bill) => ({ title: "Tebus dicatat", description: `Tagihan ${bill.purchaseNumber} siap dibayar.` }),
+    onDone: (bill) => {
+      setConfirmingPurchase(false);
+      navigate(`/purchases/${bill.id}`);
+    },
+  });
+
   const importSummary = useQuery({
     queryKey: [...scopeKey(), "sa-import-summary", id],
     queryFn: () => getImportSummary(id),
@@ -224,6 +243,28 @@ export function SADetailPage() {
         title={sa.nomorSA}
         description={`Periode ${formatDateId(sa.periodeMulai)} – ${formatDateId(sa.periodeBerakhir)}.`}
         meta={<StatusBadge variant={getStatusVariant(sa.status)} label={sa.status} />}
+        actions={
+          // Active only: a draft is not in force, and allocation refuses
+          // anything else (AGREEMENT_INACTIVE). The server refuses a second
+          // tebus of the same agreement.
+          sa.status === "Aktif" &&
+          sa.products.length > 0 &&
+          holds(PERMISSIONS.PURCHASES_CREATE) && (
+            <Button onClick={() => setConfirmingPurchase(true)}>Catat tebus</Button>
+          )
+        }
+      />
+
+      <ConfirmDialog
+        isOpen={confirmingPurchase}
+        title="Catat tebus SA ini?"
+        message={`Satu tagihan pemasok untuk seluruh kuota ${sa.nomorSA}: ${formatNumber(sa.totalKuota)} ${unitLabel()}, dengan harga pokok per produk pada hari ini.`}
+        details="Stok bertambah dan utang ke pemasok tercatat. Pembayarannya dicatat di halaman tagihan."
+        confirmLabel="Catat tebus"
+        variant="default"
+        isPending={purchase.isPending}
+        onCancel={() => setConfirmingPurchase(false)}
+        onConfirm={() => purchase.mutate(undefined as never)}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

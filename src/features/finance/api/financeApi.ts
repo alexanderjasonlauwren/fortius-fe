@@ -56,6 +56,7 @@ export const getInvoice = api.getInvoice.bind(api);
 export { CREDIT_NOTE_REASONS } from "./contract";
 export const getJournals = api.getJournals.bind(api);
 export const createManualJournal = api.createManualJournal.bind(api);
+export const postInventoryAdjustment = api.postInventoryAdjustment.bind(api);
 export const reverseJournal = api.reverseJournal.bind(api);
 export const getTrialBalance = api.getTrialBalance.bind(api);
 export const getProfitAndLoss = api.getProfitAndLoss.bind(api);

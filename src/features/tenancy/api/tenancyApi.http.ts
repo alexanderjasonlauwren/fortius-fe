@@ -12,6 +12,7 @@ import type {
   CreateTenantInput,
   CreateTenantResult,
   TenantDetail,
+  UpdateTenantInput,
 } from "./contract";
 
 /** Mirrors the backend's tenant.Response exactly. */
@@ -89,6 +90,8 @@ export async function getTenant(id: ID): Promise<TenantDetail> {
   const row = await getOne<DetailResponse>(`/tenants/${id}`);
   return {
     ...toDomain(row),
+    deskripsi: row.description ?? "",
+    versi: row.version,
     leluhur: row.ancestors.map((a) => ({
       id: a.id,
       kode: a.code,
@@ -144,6 +147,15 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
     jumlahPenomoran: row.document_sequences_created,
     pendiriDitunjuk: row.founder_granted,
   };
+}
+
+export async function updateTenant(id: ID, input: UpdateTenantInput): Promise<void> {
+  const description = input.deskripsi.trim();
+  await send("put", `/tenants/${id}`, {
+    name: input.nama.trim(),
+    description: description === "" ? null : description,
+    version: input.versi,
+  });
 }
 
 export async function deactivateTenant(id: ID): Promise<void> {
