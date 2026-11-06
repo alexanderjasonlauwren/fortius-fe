@@ -25,7 +25,7 @@ vi.mock("@/lib/api", () => ({
   upload: vi.fn(),
 }));
 
-const { orderApiHttp, scheduleOneOrder } = await import("./orderApi.http");
+const { orderApiHttp, scheduleOrders } = await import("./orderApi.http");
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const OUTLET_ID = "22222222-2222-4222-8222-222222222222";
@@ -167,6 +167,17 @@ describe("approveOrder and declineOrder", () => {
     expect(body).toEqual({ version: 3 });
   });
 
+  it("sends the approval note, trimmed, and leaves a blank one out", async () => {
+    getOne.mockResolvedValue(wire({ version: 3 }));
+    send.mockResolvedValue(wire({ order_status: "approved", version: 4 }));
+
+    await orderApiHttp.approveOrder(ID, "  dikirim sore  ");
+    await orderApiHttp.approveOrder(ID, "   ");
+
+    expect(send.mock.calls[0][2]).toEqual({ version: 3, note: "dikirim sore" });
+    expect(send.mock.calls[1][2]).toEqual({ version: 3 });
+  });
+
   it("sends the reason along with the version on decline", async () => {
     getOne.mockResolvedValue(wire({ version: 3 }));
     send.mockResolvedValue(wire({ order_status: "rejected", version: 4 }));
@@ -195,36 +206,53 @@ describe("approveOrderBatch", () => {
 });
 
 describe("scheduling", () => {
-  it("scheduleOneOrder reads the version and posts the plan link", async () => {
-    getOne.mockResolvedValue(wire({ version: 2 }));
-    send.mockResolvedValue(undefined);
+  it("schedules every order in one request, each with the version it read", async () => {
+    getOne.mockImplementation(async (path: string) => wire({ id: path.split("/").pop(), version: path.endsWith("a") ? 2 : 7 }));
+    send.mockResolvedValue([wire(), wire()]);
 
-    await scheduleOneOrder(ID, PLAN_ID);
+    await expect(scheduleOrders(PLAN_ID, ["a", "b"])).resolves.toBe(2);
 
+    expect(send).toHaveBeenCalledTimes(1);
     const [method, path, body] = send.mock.calls[0];
     expect(method).toBe("post");
-    expect(path).toBe(`/orders/${ID}/schedule`);
-    expect(body).toEqual({ version: 2, distribution_order_id: PLAN_ID });
+    expect(path).toBe("/orders/schedule");
+    expect(body).toEqual({
+      distribution_order_id: PLAN_ID,
+      orders: [{ id: "a", version: 2 }, { id: "b", version: 7 }],
+    });
   });
 
-  it("addOrdersToPlan is not atomic: it reports how many succeeded before a failure", async () => {
+  it("passes the server's refusal through: nothing was scheduled", async () => {
     getOne.mockResolvedValue(wire({ version: 1 }));
-    send
-      .mockResolvedValueOnce(undefined) // order 1 schedules fine
-      .mockRejectedValueOnce(new Error("Hanya pesanan yang disetujui dapat dijadwalkan")); // order 2 fails
+    send.mockRejectedValue(new Error("Order PO-2 is not approved"));
 
-    await expect(orderApiHttp.addOrdersToPlan(PLAN_ID, ["a", "b", "c"])).rejects.toThrow(
-      /1 dari 3 pesanan terjadwalkan sebelum gagal/,
-    );
-    // The loop must stop at the first failure rather than trying the third id.
-    expect(send).toHaveBeenCalledTimes(2);
+    await expect(orderApiHttp.addOrdersToPlan(PLAN_ID, ["a", "b"])).rejects.toThrow("Order PO-2 is not approved");
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it("returns the full count when every order schedules", async () => {
-    getOne.mockResolvedValue(wire({ version: 1 }));
-    send.mockResolvedValue(undefined);
+  it("sends nothing for an empty selection", async () => {
+    await expect(orderApiHttp.addOrdersToPlan(PLAN_ID, [])).resolves.toBe(0);
+    expect(send).not.toHaveBeenCalled();
+  });
+});
 
-    await expect(orderApiHttp.addOrdersToPlan(PLAN_ID, ["a", "b"])).resolves.toBe(2);
+describe("decision facts on the order", () => {
+  it("maps the district, the approver, the approval note and the remaining quota", async () => {
+    getList.mockResolvedValue({
+      items: [
+        wire({ order_status: "approved", outlet_district: "Sidorejo", approved_by_name: "Kepala Gudang",
+          approval_note: "dikirim sore", notes: "minta pagi", outlet_month_remaining: 40 }),
+        wire({ order_status: "requested" }),
+      ],
+    });
+    const [approved, open] = (await orderApiHttp.getOrders()).items;
+    expect(approved.kecamatan).toBe("Sidorejo");
+    expect(approved.diprosesOleh).toBe("Kepala Gudang");
+    expect(approved.catatan).toBe("dikirim sore");
+    expect(approved.sisaKuotaOutlet).toBe(40);
+    // No target is unknown, not zero: zero would flag the order as over quota.
+    expect(open.sisaKuotaOutlet).toBe(Number.POSITIVE_INFINITY);
+    expect(open.kecamatan).toBe("—");
   });
 });
 

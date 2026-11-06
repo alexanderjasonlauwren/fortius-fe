@@ -17,13 +17,11 @@
  * stops as they are added rather than a value the service stores — a plan saved
  * with no stops does not remember it.
  *
- * **A stop's decoration is not on the wire.** The planning screen shows an
- * address, the outlet's remaining monthly quota, and its receivable beside each
- * stop. None of those are on the order-item response: the address belongs to
- * the outlet module, the quota to outlet targets, the receivable to finance.
- * They arrive here as "unknown" rather than as zero, because a zero receivable
- * reads as "this outlet owes nothing" and that is a claim this adapter cannot
- * make. `docs/technical-gaps.md` records the three.
+ * **A stop's decoration comes with the line.** The order-item response carries
+ * the outlet's address, its open and overdue receivable and what is left of its
+ * monthly target (since 2026-11-06). The remaining quota is absent when the
+ * outlet has no target that month, and that arrives as unknown rather than 0,
+ * which would read as "over quota".
  *
  * **The crew comes from the dispatch board**, which is a second request. The
  * order's own lines carry only whether a stop is on a run and where in it —
@@ -34,7 +32,7 @@ import { getAllPages, getOne, send } from "@/lib/api";
 import { printDocument } from "@/lib/export";
 import { outletLabelTitle, unitLabelTitle } from "@/lib/lexicon";
 import { scopeKey } from "@/lib/scope";
-import { scheduleOneOrder } from "@/features/orders/api/orderApi.http";
+import { scheduleOrders } from "@/features/orders/api/orderApi.http";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getSettings } from "@/features/settings/api/settingsApi";
 import { compareStops } from "../lib/stopOrder";
@@ -54,6 +52,7 @@ import type {
   UnroutableStop,
 } from "../types";
 import type {
+  CreditApprover,
   CreditOverrideInput,
   DispatchResult,
   DistributionApi,
@@ -88,6 +87,13 @@ interface OrderItemResponse {
   invoice_payment_status?: string;
   item_status: string;
   notes?: string;
+  outlet_address?: string;
+  outlet_district?: string;
+  outlet_receivable?: number;
+  outlet_receivable_overdue?: number;
+  /** The outlet's monthly target less every live plan that month; absent
+   *  when no target is set. */
+  outlet_month_remaining?: number;
 }
 
 interface OrderResponse {
@@ -107,6 +113,8 @@ interface OrderResponse {
   confirmed_by?: string;
   confirmed_at?: string;
   completed_at?: string;
+  /** Who drafted the plan, by name. */
+  created_by?: string;
   items?: OrderItemResponse[];
   version: number;
   created_at: string;
@@ -333,9 +341,7 @@ function toPlanView(order: OrderResponse): DistributionPlan {
     // planner an agreement to choose rather than a quota to exceed.
     sisaKuotaSA: order.agreement_remaining ?? 0,
     catatan: order.notes,
-    // The service records who confirmed a plan and not who drafted it: a draft
-    // is attributed by created_by, which is not on the wire.
-    dibuatOleh: "—",
+    dibuatOleh: order.created_by ?? "—",
     dikonfirmasiOleh: order.confirmed_by,
     dikonfirmasiPada: order.confirmed_at,
     version: order.version,
@@ -415,8 +421,7 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
       id: item.id,
       outletId,
       outlet: item.outlet_name ?? "—",
-      // Not on the order-item response; see the module header.
-      alamat: "—",
+      alamat: item.outlet_address ?? "—",
       lines: [],
       jumlahUnit: 0,
       driverId: crew?.driverId ?? null,
@@ -437,10 +442,17 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
       tripStatus: crew?.tripStatus,
       berangkat: crew?.berangkat ?? null,
       statusBayar: statusBayarFor(item.payment_state, item.payment_status, item.invoice_payment_status),
-      sisaKuotaOutlet: 0,
-      piutang: 0,
-      piutangJatuhTempo: 0,
+      // Per outlet, not per line: the receivable is the outlet's. The quota is
+      // per product, so a multi-product stop adds the other lines' below.
+      sisaKuotaOutlet: item.outlet_month_remaining ?? Number.POSITIVE_INFINITY,
+      piutang: item.outlet_receivable ?? 0,
+      piutangJatuhTempo: item.outlet_receivable_overdue ?? 0,
     } satisfies PlanRow;
+    if (byOutlet.has(outletId) && item.outlet_month_remaining !== undefined) {
+      row.sisaKuotaOutlet = Number.isFinite(row.sisaKuotaOutlet)
+        ? row.sisaKuotaOutlet + item.outlet_month_remaining
+        : item.outlet_month_remaining;
+    }
 
     row.lines.push({ productId: item.product_id ?? "", jumlah: item.planned_qty });
     row.jumlahUnit += item.planned_qty;
@@ -650,27 +662,13 @@ async function cancelDistributionPlan(planId: string, version: number): Promise<
 }
 
 /**
- * Schedules approved orders onto a plan, via `orderApi`'s own real request --
- * not a second copy of it. See `orderApi.http.ts`'s own header for what
- * `/orders/:id/schedule` does and does not do (no plan line is added; a
- * planner still adds it here, through this same feature's own row editor)
- * and for why a batch that fails partway through is no longer atomic the way
- * the mock's `scheduleOrders` is.
+ * Schedules approved orders onto a plan, all or none, via `orderApi`'s own
+ * request -- not a second copy of it. Scheduling links an order to the plan;
+ * it does not add a plan line, which a planner still adds here, through this
+ * feature's own row editor.
  */
 export async function addApprovedOrders(planId: string, orderIds: string[]): Promise<number> {
-  let scheduled = 0;
-  for (const id of orderIds) {
-    try {
-      await scheduleOneOrder(id, planId);
-      scheduled += 1;
-    } catch (error) {
-      throw new Error(
-        `${scheduled} dari ${orderIds.length} pesanan terjadwalkan sebelum gagal: ` +
-          `${(error as Error).message}`,
-      );
-    }
-  }
-  return scheduled;
+  return scheduleOrders(planId, orderIds);
 }
 
 /* ── option lists for the planner ──────────────────────────────────────── */
@@ -885,6 +883,11 @@ async function dispatchTrip(
   return { issued: response.issued.length };
 }
 
+async function getCreditApprovers(): Promise<CreditApprover[]> {
+  const rows = await getOne<{ id: string; full_name: string; username: string }[]>("/distribution/credit-approvers");
+  return rows.map((r) => ({ id: r.id, nama: r.full_name, username: r.username }));
+}
+
 async function getActiveSaOptions(): Promise<PlanOption[]> {
   const page = await getAllPages<AgreementListResponse>("/schedule-agreements", {
     pageSize: OPTION_PAGE_SIZE,
@@ -1053,4 +1056,5 @@ export const distributionApiHttp: DistributionApi = {
   suggestAssignment,
   applyAssignment,
   dispatchTrip,
+  getCreditApprovers,
 };

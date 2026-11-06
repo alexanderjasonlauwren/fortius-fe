@@ -306,6 +306,39 @@ describe("stop mapping", () => {
   });
 
   /**
+   * What the planner sees beside a stop comes from the line: address,
+   * receivable and its overdue part, and the remaining monthly quota summed
+   * over the stop's products. No target is unknown, not zero.
+   */
+  it("carries the outlet's address, receivable and remaining quota", async () => {
+    getOne
+      .mockResolvedValueOnce(
+        order({
+          created_by: "Perencana Satu",
+          items: [
+            item({ outlet_address: "Jl Sutono 3", outlet_receivable: 70000, outlet_receivable_overdue: 50000, outlet_month_remaining: 120 }),
+            item({ id: "second", product_id: "p2", outlet_address: "Jl Sutono 3", outlet_receivable: 70000, outlet_receivable_overdue: 50000, outlet_month_remaining: 30 }),
+            item({ id: "third", outlet_id: "outlet-b", outlet_name: "Pangkalan Budi" }),
+          ],
+        }),
+      )
+      .mockRejectedValueOnce(new Error("no board yet"));
+
+    const rows = await distributionApiHttp.getPlanDetail(PLAN_ID);
+    const a = rows.find((r) => r.outletId === OUTLET_A)!;
+    const b = rows.find((r) => r.outletId === "outlet-b")!;
+    expect(a.alamat).toBe("Jl Sutono 3");
+    expect(a.piutang).toBe(70000);
+    expect(a.piutangJatuhTempo).toBe(50000);
+    expect(a.sisaKuotaOutlet).toBe(150);
+    expect(b.sisaKuotaOutlet).toBe(Number.POSITIVE_INFINITY);
+    expect(b.alamat).toBe("—");
+
+    getOne.mockResolvedValueOnce(order({ created_by: "Perencana Satu" }));
+    expect((await distributionApiHttp.getPlan(PLAN_ID)).dibuatOleh).toBe("Perencana Satu");
+  });
+
+  /**
    * A cancelled stop is not on the plan any more.
    *
    * The service keeps the row for its quota lineage rather than deleting it, so
@@ -912,9 +945,9 @@ describe("the suggestion", () => {
 });
 
 describe("addApprovedOrders", () => {
-  it("calls orderApi's own schedule request, not a second copy of it", async () => {
-    getOne.mockResolvedValue({ version: 5 });
-    send.mockResolvedValue(undefined);
+  it("calls orderApi's own batch schedule request, not a second copy of it", async () => {
+    getOne.mockResolvedValue({ id: OUTLET_A, version: 5 });
+    send.mockResolvedValue([{}]);
 
     const { addApprovedOrders } = await import("./distributionApi.http");
     const count = await addApprovedOrders(PLAN_ID, [OUTLET_A]);
@@ -922,8 +955,8 @@ describe("addApprovedOrders", () => {
     expect(count).toBe(1);
     const [method, path, body] = send.mock.calls[0];
     expect(method).toBe("post");
-    expect(path).toBe(`/orders/${OUTLET_A}/schedule`);
-    expect(body).toEqual({ version: 5, distribution_order_id: PLAN_ID });
+    expect(path).toBe("/orders/schedule");
+    expect(body).toEqual({ distribution_order_id: PLAN_ID, orders: [{ id: OUTLET_A, version: 5 }] });
   });
 });
 

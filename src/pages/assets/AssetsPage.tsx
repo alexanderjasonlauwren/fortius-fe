@@ -23,6 +23,7 @@ import { DataTable, type Column } from "@/components/common/DataTable";
 import { Field, SegmentedControl } from "@/components/common/Field";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { AttachmentsButton } from "@/features/attachments/components/AttachmentsButton";
 import { getStatusVariant } from "@/lib/status";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
@@ -106,6 +107,8 @@ export function AssetsPage() {
       key: "actions", header: "",
       render: (row) => (
         <div className="flex justify-end gap-1">
+          {/* Purchase invoice, BAST, photos: kept on the asset itself. */}
+          <AttachmentsButton ownerType="asset" ownerId={row.id} label={row.assetCode} />
           <Button variant="ghost" size="icon-xs" aria-label={`Jadwal ${row.assetCode}`} onClick={() => setScheduleTarget(row)}>
             <CalendarClock className="h-3.5 w-3.5" />
           </Button>

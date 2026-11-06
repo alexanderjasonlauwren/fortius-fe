@@ -74,6 +74,8 @@ export function OrderListPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [rejecting, setRejecting] = useState<OrderView | null>(null);
   const [alasan, setAlasan] = useState("");
+  const [approving, setApproving] = useState<OrderView | null>(null);
+  const [catatanSetuju, setCatatanSetuju] = useState("");
   const [scheduling, setScheduling] = useState(false);
   const [planId, setPlanId] = useState("");
   const [creating, setCreating] = useState(false);
@@ -101,12 +103,18 @@ export function OrderListPage() {
   const clearSelection = () => setSelected(new Set());
 
   const approveMutation = useDeskMutation({
-    mutationFn: (id: string) => { assertManualIntake(); return approveOrder(id); },
+    mutationFn: ({ id, catatan }: { id: string; catatan: string }) => {
+      assertManualIntake(); return approveOrder(id, catatan);
+    },
     errorTitle: "Persetujuan gagal",
     success: (o) => ({
       title: `${o.kode} disetujui`,
       description: "Pesanan siap ditarik ke rencana distribusi.",
     }),
+    onDone: () => {
+      setApproving(null);
+      setCatatanSetuju("");
+    },
   });
 
   const batchApprove = useDeskMutation({
@@ -234,16 +242,19 @@ export function OrderListPage() {
           <span className="data block font-semibold text-ink">
             {formatNumber(row.jumlahUnit)}
           </span>
-          <span
-            className={cn(
-              "block text-2xs",
-              row.jumlahUnit > row.sisaKuotaOutlet
-                ? "font-semibold text-rust-ink"
-                : "text-ink-muted",
-            )}
-          >
-            sisa kuota {formatNumber(row.sisaKuotaOutlet)}
-          </span>
+          {/* Infinite when the outlet has no target that month: nothing to show. */}
+          {Number.isFinite(row.sisaKuotaOutlet) && (
+            <span
+              className={cn(
+                "block text-2xs",
+                row.jumlahUnit > row.sisaKuotaOutlet
+                  ? "font-semibold text-rust-ink"
+                  : "text-ink-muted",
+              )}
+            >
+              sisa kuota {formatNumber(row.sisaKuotaOutlet)}
+            </span>
+          )}
         </>
       ),
       sortValue: (row) => row.jumlahUnit,
@@ -289,7 +300,7 @@ export function OrderListPage() {
           <div className="flex items-center justify-end gap-1">
             <Button
               size="xs"
-              onClick={() => approveMutation.mutate(row.id)}
+              onClick={() => setApproving(row)}
               disabled={approveMutation.isPending}
             >
               <CheckCircle2 className="h-3 w-3" />
@@ -571,6 +582,45 @@ export function OrderListPage() {
               }
             >
               Tambahkan ke rencana
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve */}
+      <Dialog open={manualIntake && !!approving} onOpenChange={(open) => !open && setApproving(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Setujui {approving?.kode}</DialogTitle>
+            <DialogDescription>
+              {approving?.outlet} · {formatNumber(approving?.jumlahUnit ?? 0)} {unitLabel()} untuk{" "}
+              {approving ? formatDateId(approving.tanggalDiminta) : ""}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Field label="Catatan persetujuan" htmlFor="catatan-setuju" hint="Opsional. Tampil di daftar pesanan.">
+            <TextareaInput
+              id="catatan-setuju"
+              rows={2}
+              maxLength={2000}
+              value={catatanSetuju}
+              onChange={(e) => setCatatanSetuju(e.target.value)}
+              placeholder="Contoh: dikirim sore, stok gudang B."
+            />
+          </Field>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApproving(null)}>
+              Batal
+            </Button>
+            <Button
+              disabled={approveMutation.isPending}
+              onClick={() =>
+                approving && approveMutation.mutate({ id: approving.id, catatan: catatanSetuju })
+              }
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Setujui pesanan
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1314,6 +1314,11 @@ function StopRow({
           {row.piutang > 0 && (
             <span className="data mt-1 block text-2xs text-ink-muted">
               piutang {formatNumber(Math.round(row.piutang / 1000))} rb
+              {row.piutangJatuhTempo > 0 && (
+                <span className="text-warning">
+                  {" "}· {formatNumber(Math.round(row.piutangJatuhTempo / 1000))} rb jatuh tempo
+                </span>
+              )}
             </span>
           )}
           {/* Payment standing for THIS stop, distinct from the credit-exposure
