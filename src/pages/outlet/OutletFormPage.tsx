@@ -181,9 +181,7 @@ export function OutletFormPage() {
     e.preventDefault();
     const next: typeof errors = {};
     if (!form.nama.trim()) next.nama = `Nama ${outletLabel()} wajib diisi.`;
-    // Required by the service, which makes it unique per tenant. The mock used
-    // to invent one and the hint said so -- against the API that produced a 422
-    // naming a field the form had told the operator to leave blank.
+    // Required by the service, which makes it unique per tenant.
     if (!form.kode.trim()) next.kode = "Kode wajib diisi.";
     if (!form.kecamatan.trim()) next.kecamatan = "Kecamatan wajib dipilih.";
     if (!form.telepon.trim()) next.telepon = "Nomor telepon wajib diisi agar dapat dihubungi kurir.";
@@ -243,10 +241,8 @@ export function OutletFormPage() {
               </Field>
 
               {/*
-                The hint used to promise "dibuat otomatis jika dikosongkan".
-                The mock did invent one; the service does not, and refuses a
-                create without it — so the form was telling the operator to
-                leave blank the one field that would fail the save.
+                No "dibuat otomatis jika dikosongkan" hint: the service does
+                not generate a code, and refuses a create without one.
               */}
               <Field
                 label="Kode"

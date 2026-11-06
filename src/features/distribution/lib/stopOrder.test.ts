@@ -96,8 +96,6 @@ describe("applySuggestion", () => {
   });
 
   it("leaves an already-chosen truck alone when the suggestion names none", () => {
-    // The mock suggester has no coordinates and never proposes a vehicle --
-    // see suggestAssignment.ts's own DASAR_KAPASITAS note.
     const rows = [row({ id: "a", outlet: "Pangkalan A", vehicleId: "v1", vehicle: "H 1234 AB" })];
     const suggestion: AssignmentSuggestion = {
       trips: [

@@ -32,11 +32,9 @@ export const setSIM3LONDefaultProduct = api.setSIM3LONDefaultProduct.bind(api);
  * deliberately outside the contract — putting it there would oblige an HTTP
  * implementation to answer a question the server has no part in.
  *
- * Built from the domain object both adapters return, so it works identically in
- * either build. The mock version used to list the plans drawing on the
- * agreement; that is dropped, because the API cannot supply them yet and a
- * document that silently shows fewer plans against a real backend than a demo
- * would be worse than one that shows none.
+ * Built from the domain object the adapter returns. It does not list the plans
+ * drawing on the agreement: no endpoint supplies them yet, and a document that
+ * silently shows fewer plans than exist would be worse than one that shows none.
  */
 export async function printSA(id: string): Promise<void> {
   const sa = await getSADetail(id);

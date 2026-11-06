@@ -106,12 +106,9 @@ it("builds the fleet description from make and model, falling back to the type",
 });
 
 /**
- * The expiry flag uses the same rule in both builds.
- *
  * STNK and KIR are what make a truck legal to run, and "lapses within 30 days"
- * is the notice a workshop booking needs. The HTTP adapter reuses the mock's
- * decoration rather than restating the window, so the two cannot drift into
- * flagging different trucks.
+ * is the notice a workshop booking needs. The adapter reuses the shared
+ * decoration rather than restating the window.
  */
 it("flags a certificate that has lapsed or lapses within 30 days", async () => {
   const soon = new Date(Date.now() + 10 * DAY).toISOString();

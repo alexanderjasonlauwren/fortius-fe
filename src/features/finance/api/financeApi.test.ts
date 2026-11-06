@@ -200,10 +200,7 @@ describe("invoice status", () => {
 
 describe("aging", () => {
   /**
-   * The bucket boundary mirrors mocks/ar.ts's own agingBucket exactly -- a
-   * mismatch here would put an invoice in a different collections bucket
-   * than the mock shows for the same age, silently disagreeing with itself
-   * across builds.
+   * An invoice belongs to a collections bucket by days past due.
    */
   it("buckets an overdue invoice by days past due, not by status", async () => {
     const overdue31 = new Date(Date.now() - 31 * 86_400_000).toISOString();

@@ -1,16 +1,15 @@
 /**
- * Entity model for the in-browser mock backend.
+ * Shared domain shapes: the entities more than one feature's adapter maps the
+ * API onto, in the console's Indonesian vocabulary.
  *
- * These are the *storage* shapes — normalised, id-linked, and close to what a
- * real API would return. Feature APIs map them into the view shapes that pages
- * already consume (`src/features/<x>/types.ts`), so swapping in a real backend
- * means rewriting only `src/features/<x>/api/*`.
+ * Each feature's `api/<f>Api.http.ts` owns its wire types and maps them here
+ * or into its own view types (`src/features/<f>/types.ts`). A shape only one
+ * feature uses belongs in that feature, not here.
  */
 
 export type ID = string;
 
 export type { GeoStamp } from "@/lib/geo";
-import type { GeoStamp } from "@/lib/geo";
 
 /* ── tenancy ───────────────────────────────────────────────────────────── */
 
@@ -177,8 +176,7 @@ export interface DriverEntity extends Scoped {
   id: ID;
   /**
    * The depot's own reference, DRV-0001. Required by the service and unique
-   * per tenant — it is what a dispatcher writes on paper and reads back, and
-   * the console had never modelled it because the mock never needed one.
+   * per tenant — it is what a dispatcher writes on paper and reads back.
    */
   kode: string;
   nama: string;
@@ -231,195 +229,6 @@ export type GeofenceShapeEntity =
   | { jenis: "Lingkaran"; pusat: { lat: number; lng: number }; radiusMeter: number }
   | { jenis: "Poligon"; batas: { lat: number; lng: number }[] };
 
-export interface GeofenceRuleEntity extends Scoped {
-  id: ID;
-  kode: string;
-  nama: string;
-  keterangan?: string;
-  bentuk: GeofenceShapeEntity;
-  subjek: "Rute" | "Wilayah outlet" | "Depot" | "Area terlarang";
-  outletId?: ID;
-  mode: "Keluar" | "Masuk";
-  keparahan: "Info" | "Peringatan" | "Kritis";
-  aktif: boolean;
-  version: number;
-}
-
-/**
- * A breach recorded against a fence.
- *
- * There is no route back to "Terbuka" once it has moved: reopening is the
- * evaluator's job, by filing a fresh alert, not an operator's by rewriting an
- * old one.
- */
-export interface GeofenceAlertEntity extends Scoped {
-  id: ID;
-  ruleId: ID;
-  pelanggaran: "Keluar" | "Masuk";
-  posisi: { lat: number; lng: number };
-  jarakMeter?: number;
-  terdeteksi: string;
-  status: "Terbuka" | "Ditinjau" | "Selesai" | "Bukan pelanggaran";
-  driverId?: ID;
-  catatan?: string;
-  version: number;
-}
-
-export type SAStatusEntity = "Draf" | "Aktif" | "Limit" | "Selesai";
-
-export interface SAEntity extends Scoped {
-  id: ID;
-  nomorSA: string;
-  supplier: string;
-  periodeMulai: string; // ISO date
-  periodeBerakhir: string; // ISO date
-  totalKuota: number;
-  /** Quota reserved by draft and confirmed plan rows. */
-  dialokasikan: number;
-  terpakai: number;
-  status: SAStatusEntity;
-  catatan?: string;
-  namaDokumen?: string;
-  diunggahOleh: string;
-  diunggahPada: string;
-  // Absent for an agreement typed by hand: the mock only models a single
-  // product per agreement (the real backend's SIM3LON import is the same,
-  // one product per batch), and a manual entry has no product quota at all
-  // until one is imported or added.
-  productId?: ID;
-  productName?: string;
-  /**
-   * Mock parity for core.sa_quota_opening_balances: outlet -> units delivered
-   * before the branch's planning start date. Folded into `dialokasikan` and
-   * `terpakai` the way the backend folds it into allocated and used.
-   */
-  saldoAwal?: Record<ID, number>;
-}
-
-/**
- * One date's stated obligation under an agreement.
- *
- * Kept per date rather than as a monthly total because a shortfall is argued
- * day by day: "the 24th was 300 and we delivered 210" is a claim, and a month's
- * figure divided by its working days is not.
- *
- * A target of zero is a real row. Sundays and public holidays are stated zeros,
- * and the distinction between "nothing was due" and "nobody entered it" is
- * exactly what this table exists to keep.
- */
-export interface SADailyTargetEntity {
-  id: ID;
-  saId: ID;
-  tanggal: string; // ISO date
-  target: number;
-  /**
-   * How the number arrived, not who typed it.
-   *
-   * A figure the supplier stated and one a person keyed from a PDF are
-   * different kinds of evidence, and only the file can be produced in an
-   * argument. `importBatchId` names which file.
-   */
-  sumber: "manual" | "file_import";
-  importBatchId: ID | null;
-}
-
-/**
- * An upload, and what applying it would do.
- *
- * The parsed rows are held on the batch so applying writes what was reviewed:
- * re-reading the file at apply time would let a different file be applied than
- * the one whose diff someone approved.
- */
-export interface SAImportBatchEntity {
-  id: ID;
-  saId: ID;
-  namaBerkas: string;
-  /** SHA-256 of the bytes read. */
-  checksum: string;
-  status: "parsed" | "applied";
-  dibuatPada: string;
-  diterapkanPada?: string;
-  rows: { tanggal: string; target: number }[];
-  barisDitulis: number;
-}
-
-/** Immutable outlet/day rows behind one applied SIM3LON monthly batch. */
-export interface SIM3LONSourceSnapshotEntity extends Scoped {
-  batchId: ID;
-  saId: ID;
-  productId: ID;
-  periodMonth: string;
-  status: "parsed" | "applied";
-  complete: boolean;
-  createdAt: string;
-  fileName?: string;
-  checksum?: string;
-  supplierName?: string;
-  rows: { date: string; outletId: ID; qty: number }[];
-}
-
-/** Mock parity for integration.sim3lon_plan_sources. */
-export interface SIM3LONPlanSourceEntity extends Scoped {
-  planId: ID;
-  batchId: ID;
-  productId: ID;
-  operationalDate: string;
-}
-
-export type PlanStatusEntity = "Draf" | "Terkonfirmasi" | "Selesai" | "Batal";
-
-export interface PlanEntity extends Scoped {
-  id: ID;
-  version: number;
-  kode: string;
-  tanggal: string; // ISO date
-  saId: ID;
-  status: PlanStatusEntity;
-  catatan?: string;
-  dibuatOleh: string;
-  dibuatPada: string;
-  dikonfirmasiOleh?: string;
-  dikonfirmasiPada?: string;
-}
-
-export interface PlanRowEntity {
-  id: ID;
-  planId: ID;
-  outletId: ID;
-  driverId: ID | null;
-  /**
-   * The truck this stop rides on. Null until the run is crewed.
-   *
-   * A driver and a vehicle are both properties of the run, not of the stop, so
-   * every row on one trip carries the same pair — the row is where they are
-   * stored because the console edits a plan as a list of stops.
-   *
-   * It exists because the service will not accept a run without one:
-   * `dispatch_trips.vehicle_id` and `deliveries.vehicle_id` are both NOT NULL.
-   * A board with drivers and no trucks cannot be applied, and the delivery it
-   * would produce cannot be written.
-   */
-  vehicleId?: ID | null;
-  lines: PlanRowLine[];
-  /** Derived: total units across `lines`. */
-  jumlahUnit: number;
-  jamPengiriman: string; // "HH:mm"
-  /**
-   * Which of the driver's depot cycles carries this stop. Null when nobody has
-   * been given it yet.
-   *
-   * Optional so every board saved before trips existed still loads; such a row
-   * reads as trip 1, which is what it was.
-   */
-  tripNo?: number | null;
-  /**
-   * Position within its run, 1-based. Optional for the same reason as
-   * `tripNo` -- a board saved before ordering was tracked has none, and such a
-   * stop sorts last rather than first.
-   */
-  urutan?: number | null;
-}
-
 /* ── transaction lines ─────────────────────────────────────────────────── */
 
 /**
@@ -438,18 +247,6 @@ export interface PlanRowEntity {
 export interface OrderLine {
   productId: ID;
   jumlah: number;
-}
-
-export type PlanRowLine = OrderLine;
-
-export interface DeliveryLine {
-  productId: ID;
-  /** Loaded onto the truck. */
-  target: number;
-  /** Accepted at the drop — what the invoice is raised from. */
-  realisasi: number;
-  /** Empty containers collected in exchange, for returnable products. */
-  kembali?: number;
 }
 
 /**
@@ -478,75 +275,7 @@ export interface InvoiceLine {
 
 export type DeliveryStatus = "Antrian" | "Proses" | "Selesai" | "Tertunda";
 
-export interface DeliveryEntity extends Scoped {
-  id: ID;
-  kode: string; // surat jalan number
-  planId: ID;
-  planRowId: ID;
-  outletId: ID;
-  driverId: ID;
-  tanggal: string; // ISO date
-  jamRencana: string; // "HH:mm"
-  lines: DeliveryLine[];
-  /** Derived from `lines`: total units loaded, accepted, and collected back. */
-  target: number;
-  realisasi: number;
-  status: DeliveryStatus;
-  mulaiPada?: string;
-  /**
-   * When the truck reached the gate, filed separately from closing the drop.
-   *
-   * The two are separate facts: a driver can wait at a pangkalan for an hour
-   * while somebody finds the person who signs, and that gap is the whole of
-   * what a delay report is made of. Without this the wait reads as zero,
-   * because the arrival gets stamped at the same instant as the completion.
-   */
-  tibaPada?: string;
-  selesaiPada?: string;
-  driverLat?: number;
-  driverLng?: number;
-  /**
-   * Empty cylinders collected at the drop.
-   *
-   * Recorded by the sopir, not derived: an outlet rarely returns exactly what
-   * it receives, and the difference is what cylinder reconciliation is about.
-   */
-  unitKembali?: number;
-  /** Who signed for the load — the proof-of-delivery the driver captures. */
-  diterimaOleh?: string;
-  catatan?: string;
-}
-
-/* ── delivery events ───────────────────────────────────────────────────── */
-
-export type DeliveryEventType = "berangkat" | "tiba" | "selesai" | "tertunda";
-
-/**
- * One thing the sopir filed, and where they were when they filed it.
- *
- * An append-only log rather than fields on the delivery, because a drop can be
- * departed, attempted, held and re-attempted — and the position at each of
- * those is a separate fact. Overwriting one slot would keep only the last.
- *
- * Mirrors core.delivery_events in the Go schema.
- */
-export interface DeliveryEventEntity extends Scoped {
-  id: ID;
-  deliveryId: ID;
-  driverId: ID;
-  tipe: DeliveryEventType;
-  at: string;
-  aktor: string;
-  posisi: GeoStamp;
-  /**
-   * Metres between the fix and the outlet, frozen at the time of filing.
-   *
-   * Stored rather than derived: re-pinning a outlet later would silently
-   * rewrite history, and this figure is what an auditor reads.
-   */
-  jarakMeter?: number;
-  catatan?: string;
-}
+/* ── transportation claims ─────────────────────────────────────────────── */
 
 /**
  * A claim for the transportation fee -- a BAST covering one calendar month.
@@ -662,45 +391,7 @@ export type PaymentStatusEntity =
   | "Terverifikasi"
   | "Ditolak";
 
-/** Money applied from one receipt to one invoice. */
-export interface PaymentAllocation {
-  invoiceId: ID;
-  jumlah: number;
-}
-
-/** Cash received from a outlet, which may settle several invoices. */
-export interface PaymentEntity extends Scoped {
-  id: ID;
-  nomor: string;
-  outletId: ID;
-  tanggal: string;
-  jumlah: number;
-  bank: BankNameEntity;
-  noRekening: string;
-  rekeningTujuanId?: ID;
-  status: PaymentStatusEntity;
-  /** Empty until the receipt is applied to invoices. */
-  alokasi: PaymentAllocation[];
-  buktiTransfer?: string;
-  keterangan?: string;
-  diverifikasiOleh?: string;
-  diverifikasiPada?: string;
-}
-
 export type CreditNoteStatus = "Terbit" | "Terpakai" | "Batal";
-
-/** A reduction of what is owed — returned cylinders, or a billing correction. */
-export interface CreditNoteEntity extends Scoped {
-  id: ID;
-  nomor: string;
-  outletId: ID;
-  invoiceId: ID | null;
-  tanggal: string;
-  jumlah: number;
-  alasan: string;
-  status: CreditNoteStatus;
-  dibuatOleh: string;
-}
 
 /* ── general ledger ────────────────────────────────────────────────────── */
 
@@ -738,18 +429,16 @@ export type AccountRole =
   | "selisihPersediaan"
   | "administrasiBank"
   | "pajakJasaGiro"
-  // Pre-existing backend accounts (fortius-backend's own tenantprovisioning/
-  // chart.go 1-1250/4-2000) the mock chart never carried until the
-  // financial-statements plan's ported layouts (phase P2) needed them.
+  // Backend accounts (tenantprovisioning/chart.go 1-1250/4-2000) the
+  // financial-statements layouts read.
   | "piutangTransportFee"
   | "pendapatanTransportFee"
   | "bebanBahanBakar"
   | "bebanTol"
   | "bebanPemeliharaan"
   | "bebanOperasionalLainnya"
-  // Mirrors fortius-backend's own "payable" role (tenantprovisioning/
-  // chart.go, 2-1000 Utang Usaha) -- gap-closing plan, Phase F, the first
-  // mock posting rule to need it (a general purchase's own credit side).
+  // The backend's "payable" role (tenantprovisioning/chart.go, 2-1000 Utang
+  // Usaha): a general purchase's credit side.
   | "hutangUsaha";
 
 export interface AccountEntity {
@@ -773,23 +462,14 @@ export interface AccountEntity {
   aktif: boolean;
 }
 
-export interface JournalLine {
-  akunId: ID;
-  debit: number;
-  kredit: number;
-  memo?: string;
-}
-
 export type JournalSourceType =
   | "invoice"
   | "payment"
   | "creditNote"
   | "delivery"
   | "manual"
-  // Mirrors fortius-backend's own fin.journals.source_type CHECK (no mock
-  // posting rule uses it yet): the financial-statements engine's own
-  // inventory-purchases cross-check (financial-statements plan, phase P2)
-  // needs to tell a real purchase journal apart from a hand-entered one.
+  // Mirrors fin.journals.source_type: the inventory-purchases cross-check
+  // tells a purchase journal apart from a hand-entered one.
   | "purchase"
   // Kas & Bank vouchers (financial-statements plan's gap-closing phase,
   // Phase B) -- mirrors the backend's "cash_voucher" source_type.
@@ -818,95 +498,7 @@ export type JournalSourceType =
   // The refund of an overpaid receipt (client answer 5); links to the receipt.
   | "paymentRefund";
 
-/**
- * A posted journal is immutable. Corrections are made by posting a reversal,
- * which is what an auditor expects to see.
- */
-export interface JournalEntity extends Scoped {
-  id: ID;
-  nomor: string;
-  tanggal: string;
-  keterangan: string;
-  sumber: { tipe: JournalSourceType; id: ID };
-  lines: JournalLine[];
-  status: "Diposting" | "Dibatalkan";
-  /** Set on a reversal, pointing at the entry it cancels. */
-  reversalDari?: ID;
-  dibuatOleh: string;
-  dibuatPada: string;
-  /** Bumped when this entry is itself reversed -- the version guard
-   *  reverseJournal's own caller echoes back (gap-closing plan, Phase E).
-   *  A journal is otherwise immutable, so this exists for exactly one
-   *  transition. */
-  version: number;
-}
-
 export type ReceiptStatus = "Menunggu Diperiksa" | "Tervalidasi" | "Ditolak";
-
-/**
- * One item read off a scanned receipt.
- *
- * `productId` is nullable on purpose. A scan reads text, not identifiers, and
- * "LPG 3KG SUBS." may match nothing in the catalogue — the same honest
- * unmatched state `outletId` and `bank` already carry. Forcing every line
- * onto a default product would silently bill the wrong item at the wrong price,
- * which is precisely the failure a review step exists to prevent.
- *
- * `namaTerbaca` keeps the raw text so the reviewer can see what the matcher was
- * working from, rather than only its conclusion.
- *
- * Mirrors ocr.receipt_items in the Go schema.
- */
-export interface ReceiptLine {
-  productId: ID | null;
-  namaTerbaca: string;
-  jumlah: number;
-  /** As printed on the paper — what the customer was actually charged. */
-  hargaSatuan: number;
-}
-
-export interface ReceiptEntity extends Scoped {
-  id: ID;
-  namaBerkas: string;
-  outletId: ID | null;
-  nomorKwitansi: string;
-  tanggalKwitansi: string;
-  lines: ReceiptLine[];
-  /** Derived from `lines`. Named for units, not cylinders — a receipt may
-   *  itemise anything the agency sells. */
-  jumlahUnit: number;
-  /**
-   * The total the document states, read separately from the items.
-   *
-   * Deliberately not derived: OCR reads the printed total and the line items as
-   * two independent facts, and a disagreement between them is the strongest
-   * signal that the scan is wrong. Computing one from the other would destroy
-   * the check.
-   */
-  nominal: number;
-  bank: BankNameEntity | null;
-  keyakinan: number; // OCR confidence 0..1
-  status: ReceiptStatus;
-  diunggahPada: string;
-  ditinjauOleh?: string;
-  ditinjauPada?: string;
-  paymentId?: ID;
-}
-
-export type NotificationTypeEntity = "Pengingat" | "Alert" | "Sistem";
-
-export interface NotificationEntity {
-  id: ID;
-  type: NotificationTypeEntity;
-  title: string;
-  message: string;
-  createdAt: string; // ISO datetime
-  isRead: boolean;
-  /** Where the "Buka" action should navigate. */
-  href?: string;
-  /** The reminder rule that produced this, when one did. */
-  rule?: ReminderRuleKey;
-}
 
 export interface AuditEntry {
   id: ID;
@@ -918,7 +510,7 @@ export interface AuditEntry {
   summary: string;
 }
 
-export type UserStatusEntity = "Aktif" | "Nonaktif" | "Diundang";
+export type UserStatusEntity = "Aktif" | "Nonaktif";
 
 export interface UserEntity {
   id: ID;
@@ -996,7 +588,7 @@ export interface ProductEntity {
   /**
    * Overrides the tenant's own inventory/revenue/cogs role account for this
    * product specifically (financial-statements plan P3.3) -- absent means
-   * "use the role", the mock chart's own `accountByRole`. Stored as the
+   * "use the role". Stored as the
    * account's own code, not id, matching the real backend's response shape
    * (ProductResponse carries `*_account_code`, never an id) -- the HTTP
    * adapter resolves code to id only at the create/update boundary.
@@ -1072,216 +664,20 @@ export interface BankAccountEntity {
 export type CashVoucherType = "receipt" | "disbursement" | "transfer";
 export type CashVoucherStatus = "draft" | "posted" | "void";
 
-/** One classified leg of a receipt/disbursement voucher -- mirrors
- *  fortius-backend's cashvoucher.LineRequest/LineResponse. */
-export interface CashVoucherLineEntity {
-  accountId: ID;
-  amount: number;
-  memo?: string;
-}
-
-/** Mirrors fortius-backend's internal/entities/cashvoucher.CashVoucherResponse. */
-export interface CashVoucherEntity extends Scoped {
-  id: ID;
-  voucherNumber: string;
-  voucherType: CashVoucherType;
-  voucherDate: string;
-  counterparty?: string;
-  description?: string;
-  bankAccountId: ID;
-  counterBankAccountId?: ID;
-  totalAmount: number;
-  status: CashVoucherStatus;
-  lines: CashVoucherLineEntity[];
-  /** Set once posted -- the journal this voucher's post wrote, so a void
-   *  can reverse exactly that entry via reverseJournal. */
-  journalId?: ID;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export type BankStatementLineStatus = "unmatched" | "matched" | "posted" | "ignored";
-
-/** One transaction line of an imported rekening koran -- mirrors
- *  fortius-backend's bankstatement.LineResponse. */
-export interface BankStatementLineEntity {
-  id: ID;
-  lineNo: number;
-  lineDate: string;
-  description: string;
-  reference: string;
-  debit: number;
-  credit: number;
-  balance?: number;
-  status: BankStatementLineStatus;
-  matchedSourceType?: string;
-  cashVoucherId?: ID;
-  /**
-   * Mock-only: which journal this line was derived from at import time (see
-   * bankStatementApi.mock.ts's own doc for why) -- autoMatch reads this to
-   * resolve the line to an already-posted document without re-searching
-   * the ledger by amount/date. Never serialised to a client; the real
-   * backend's own LineResponse has no equivalent, because there the line's
-   * own stored row already knows nothing about its origin until matched.
-   */
-  sourceJournalId?: ID;
-}
-
-/** Mirrors fortius-backend's internal/entities/bankstatement.ImportResponse. */
-export interface BankStatementImportEntity extends Scoped {
-  id: ID;
-  bankAccountId: ID;
-  periodFrom: string;
-  periodTo: string;
-  openingBalance: number;
-  closingBalance: number;
-  fileName: string;
-  lines: BankStatementLineEntity[];
-  createdAt: string;
-}
-
-/** An auto-classification rule -- mirrors bankstatement.RuleResponse. */
-export interface BankStatementRuleEntity extends Scoped {
-  id: ID;
-  pattern: string;
-  direction: "in" | "out";
-  accountId: ID;
-  sortOrder: number;
-  isActive: boolean;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/* ── registration packages (gap-closing plan, Phase C) ──────────────────── */
-
-/** One kit item a registration package issues. */
-export interface RegistrationPackageItemEntity {
-  productId: ID;
-  qty: number;
-}
-
-/** A reusable Pendaftaran Pangkalan template -- mirrors
- *  registrationpackage.PackageResponse. */
-export interface RegistrationPackageEntity extends Scoped {
-  id: ID;
-  name: string;
-  feeAmount: number;
-  isDefault: boolean;
-  isActive: boolean;
-  items: RegistrationPackageItemEntity[];
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
 
 /* ── asset register & depreciation runs (gap-closing plan, Phase D) ─────── */
 
 export type AssetClass = "building" | "vehicle" | "office_equipment" | "intangible" | "prepaid";
 export type AssetStatus = "active" | "fully_depreciated" | "disposed";
 
-/** A depreciable or amortisable register row -- mirrors asset.AssetResponse.
- *  `monthlyAmount`/`accumulatedToDate` are computed on read, never stored,
- *  the same way the real backend's own toResponse attaches them. */
-export interface AssetEntity extends Scoped {
-  id: ID;
-  assetCode: string;
-  name: string;
-  assetClass: AssetClass;
-  acquisitionDate: string;
-  depreciationStartDate: string;
-  cost: number;
-  residualValue: number;
-  usefulLifeMonths: number;
-  method: "straight_line";
-  openingAccumulated: number;
-  openingAsOf?: string;
-  assetAccountId: ID;
-  accumulatedAccountId?: ID;
-  expenseAccountId: ID;
-  vehicleId?: ID;
-  status: AssetStatus;
-  disposedAt?: string;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export type DepreciationRunStatus = "posted" | "void";
-
-/** One asset's charge within a run -- mirrors depreciationrun.LineResponse. */
-export interface DepreciationRunLineEntity {
-  assetId: ID;
-  amount: number;
-}
-
-/** One monthly depreciation run -- mirrors depreciationrun.
- *  DepreciationRunResponse. No draft state: a run computes its lines and
- *  posts the one balanced journal in the same write, the same reasoning
- *  the backend's own services.go header gives. */
-export interface DepreciationRunEntity extends Scoped {
-  id: ID;
-  period: string;
-  status: DepreciationRunStatus;
-  lines: DepreciationRunLineEntity[];
-  /** Set once posted -- the journal this run's post wrote, so a void can
-   *  reverse exactly that entry via reverseJournal. */
-  journalId?: ID;
-  version: number;
-  createdAt: string;
-}
 
 /* ── fiscal years & opening balance (gap-closing plan, Phase E) ─────────── */
 
 export type FiscalYearStatus = "open" | "closed";
 
-/** A fiscal year that has been closed (and possibly reopened) -- mirrors
- *  fiscalyear.FiscalYearResponse. A year that has never been closed has
- *  no row here at all; see FiscalYearSection's own doc for what that
- *  means for a "which years can I close" list. */
-export interface FiscalYearEntity extends Scoped {
-  year: number;
-  status: FiscalYearStatus;
-  closedAt?: string;
-  closingJournalId?: ID;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** Whether the one-time opening-balance commit has already run for this
- *  tenant -- mirrors the real backend's own refusal ("An opening balance
- *  already exists") on a second POST /opening-balance/commit. The mock
- *  cannot read an uploaded workbook's content (same documented gap
- *  externalstatements/bankstatements already carry), so this is the one
- *  piece of real state it keeps: not what was committed, only that
- *  something was. */
-export interface OpeningBalanceEntity extends Scoped {
-  asOf: string;
-  journalId: ID;
-  committedAt: string;
-}
-
 /* ── sub-ledger admin (gap-closing plan, Phase F) ────────────────────────── */
-
-/** A tenant-defined expense category -- mirrors expensecategory.
- *  ExpenseCategoryResponse. `core.expenses.category` is a composite FK into
- *  this table's own `code`, not a fixed CHECK list, so the create form's
- *  category picker and this screen's own filter both have to read it live
- *  rather than from a hardcoded enum. */
-export interface ExpenseCategoryEntity extends Scoped {
-  id: ID;
-  code: string;
-  name: string;
-  accountId: ID;
-  groupLabel: string;
-  sortOrder: number;
-  status: "atv" | "ina";
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
 
 /** A local vendor a general purchase (no Schedule Agreement behind it) pays
  *  -- mirrors supplier.SupplierResponse. Deliberately NOT the same concept
@@ -1304,40 +700,7 @@ export interface VendorEntity extends Scoped {
   updatedAt: string;
 }
 
-export interface PurchaseLine {
-  productId: ID;
-  quantity: number;
-  unitCost: number;
-  subtotal: number;
-}
-
 export type PurchasePaymentStatus = "unpaid" | "paid";
-
-/** A purchase -- mirrors purchase.PurchaseResponse. `scheduleAgreementId`
- *  is set only for an SA-redeemed ("tebus") purchase, a creation path this
- *  console still has no UI for (see PurchasesPage's own header); every
- *  purchase this console creates is a general one, `supplierId` always set
- *  to a VendorEntity row. */
-export interface PurchaseEntity extends Scoped {
-  id: ID;
-  purchaseNumber: string;
-  scheduleAgreementId?: ID;
-  supplierId: ID;
-  lines: PurchaseLine[];
-  redeemedAt: string;
-  subtotal: number;
-  taxPercentage: number;
-  taxAmount: number;
-  totalAmount: number;
-  totalQty: number;
-  paymentStatus: PurchasePaymentStatus;
-  paidAt?: string;
-  bankReference?: string;
-  notes?: string;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
 
 /** Document prefixes. Visible on every table row and printout. */
 export interface NumberingEntity {
@@ -1506,23 +869,6 @@ export interface SettingsEntity {
 }
 
 /**
- * One tenant's own settings, with the fields it has chosen to set.
- *
- * `Partial`, and that is the whole design: a field absent here means "not set
- * for this tenant, ask its parent". It mirrors iam.tenant_settings, where every
- * column is nullable and NULL means inherit — so a subsidiary that renames only
- * its lexicon still follows its group's working week.
- *
- * Flattening this to a full SettingsEntity per tenant would lose the
- * distinction, and saving the resolved values back would silently turn every
- * inherited value into an override the parent could never change again.
- */
-export interface TenantSettingsEntity {
-  tenantId: ID;
-  values: Partial<SettingsEntity>;
-}
-
-/**
  * Where a settings field came from, for one tenant.
  *
  * Mirrors the backend's GET /tenants/:id/settings, which returns the same three
@@ -1539,80 +885,4 @@ export interface ResolvedSettingsEntity {
    * absent from this map was either set here or is unset everywhere.
    */
   inheritedFrom: Partial<Record<keyof SettingsEntity, TenantEntity>>;
-}
-
-export interface Database {
-  version: number;
-  seededAt: string;
-  /**
-   * Every tenant in the tree, not one.
-   *
-   * Was `tenant: TenantEntity` while tenancy was flat and fixed by the session.
-   * The console now switches between them, so the store has to hold the shape
-   * the switcher renders.
-   */
-  tenants: TenantEntity[];
-  branches: BranchEntity[];
-  outlets: OutletEntity[];
-  drivers: DriverEntity[];
-  vehicles: VehicleEntity[];
-  geofenceRules: GeofenceRuleEntity[];
-  geofenceAlerts: GeofenceAlertEntity[];
-  scheduleAgreements: SAEntity[];
-  /** Daily obligations under an agreement. Follow their SA, like plan rows. */
-  saDailyTargets: SADailyTargetEntity[];
-  /** Uploads awaiting a decision, and the applied ones they became. */
-  saImportBatches: SAImportBatchEntity[];
-  sim3lonSourceSnapshots: SIM3LONSourceSnapshotEntity[];
-  sim3lonPlanSources: SIM3LONPlanSourceEntity[];
-  plans: PlanEntity[];
-  planRows: PlanRowEntity[];
-  deliveries: DeliveryEntity[];
-  deliveryEvents: DeliveryEventEntity[];
-  transportationClaims: TransportationClaimEntity[];
-  outletWarnings: OutletWarningEntity[];
-  payments: PaymentEntity[];
-  receipts: ReceiptEntity[];
-  notifications: NotificationEntity[];
-  audit: AuditEntry[];
-  users: UserEntity[];
-  products: ProductEntity[];
-  orders: OrderEntity[];
-  suppliers: SupplierEntity[];
-  bankAccounts: BankAccountEntity[];
-  accounts: AccountEntity[];
-  journals: JournalEntity[];
-  cashVouchers: CashVoucherEntity[];
-  bankStatementImports: BankStatementImportEntity[];
-  bankStatementRules: BankStatementRuleEntity[];
-  registrationPackages: RegistrationPackageEntity[];
-  assets: AssetEntity[];
-  depreciationRuns: DepreciationRunEntity[];
-  fiscalYears: FiscalYearEntity[];
-  openingBalances: OpeningBalanceEntity[];
-  expenseCategories: ExpenseCategoryEntity[];
-  vendors: VendorEntity[];
-  purchases: PurchaseEntity[];
-  invoices: InvoiceEntity[];
-  creditNotes: CreditNoteEntity[];
-  /**
-   * The acting tenant's settings, already resolved up the tree.
-   *
-   * Kept as a plain SettingsEntity because a dozen readers across the console
-   * want the effective value and nothing else — a print header wants the agency
-   * name, not the question of who set it. `getDb()` resolves it from
-   * `settingsByTenant` on every read.
-   */
-  settings: SettingsEntity;
-  /** Per-tenant overrides. The stored truth; `settings` above is derived. */
-  settingsByTenant: TenantSettingsEntity[];
-  /**
-   * The SIM3LON Penyaluran Harian import dialog's preselected product, per
-   * tenant, inheriting up the tree the same way `settingsByTenant` does.
-   * Kept separate from `settingsByTenant` rather than folded into
-   * `SettingsEntity`: it is this one dialog's own preference, not a field any
-   * settings screen edits, and the backend holds it on a column the generic
-   * tenant-settings endpoint deliberately does not expose either.
-   */
-  sim3lonDefaultProductByTenant: { tenantId: ID; code: string | null }[];
 }

@@ -33,7 +33,7 @@ older notices exist), and an outlet's recent deliveries.
 | dashboard | The dispatch rail has no clock: no planned time of day exists in the schema. Jejak aktivitas is shown only to roles with `audit.read.audit_trails`, and only writes of the last 30 days. |
 | depreciationruns | The "preview before posting" is computed in the browser (`lib/depreciation.ts`, a port of the backend's straight-line formula) because the backend has no dry-run endpoint; the two can drift. |
 | distribution | A stop's remaining monthly quota arrives on the row (`sisaKuotaOutlet`) but the planning table has no column for it. Re-uploading a source plan does not update drafts made from the previous upload. |
-| drivers | A driver's schedule shows `jam` empty: no planned time of day exists in the schema. |
+| drivers | A driver's schedule shows `jam` empty: no planned time of day exists in the schema. The list's delivery figures (hari ini, 30 hari, ketepatan) are hidden: no endpoint aggregates deliveries per driver. |
 | finance (Piutang, Penerimaan, Buku Besar) | Penerimaan's header no longer counts "belum dialokasikan" receipts: unallocated money cannot be filtered on the server, and the old count covered one tab's first page; the row spine still marks them. |
 | financedashboard | Tenant-wide, not per branch. A tenant still on the 2025 layout shows "—" for `laba_rugi_v2` lines it lacks. The 12-month trend is 12 requests. |
 | financereports | A vendor row does not drill down (vendors have no page). |
@@ -43,7 +43,7 @@ older notices exist), and an outlet's recent deliveries.
 | ocr | No OCR engine: what is "read" off a receipt is typed by hand. Uploads are scanned only once the installation runs clamd (`technical-gaps.md` T5); an infected file is refused (`FILE_INFECTED`). |
 | openingbalance | The refusal path for a deliberately broken workbook has not been verified against the real API (no scratch tenant without ledger activity existed); it is covered by unit tests only. |
 | orders | Mass approval is one request per order and reports the failures; scheduling several orders is one all-or-nothing request. A rejected order names no one under "diproses oleh": the order records an approver, not a rejecter. |
-| outlet | "Ditangguhkan" is the backend's `sus` (since 2026-11-02): listed and billable, refused at dispatch. What else a suspension should block is the client's call (`business-gaps.md` C6). |
+| outlet | "Ditangguhkan" is the backend's `sus` (since 2026-11-02): listed and billable, refused at dispatch. What else a suspension should block is the client's call (`business-gaps.md` C6). The delivery-derived figures (terpakai bulan ini, sisa kuota, tagihan tertunda, pengiriman terakhir) are hidden: no endpoint aggregates deliveries and invoices per outlet (`statistikTersedia` false). The amount owed shows, from `credit_balance`. |
 | products | Stock shows only for roles with `finance.read.inventory`; others see "Stok belum tersedia". Quantities are tenant-wide (`technical-gaps.md` T9). |
 | purchases | "Catat tebus" (SA detail, active agreements only) bills the whole granted quota at today's cost price; a partial tebus is not possible. |
 | sa | SA amendment and cancellation have no endpoint or screen (`business-gaps.md` C8). The source plant is free text (`supplier_name`, B6). |
@@ -51,7 +51,7 @@ older notices exist), and an outlet's recent deliveries.
 | sopir | GPS stops while the tab is in the background (`technical-gaps.md` T7). Filings and photos made with no signal wait in the phone's outbox (IndexedDB) and are sent with their Idempotency-Key when it is back, so nothing is filed twice; one the server refuses is shown with its reason. A filing still waiting is lost if the driver clears the browser's site data, and the server forgets a key after 24 hours. |
 | transactions | `jamRencana` is always empty; an unbilled delivery shows `nominal` 0. |
 | transportation | Per-trip pricing is not built (tariffs are per kg or per tabung). |
-| users | No invitation flow; the "Diundang" status is dead code. No user export or audit-trail read. |
+| users | No invitation flow: an account is created with its password. No user export or per-user audit-trail read. |
 
 ## No gaps recorded
 

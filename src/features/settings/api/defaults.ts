@@ -1,17 +1,13 @@
 import type { SettingsEntity } from "@/types/domain";
 
 /**
- * Neutral defaults for fields no endpoint owns yet.
+ * Neutral defaults for the fields this adapter does not read.
  *
  * `iam.tenant_settings` covers the lexicon and the operating window;
  * `iam.tenant_profiles` covers legal identity. SettingsEntity is wider than
- * both — numbering, notification rules, theme — and those have no endpoint. The
- * HTTP adapter merges over these rather than leaving them undefined and letting
- * a screen render blank.
- *
- * Written out rather than imported from `@/mocks/seed`, which is what the first
- * version did: that pulled the entire seed database — outlets, deliveries,
- * journals — into the API build's bundle, to read a handful of defaults.
+ * both — numbering, notification rules (the Notifikasi panel reads those from
+ * `/reminder-settings` itself), theme. The HTTP adapter merges over these
+ * rather than leaving them undefined and letting a screen render blank.
  *
  * The lexicon falls back to colourless words on purpose. A brand-new session
  * shows these for the moment before settings load, and a neutral noun is better

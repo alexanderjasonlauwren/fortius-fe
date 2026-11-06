@@ -66,8 +66,8 @@ export function OutletListPage() {
   const rows = list.data ?? [];
   const aktif = rows.filter((p) => p.status === "Aktif").length;
   // Outlets with an unverified invoice. The header clause below already hides
-  // itself when this is empty, which is what the API build produces -- invoices
-  // are not readable there, so the count is zero and nothing claims otherwise.
+  // itself when this is empty, which it is until invoices are counted per
+  // outlet (see OutletView.statistikTersedia).
   const tertunggak = rows.filter((p) => p.tagihanTertunda > 0);
 
   const columns: Column<OutletView>[] = [

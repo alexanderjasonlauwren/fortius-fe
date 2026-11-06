@@ -14,8 +14,7 @@ export const apiClient = axios.create({
   // written relative to it ("/users", "/profile"). The default was
   // ":3000/api" — the wrong port and one segment short of the router's
   // /api/v1 group, so every request 404'd. It went unnoticed because nothing
-  // had run against the API: the auth store was mock-only, so no build could
-  // get past the login screen to find out.
+  // had run against the API yet.
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8007/api/v1",
   headers: {
     "Content-Type": "application/json",

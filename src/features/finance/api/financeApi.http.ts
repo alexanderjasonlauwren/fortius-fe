@@ -4,9 +4,7 @@
  * Five backend resources sit behind this one console feature -- invoices,
  * payments, payment allocations, credit notes and journals -- all landed by
  * D2's plan (see fortius-backend's docs/flow-gap-analysis.md §F). This file
- * is where their wire shapes meet the console's existing view types, so nine
- * screens built against the mock keep working unchanged against the real
- * service.
+ * is where their wire shapes meet the console's view types.
  *
  * An invoice carries its surat jalan number (`delivery_number`) and a
  * receipt its allocation lines with invoice numbers -- both were gaps this
@@ -135,10 +133,7 @@ function toInvoiceStatus(paymentStatus: string): InvoiceStatus {
 }
 
 /**
- * Mirrors mocks/ar.ts's own `agingBucket` exactly -- kept as a second copy
- * rather than a shared import because that function takes a full
- * `InvoiceEntity`, and widening its signature to fit both builds is a larger
- * change than five lines of duplicated arithmetic.
+ * The console's aging buckets, by days past due.
  */
 function agingBucketFor(dueDateIso: string, today: string): (typeof AGING_BUCKETS)[number] {
   if (dueDateIso >= today) return "Belum jatuh tempo";
@@ -327,8 +322,8 @@ async function getAgingReport(): Promise<AgingReport> {
         buckets: Object.fromEntries(AGING_BUCKETS.map((b) => [b, 0])),
         total: 0,
         jatuhTempo: 0,
-        // Mirrors mocks/ar.ts's outletExposure: blocked only when the
-        // outlet opted into auto-blocking and is actually overdue.
+        // Blocked only when the outlet opted into auto-blocking and is
+        // actually overdue.
         terblokir: false,
       };
       byOutlet.set(inv.outletId, row);
@@ -839,11 +834,9 @@ const ACCOUNT_TYPE: Record<string, AccountType> = {
 
 /**
  * `idToCode` resolves `parent_id` (a uuid) to the parent's own code --
- * `induk` stores the code, same as the mock (see mocks/ledger.ts's own
- * accounts), so `leafAccounts()` can compare it against sibling codes
- * without caring which adapter produced the row. Omitting this lookup left
- * every API-mode account's `induk` undefined, which made `leafAccounts()` a
- * silent no-op against the real backend -- caught live posting a manual
+ * `induk` stores the code, so `leafAccounts()` can compare it against
+ * sibling codes. Omitting this lookup left every account's `induk`
+ * undefined, which made `leafAccounts()` a silent no-op -- caught live posting a manual
  * journal to "5-4000 Beban Umum dan Administrasi", a grouping header still
  * listed as selectable (gap-closing plan, Phase E).
  */

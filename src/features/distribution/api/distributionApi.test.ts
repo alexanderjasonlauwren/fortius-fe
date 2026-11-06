@@ -835,9 +835,8 @@ describe("dispatching a trip", () => {
 
 describe("the suggestion", () => {
   /**
-   * The service's proposal says the route was considered, and the mock's does
-   * not. That single line is the one place the two builds are supposed to
-   * differ, so it must not be copied from the packer.
+   * The service's proposal says how it measured the route, so the planner
+   * knows whether to trust the order it proposes.
    */
   it("reports the distance the service actually routed", async () => {
     send.mockResolvedValue({
@@ -867,8 +866,7 @@ describe("the suggestion", () => {
   });
 
   /**
-   * The service's proposal carries a schedule the mock cannot (see
-   * suggestAssignment.ts's own DASAR_KAPASITAS note) -- each stop's estimated
+   * The service's proposal carries a schedule -- each stop's estimated
    * arrival and the run's estimated departure both need to survive the
    * mapping, and the finish time belongs in the planner's own explanation.
    */
@@ -1051,8 +1049,7 @@ describe("printRouteSheet", () => {
   });
 
   /**
-   * The address gap this used to stay mock-only for is closed by
-   * `getOutletList()` -- a real, already-implemented endpoint. The stop's
+   * The address comes from `getOutletList()`. The stop's
    * address in the printed sheet must be the outlet's real one, not a dash.
    */
   it("resolves each stop's address from the outlet list", async () => {

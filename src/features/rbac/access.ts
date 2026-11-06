@@ -3,11 +3,8 @@ import { PERMISSIONS } from "./permissions";
 /**
  * How a session's authority is described on screen.
  *
- * Both of these used to be a lookup keyed on one role name -- `ROLE_LABEL[role]`
- * and `ROLE_SUMMARY[role]` -- which worked only while the console pretended a
- * person had exactly one role and only while those names were the mock's own.
- * Against the API both assumptions fail: a person may hold several, and the
- * names are whatever the tenant called them.
+ * Not a lookup keyed on one role name (`ROLE_LABEL[role]`): a person may hold
+ * several roles, and their names are whatever the tenant called them.
  */
 
 /**

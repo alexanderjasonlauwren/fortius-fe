@@ -2,16 +2,13 @@ import type { Paged } from "@/lib/api";
 /**
  * What every finance adapter must provide.
  *
- * Same reason as `features/vehicles/api/contract.ts`: without a contract the
- * mock and the HTTP adapter drift, and the drift shows up only in whichever
- * screen happens to read the field one of them forgot. This one is larger
- * than most because the backend's finance module is five real resources
+ * The domain shape screens read; the HTTP adapter maps the wire onto it.
+ * Larger than most because the backend's finance module is five resources
  * (invoices, payments, allocations, credit notes, journals) behind one
  * console feature.
  *
  * **Adapters return domain types.** The wire shape never escapes the HTTP
- * adapter -- mapping there is what keeps every component unaware of which
- * source it is running against.
+ * adapter.
  */
 import type { AccountBalance } from "@/features/finance/lib/accounts";
 import type { TrialBalanceRow, TrialBalanceTotals } from "@/features/finance/lib/trialBalance";

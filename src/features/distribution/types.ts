@@ -24,8 +24,7 @@ export interface DistributionPlan {
    *
    * Without it there is nothing to detect a concurrent edit against, and the
    * service refuses a write built on a stale value with 409 rather than
-   * overwriting whatever the other planner committed. The mock build has one
-   * writer and carries a constant.
+   * overwriting whatever the other planner committed.
    */
   version: number;
 }
@@ -77,17 +76,12 @@ export interface PlanRow {
   alasanBlokir?: string;
   /**
    * The run this stop's trip actually posts against once assigned — an
-   * opaque id, not a display value. On the API build this is the real
-   * `dispatch_trips.id` a saved board carries; the mock has no trips table
-   * at all, so it synthesises the same `driverId#tripNo` key the planner
-   * already groups rows by. Null until a driver and trip number are both
-   * set, since neither build can name a run before then.
+   * opaque id, not a display value: the `dispatch_trips.id` a saved board
+   * carries. Null until the board is saved with this stop on a run.
    */
   tripId?: string | null;
   /**
    * The trip's own status, when known (`"planned"`, `"dispatched"`, …).
-   * Absent on the mock build, which does not persist per-trip dispatch
-   * state — see `dispatchTrip`'s own header comment.
    */
   tripStatus?: string;
   /**
@@ -156,9 +150,8 @@ export interface SuggestedStop {
   /** False when no payment has arrived for this stop. Flagged, never hidden. */
   lunas: boolean;
   /**
-   * Estimated arrival, "HH:MM". Absent from the mock, which has no
-   * coordinates to estimate travel time from -- see suggestAssignment.ts's
-   * own DASAR_KAPASITAS note.
+   * Estimated arrival, "HH:MM". Absent when the outlet has no coordinates
+   * or the trip no departure.
    */
   eta?: string;
 }
@@ -176,7 +169,7 @@ export interface SuggestedTrip {
   /** Cylinders on this trip with no payment behind them yet. */
   muatanBerisiko: number;
   stops: SuggestedStop[];
-  /** Estimated departure, "HH:MM". Absent from the mock; see SuggestedStop.eta. */
+  /** Estimated departure, "HH:MM", when the suggestion sets one. */
   berangkat?: string;
 }
 
@@ -194,9 +187,9 @@ export interface AssignmentSuggestion {
   /**
    * What the proposal is based on, in the planner's own words.
    *
-   * The mock has no outlet coordinates, so it can propose which stops share a
-   * truck and never what order to drive them in. The service can do both. The
-   * panel prints this rather than asserting a quality neither adapter promised.
+   * Road distances when a router measured them, straight lines otherwise;
+   * the panel prints this rather than asserting a quality the proposal
+   * does not have.
    */
   dasar: string;
 }

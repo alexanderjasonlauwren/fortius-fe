@@ -70,8 +70,7 @@ export interface MonitoringRow {
   catatan?: string;
   /**
    * The optimistic-locking counter the http adapter reads off the board and
-   * echoes back on a write. The mock does not version its rows, so this is
-   * `0` there — nothing reads it in that build.
+   * echoes back on a write.
    */
   version: number;
 }

@@ -46,8 +46,7 @@ export function MonitoringTable({
           </span>
         </>
       ),
-      // Sorted by urutan, not jamRencana: against the API build jamRencana is
-      // always "", and sorting by it would be a no-op that only worked by
+      // Sorted by urutan, not jamRencana: jamRencana is always "", and sorting by it would be a no-op that only worked by
       // accident of a stable sort landing on server order.
       sortValue: (row) => row.urutan,
     },

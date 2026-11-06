@@ -1,10 +1,7 @@
 /**
  * What every monitoring adapter must provide.
  *
- * Same reason as every other feature's contract: without one the mock and the
- * HTTP adapter drift, and the drift surfaces only on whichever screen reads
- * the field one of them forgot. Here that screen is the one a dispatcher
- * leaves open all shift.
+ * The domain shape screens read; the HTTP adapter maps the wire onto it.
  *
  * **Adapters return domain types.** The wire shape never escapes the HTTP
  * adapter.
@@ -49,9 +46,7 @@ export interface SetDeliveryStatusInput {
   /**
    * Required for "Tertunda": `POST /deliveries/:id/fail` refuses a failure
    * nobody explained, and the database agrees
-   * (`ck_deliveries_failure_reason`). The mock enforces nothing today, but the
-   * dialog that calls this always supplies one now regardless of which build
-   * is running — a reason typed once should not depend on the data source.
+   * (`ck_deliveries_failure_reason`), so the dialog always supplies one.
    */
   catatan?: string;
 }

@@ -4,7 +4,7 @@
  * The language boundary lives here, as it does for users: the backend speaks
  * English and matches its own schema, the UI domain model is Indonesian. Mapping
  * in this file keeps the backend consistent with its published contract and
- * leaves every component unaware of which source it is running against.
+ * leaves every component unaware of the wire.
  */
 import { getAllPages, getOne, send } from "@/lib/api";
 import type { BranchEntity, ID, TenantEntity } from "@/types/domain";

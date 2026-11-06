@@ -41,8 +41,8 @@ export const getCreditApprovers = api.getCreditApprovers.bind(api);
 export const addApprovedOrders = addApprovedOrdersHttp;
 
 /**
- * The address gap that kept this mock-only is closed: `printRouteSheetHttp`
- * resolves each stop's address from `getOutletList()`. The delivery-time gap
+ * `printRouteSheetHttp` resolves each stop's address from `getOutletList()`.
+ * The delivery-time gap
  * is real and stays a "—", the same placeholder the live planning screen
  * already shows for it.
  */

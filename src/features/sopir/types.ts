@@ -96,8 +96,3 @@ export interface DriverRun {
   stopBerikutId: string | null;
 }
 
-export interface DriverOption {
-  id: string;
-  label: string;
-  sublabel: string;
-}

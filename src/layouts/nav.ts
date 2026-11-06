@@ -309,7 +309,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       // Two entries, because the service serves two lists. A driver swaps
       // trucks and a truck swaps drivers, so neither owns the other and the
-      // pairing belongs to the run -- see mocks/fleet.ts.
+      // pairing belongs to the run (core.dispatch_trips).
       {
         name: "Armada",
         href: "/vehicles",

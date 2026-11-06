@@ -1,13 +1,10 @@
 /**
  * What every driver-screen adapter must provide.
  *
- * Same reason as `features/sa/api/contract.ts`: without a contract the mock and
- * the HTTP adapter drift, and the drift shows up only on whichever screen reads
- * the field one of them forgot. Here that screen is a phone at a pangkalan
- * gate, which is the worst place to find out.
+ * The domain shape screens read; the HTTP adapter maps the wire onto it.
  */
 import type { Filing, ReplayResult } from "../lib/outbox";
-import type { DriverOption, DriverRun } from "../types";
+import type { DriverRun } from "../types";
 
 /**
  * What a filing hands back to the screen.
@@ -63,8 +60,7 @@ export interface SopirApi {
   /**
    * One driver's run for a day.
    *
-   * `driverId` is what the *mock* narrows by, and what the demo's driver picker
-   * supplies. Against the service it is ignored: the run comes from
+   * `driverId` is ignored: the run comes from
    * `GET /deliveries/mine`, which resolves the driver from the session. Two
    * drivers in one branch are the same tenant, so no policy separates them —
    * an id in flight would be an id a caller could change.
@@ -92,11 +88,6 @@ export interface SopirApi {
   /** Drops a filing the server refused, once the driver has seen why. */
   discardFiling(id: string): Promise<void>;
 
-  /**
-   * Fleet list for accounts that are not themselves a sopir — a dispatcher
-   * covering the radio, or an admin checking what the driver sees.
-   */
-  getDriverOptions(): Promise<DriverOption[]>;
 
   /**
    * Reports a batch of positions for the caller's own currently-dispatched

@@ -1,9 +1,7 @@
 /**
  * What every product adapter must provide.
  *
- * Same reason as every other feature's contract: without one the mock and the
- * HTTP adapter drift, and the drift shows up only in whichever screen reads
- * the field one of them forgot.
+ * The domain shape screens read; the HTTP adapter maps the wire onto it.
  *
  * # Why `stokTersedia` exists
  *
@@ -65,7 +63,7 @@ export interface ProductApi {
     input: Partial<ProductEntity> & { id?: string },
   ): Promise<ProductView>;
   removeProduct(id: string): Promise<void>;
-  /** Mock-only in this build — see `productApi.http.ts`'s own note. */
+  /** Counts and stock value over the catalogue, from `/inventory/stock`. */
   getStockSummary(): Promise<StockSummary>;
   /** The global measurement units a product's unit names. */
   getUnits(): Promise<UnitOption[]>;

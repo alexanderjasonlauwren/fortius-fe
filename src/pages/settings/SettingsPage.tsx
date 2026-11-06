@@ -164,8 +164,8 @@ export function SettingsPage() {
   /**
    * Belt-and-braces: `if (!form)` alone cannot tell "still loading" from
    * "failed" — both leave `form` null — so a genuine error read as an
-   * eternal skeleton, with nothing on screen explaining why. Found live
-   * against the API build; see lib/scope.ts's `setActiveScope` for the
+   * eternal skeleton, with nothing on screen explaining why. Found live; see
+   * lib/scope.ts's `setActiveScope` for the
    * root-cause fix this is deliberately kept alongside, not instead of.
    */
   if (settings.isError) {

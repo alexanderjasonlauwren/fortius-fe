@@ -92,7 +92,6 @@ const STATUS_MAP: Record<string, StatusVariant> = {
   Diabaikan: "draft",
   Standby: "draft",
   Cuti: "draft",
-  Diundang: "draft",
 
   Info: "info",
 };

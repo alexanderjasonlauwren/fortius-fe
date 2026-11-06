@@ -1,13 +1,10 @@
 /**
  * What every outlet adapter must provide.
  *
- * Same reason as `features/sa/api/contract.ts`: without a contract the mock and
- * the HTTP adapter drift, and the drift shows up only in whichever screen
- * happens to read the field one of them forgot.
+ * The domain shape screens read; the HTTP adapter maps the wire onto it.
  *
  * **Adapters return domain types.** The wire shape never escapes the HTTP
- * adapter — mapping there is what keeps every component unaware of which source
- * it is running against.
+ * adapter — mapping there keeps every component unaware of the wire.
  */
 import type { OutletEntity, OutletStatus } from "@/types/domain";
 
@@ -16,11 +13,11 @@ import type { OutletEntity, OutletStatus } from "@/types/domain";
  *
  * # Why `statistikTersedia` exists
  *
- * Five of these are computed from deliveries and invoices — modules the service
- * does not have yet. The alternative to a flag was reporting them as zero,
+ * Five of these are counted from deliveries and invoices, which no endpoint
+ * aggregates per outlet yet. The alternative to a flag was reporting them as zero,
  * which is not a smaller lie: "0 tagihan tertunda" says this outlet owes
  * nothing, and "sisa kuota 0" says it may take no more cylinders. Both are
- * claims the API build cannot make, and both are exactly the sort a planner
+ * claims the console cannot make, and both are exactly the sort a planner
  * acts on.
  *
  * A flag rather than five nullable numbers because the answer is the same for
@@ -28,9 +25,9 @@ import type { OutletEntity, OutletStatus } from "@/types/domain";
  * is hidden whole, which reads as "not available here" rather than as a row of
  * dashes that look like missing data.
  *
- * `nilaiTertunda` is the exception and is populated in both builds:
- * `credit_balance` is a column on the outlet, so what the outlet owes is known
- * even where the invoices behind it are not.
+ * `nilaiTertunda` is the exception and is always populated: `credit_balance`
+ * is a column on the outlet, so what the outlet owes is known without
+ * counting its invoices.
  */
 export interface OutletView extends OutletEntity {
   /** Cylinders delivered to this outlet in the current month. */
@@ -41,9 +38,8 @@ export interface OutletView extends OutletEntity {
   nilaiTertunda: number;
   pengirimanTerakhir?: string;
   /**
-   * Whether the four delivery-derived figures above mean anything in this
-   * build. False on the API build, where deliveries and invoices have no
-   * service behind them.
+   * Whether the four delivery-derived figures above mean anything. False
+   * until an endpoint aggregates them per outlet.
    */
   statistikTersedia: boolean;
 }

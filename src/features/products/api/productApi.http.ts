@@ -76,8 +76,8 @@ async function resolveDefaultCategory(): Promise<string> {
 }
 
 /**
- * `ukuran` is a free-text display label in the mock ("3kg", "5.5kg") with no
- * equivalent column server-side — the closest real field is `weight_kg`, the
+ * `ukuran` is a free-text display label ("3kg", "5.5kg") with no equivalent
+ * column server-side — the closest real field is `weight_kg`, the
  * weight of one unit, which is what "ukuran" means for a cylinder catalogue
  * in practice. Read back formatted as "<n> kg"; written back by taking the
  * leading number out of whatever the form holds, so a size typed as "12" or
@@ -202,8 +202,8 @@ async function getProductDetail(id: string): Promise<ProductView> {
 
 /**
  * `code` is required server-side; the form's own hint says it is "dibuat
- * otomatis jika dikosongkan" (generated automatically if left blank), which
- * the mock honours by auto-numbering. Kept true here rather than sending an
+ * otomatis jika dikosongkan" (generated automatically if left blank). Kept
+ * true here rather than sending an
  * empty string and letting the server's 422 contradict the form's own promise.
  */
 function generateCode(name: string): string {

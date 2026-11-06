@@ -1,13 +1,10 @@
 /**
  * What every distribution planning adapter must provide.
  *
- * Same reason as `features/sa/api/contract.ts`: without a contract the mock and
- * the HTTP adapter drift, and the drift shows up only in whichever screen
- * happens to read the field one of them forgot.
+ * The domain shape screens read; the HTTP adapter maps the wire onto it.
  *
  * **Adapters return domain types.** The wire shape never escapes the HTTP
- * adapter — mapping there is what keeps every component unaware of which source
- * it is running against.
+ * adapter — mapping there keeps every component unaware of the wire.
  */
 import type {
   AssignmentSuggestion,
@@ -103,7 +100,7 @@ export interface DistributionApi {
    *
    * `saId` is the agreement its stops will draw on. The service records the
    * agreement per stop rather than per plan — one plan can legitimately spend a
-   * base SA and a doping SA — so on the API build this choice is the default
+   * base SA and a doping SA — so this choice is the default
    * applied to each stop as it is added, not a field stored on the plan. A plan
    * saved with no stops therefore does not remember it; see
    * `docs/technical-gaps.md`.

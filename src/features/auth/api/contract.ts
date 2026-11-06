@@ -1,9 +1,7 @@
 /**
  * What every auth adapter must provide.
  *
- * Same reason as `features/users/api/contract.ts`: without a contract the mock
- * and the HTTP adapter drift, and the drift only shows up in whichever screen
- * happens to read the field one of them forgot.
+ * The domain shape screens read; the HTTP adapter maps the wire onto it.
  *
  * **Adapters return domain types.** `SessionResult` is the console's shape, not
  * the wire's — the backend's `SessionResponse` never escapes the HTTP adapter.
