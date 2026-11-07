@@ -34,8 +34,7 @@
  * second lookup here. `jamRencana` stays empty: no planned-time-of-day
  * field exists anywhere in the schema, the same gap `monitoringApi.http.ts`
  * already carries for the same reason. An unbilled delivery's `nominal`
- * reads 0 rather than the mock's catalogue-price estimate -- the API has no
- * per-delivery unit price to estimate from, and 0 is honest about what has
+ * reads 0 rather than a catalogue-price estimate: 0 is honest about what has
  * actually been billed so far.
  */
 import { type Paged, getAllPages, getPage } from "@/lib/api";
@@ -236,8 +235,7 @@ async function getTransactionSummary(filters?: TransactionFilters): Promise<Tran
  * Options for the filter bar. Reads the real outlet and driver lists
  * (complete, not just what happens to be on the current page) rather than
  * deriving them from fetched rows -- an outlet or driver with zero
- * transactions this period should still be choosable, same as the mock's
- * own `getTransactionFilterOptions`.
+ * transactions this period should still be choosable.
  *
  * The driver label carries no plate: `driverApi`'s own contract states why
  * -- a driver has no static truck, only whichever one it used on a given

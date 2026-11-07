@@ -22,9 +22,8 @@
  * the same reason `sopirApi.http.ts` sets it — the plan carries a stop's
  * *position*, not a clock time; `urutan` (from `sequence_no`) is what actually
  * orders a round now, and `lib/roundSequence.ts` / `MonitoringTable` sort by
- * it rather than by the empty string. `durasi` is not invented the way the
- * mock's "±15 menit" is — it is computed from the real arrival timestamp, so
- * it is a measurement rather than a placeholder wherever a truck is actually
+ * it rather than by the empty string. `durasi` is computed from the real
+ * arrival timestamp, so it is a measurement wherever a truck is actually
  * standing at a gate.
  *
  * The `"kasar"` verdict is reachable: the board carries `filed_accuracy_m`,
@@ -259,7 +258,7 @@ function toDriverStatus(driver: BoardDriverWire, mine: BoardStopWire[]): DriverS
   return "Standby";
 }
 
-/** "±N menit" from a real arrival, not the mock's fixed guess. */
+/** "±N menit" since a real arrival. */
 function minutesSince(iso: string): string {
   const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
   return `±${minutes} menit`;
@@ -316,8 +315,8 @@ function toAssignment(
   });
 
   // Trucks with no fix and nothing driven yet fan around the depot, so their
-  // pins do not stack into one unreadable marker — the same trick the mock
-  // does, from whichever depot the run's own branch resolves to.
+  // pins do not stack into one unreadable marker, around whichever depot the
+  // run's own branch resolves to.
   const depotLat = driver.depot_latitude ?? FALLBACK_COORD.lat;
   const depotLng = driver.depot_longitude ?? FALLBACK_COORD.lng;
   const angle = (index / Math.max(1, totalDrivers)) * Math.PI * 2;

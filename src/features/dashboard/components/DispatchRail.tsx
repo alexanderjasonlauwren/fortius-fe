@@ -17,9 +17,9 @@ import { outletLabelTitle } from "@/lib/lexicon";
  * totals. A stop's position is its planned window; the "now" marker makes late
  * work obvious without anyone reading a status column.
  *
- * `data.hasSchedule` is false against the real API: no field for a stop's
- * planned time of day exists anywhere in the schema (`jamRencana` reads
- * empty everywhere else on this build for the same reason). The rail still
+ * `data.hasSchedule` is false: no field for a stop's planned time of day
+ * exists anywhere in the schema (`jamRencana` reads empty everywhere else for
+ * the same reason). The rail still
  * positions stops left-to-right by their real visiting order in that case
  * -- it just stops drawing a clock ruler, a "now" line and a late verdict
  * over a position that isn't a real time, rather than presenting an

@@ -84,8 +84,8 @@ export interface DispatchRail {
   /**
    * False when a stop's startMinute/endMinute are a layout device rather
    * than a real planned time -- no field for a stop's time of day exists
-   * anywhere in the schema (the real API build's own `jamRencana` reads
-   * empty everywhere else for the same reason). The rail still positions
+   * anywhere in the schema (`jamRencana` reads empty everywhere else for
+   * the same reason). The rail still positions
    * stops left-to-right by their real visiting order in that case; it just
    * stops presenting that position as a clock.
    */

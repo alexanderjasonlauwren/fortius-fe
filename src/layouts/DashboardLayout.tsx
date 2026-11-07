@@ -20,8 +20,7 @@ export function DashboardLayout() {
   const collapsed = useSidebarStore((s) => s.collapsed);
 
   // Establishes the active branch before any child query runs.
-  // The tenant list, fetched through whichever adapter this build uses and
-  // handed to the registry that useScope reads synchronously. Done here because
+  // The tenant list, fetched and handed to the registry that useScope reads synchronously. Done here because
   // the layout owns the session and renders above every screen that needs a
   // scope.
   const tenantList = useQuery({

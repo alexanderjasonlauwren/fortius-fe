@@ -356,8 +356,7 @@ export function DriverPage() {
                 {/*
                   The depot's own reference. Required by the service and unique
                   per tenant -- it is what a dispatcher writes on a run sheet
-                  and reads back, and it had no field here because the mock
-                  never needed one.
+                  and reads back.
                 */}
                 <Field label="Kode" htmlFor="d-kode" error={errors.kode} required>
                   <TextInput

@@ -130,8 +130,8 @@ describe("reading", () => {
 describe("writing", () => {
   /**
    * The form's own hint claims a blank code is "dibuat otomatis" (generated
-   * automatically) -- true for the mock, and a real 422 from the server
-   * without this fix, since `code` is required there. A build once sent an
+   * automatically) -- a real 422 from the server without this fix, since
+   * `code` is required there. A build once sent an
    * empty string and let the form's own promise turn into an error toast.
    */
   it("generates a code when the form leaves it blank, honouring its own hint", async () => {

@@ -13,8 +13,8 @@ import type { ToastOptions } from "@/components/ui/toast-context";
  *
  * # Why invalidating everything is still the default
  *
- * It is correct and it is nearly free against the mock, where a refetch is a
- * read of an in-memory store. Narrowing it globally would be a silent
+ * It is correct, and React Query only refetches what is mounted. Narrowing it
+ * globally would be a silent
  * regression across twenty screens that rely on the broad sweep -- a payment
  * verified on one page would stop updating the bell on another, and nobody
  * would notice until someone complained about a stale number.

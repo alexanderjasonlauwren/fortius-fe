@@ -38,8 +38,8 @@ import { leafAccounts } from "@/features/finance/lib/accounts";
 import { scopeKey } from "@/lib/scope";
 
 /** Account codes the quick templates pre-select -- confirmed to exist on
- *  both the real chart (tenantprovisioning/chart.go) and the mock's own
- *  (mocks/ledger.ts), so the suggestion is never a dead pick. */
+ *  the provisioned chart (tenantprovisioning/chart.go), so the suggestion is
+ *  never a dead pick. */
 const QUICK_TEMPLATES: {
   label: string;
   voucherType: CashVoucherType;

@@ -72,8 +72,8 @@ export function UserListPage() {
   const saveMutation = useDeskMutation({
     mutationFn: (values: FormState) => createOrUpdateUser(values),
     errorTitle: "Akun tidak tersimpan",
-    success: (u) => ({
-      title: u.status === "Diundang" ? `Undangan dikirim ke ${u.email}` : `${u.nama} diperbarui`,
+    success: (u, values) => ({
+      title: values.id ? `${u.nama} diperbarui` : `${u.nama} ditambahkan`,
     }),
     onDone: () => setEditing(null),
   });
@@ -228,7 +228,7 @@ export function UserListPage() {
         actions={
           <Button onClick={() => openEditor(EMPTY)}>
             <UserPlus className="h-3.5 w-3.5" />
-            Undang pengguna
+            Tambah pengguna
           </Button>
         }
       />
@@ -266,10 +266,10 @@ export function UserListPage() {
           defaultSortKey="nama"
           emptyIcon={Users}
           emptyMessage="Tidak ada pengguna yang cocok"
-          emptyDescription="Ubah filter, atau undang anggota tim baru."
+          emptyDescription="Ubah filter, atau tambahkan anggota tim baru."
           emptyAction={
             <Button size="sm" onClick={() => openEditor(EMPTY)}>
-              Undang pengguna
+              Tambah pengguna
             </Button>
           }
           dense
@@ -283,7 +283,7 @@ export function UserListPage() {
           <form onSubmit={submit}>
             <DialogHeader>
               <DialogTitle>
-                {editing?.id ? `Ubah akses ${editing.nama}` : "Undang pengguna"}
+                {editing?.id ? `Ubah akses ${editing.nama}` : "Tambah pengguna"}
               </DialogTitle>
               <DialogDescription>
                 {editing?.id
@@ -363,7 +363,7 @@ export function UserListPage() {
                 Batal
               </Button>
               <Button type="submit" disabled={saveMutation.isPending}>
-                {editing?.id ? "Simpan perubahan" : "Kirim undangan"}
+                {editing?.id ? "Simpan perubahan" : "Buat akun"}
               </Button>
             </DialogFooter>
           </form>

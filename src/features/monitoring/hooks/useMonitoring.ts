@@ -30,16 +30,14 @@ export function useMonitoring() {
   const statusMutation = useDeskMutation({
     mutationFn: setDeliveryStatus,
     // Just this board, not every query in the console. The default sweep is
-    // right almost everywhere and nearly free against the mock, but this
+    // right almost everywhere, but this
     // screen polls every thirty seconds and draws a map whose rounds are
     // road-snapped through a router: one "Berangkat" press re-ran every one
     // of those requests, and against a real router that is N calls per click.
     invalidate: [[...scopeKey(), "monitoring-snapshot"]],
     errorTitle: "Gagal memperbarui surat jalan",
-    // No invoice claim here: the service has no billing module behind this
-    // board yet, and a toast promising one would be a promise the system
-    // does not keep. Dropped from both builds rather than made conditional
-    // on the data source, so the demo does not train anyone to expect it.
+    // No invoice claim here: completing a drop does not raise one (the
+    // invoice is raised at dispatch), so the toast promises nothing.
     success: (delivery) => ({
       title: `${delivery.kode} → ${delivery.status}`,
       description:

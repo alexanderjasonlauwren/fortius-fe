@@ -2,9 +2,7 @@
  * What every financial-statement adapter must provide.
  *
  * Mirrors fortius-backend's internal/entities/financialstatement package
- * field for field -- the mock's own engine (lib/engine.ts) computes the
- * same shape locally so a screen built against one adapter needs no
- * changes to run against the other. Financial-statements plan, phase P2.
+ * field for field.
  */
 
 export type StatementLineKind =
@@ -182,10 +180,7 @@ export interface FinancialStatementsApi {
     limit?: number;
     offset?: number;
   }): Promise<GeneralLedgerPage>;
-  /** Downloads the .xlsx package -- the http adapter triggers a browser
-   *  save; the mock adapter renders the same three sheets with
-   *  `exportExcel`. Returns the number of bytes/rows written, only so a
-   *  caller has something to show a toast about. */
+  /** Downloads the .xlsx package the backend renders, as a browser save. */
   downloadPackage(input: {
     fiscalYear?: number;
     dateFrom?: string;

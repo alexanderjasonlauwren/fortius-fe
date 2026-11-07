@@ -6,7 +6,7 @@
  * a depreciation run (CreateRun computes and posts in the same write, per
  * its own services.go header) -- a "preview before posting" has nowhere to
  * come from but this same arithmetic, run against the asset list already
- * on hand, in both api and mock modes alike.
+ * on hand.
  */
 
 /** The standard straight-line charge: (cost-residual) / useful_life_months,

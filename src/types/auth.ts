@@ -1,14 +1,11 @@
 /**
- * Role names, as the mock database and the users list use them.
+ * The seeded role codes, for the users list's role column and its summaries.
  *
  * NOT the session's model of authority. A signed-in user carries `roles` — a
- * list, because the backend has always allowed several and has no `role` column
- * on iam.users to read — and nothing branches on those names. What a person may
+ * list, because the backend allows several and has no `role` column on
+ * iam.users to read — and nothing branches on those names. What a person may
  * do is `permissions`, resolved per request by the server from iam.user_roles.
- *
- * This union survives because the users LIST still shows a role column backed
- * by mock data. It is display vocabulary, and it should go when that list is
- * wired to the API.
+ * A tenant's own role, outside this list, shows its code as stored.
  */
 export type UserRole =
   | "admin"

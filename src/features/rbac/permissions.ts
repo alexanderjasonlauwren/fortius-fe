@@ -405,7 +405,7 @@ export const PERMISSIONS = {
   // The `console.` prefix is deliberate and is a to-do list, not a design. No
   // backend role grants these, so against the API the features they guard stay
   // hidden — which is correct, because the routes behind them do not exist
-  // either. The mock grants them so the demo is complete.
+  // either.
   //
   // Empty as of the finance ledger landing: REPORTS_VIEW and REPORTS_EXPORT
   // were the last two entries here, gating LedgerPage, ReportsPage and
@@ -422,8 +422,7 @@ export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 /**
  * Codes the backend does not define, so nothing can grant them over HTTP.
  *
- * Exported so the mock can grant exactly this set and a test can assert the
- * list shrinks rather than grows.
+ * Exported so a test can assert the list shrinks rather than grows.
  */
 export const CONSOLE_ONLY_PERMISSIONS: readonly string[] = Object.values(
   PERMISSIONS,

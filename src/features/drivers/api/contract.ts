@@ -10,9 +10,8 @@
  * driver's capacity?" answerable — and the answer was wrong on any day they
  * took a different truck.
  *
- * Screens that want to show a driver with their truck read the vehicle list.
- * In the demo build that pairing is `mocks/fleet.ts`; against the service it is
- * the dispatch board, which is the only place it is real.
+ * Screens that want to show a driver with their truck read the dispatch
+ * board, which is the only place that pairing is real.
  */
 import type { DriverEntity, DriverStatusEntity } from "@/types/domain";
 
@@ -20,8 +19,8 @@ import type { DriverEntity, DriverStatusEntity } from "@/types/domain";
  * A driver with the figures the screens put beside them.
  *
  * `statistikTersedia` carries the same meaning it does on the outlet view:
- * every number here is counted from `core.deliveries`, which has no service
- * yet. Reported as zero, "0 pengiriman, ketepatan 100%" describes a driver who
+ * every number here is counted from `core.deliveries`, which no endpoint
+ * aggregates per driver yet. Reported as zero, "0 pengiriman, ketepatan 100%" describes a driver who
  * has done nothing perfectly — a sentence with no true reading.
  */
 export interface DriverView extends DriverEntity {
@@ -35,8 +34,8 @@ export interface DriverView extends DriverEntity {
   /** Share of drops finished on the day they were planned, 0..1. */
   ketepatan: number;
   /**
-   * Whether the six figures above mean anything in this build. False against
-   * the service, which does not serve deliveries.
+   * Whether the six figures above mean anything. False until an endpoint
+   * aggregates them per driver.
    */
   statistikTersedia: boolean;
 }

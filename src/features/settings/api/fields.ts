@@ -5,8 +5,7 @@ import type { SettingsEntity } from "@/types/domain";
  *
  * The list follows the backend's `iam.tenant_settings` columns exactly, because
  * an inheritance badge is a promise about behaviour — showing one for a field
- * the API cannot carry would be a lie in the API build, and a demo-only truth in
- * the mock.
+ * the API cannot carry would be a lie.
  *
  *   unit_term / outlet_term / supplier_term   -> istilah
  *   operating_hours_start / _end              -> jamOperasional*

@@ -1,15 +1,8 @@
 /**
  * The session, as the console sees it.
  *
- * This store used to *be* the authentication: it read the mock user table
- * directly, compared against a hardcoded demo password and minted a fake JWT.
- * That made the API build unable to log in at all, which in turn meant none of
- * the HTTP adapters behind it had ever run.
- *
- * Now it holds session state and delegates every I/O decision to `authApi`,
- * which is the mock or the real service depending on the build. The demo
- * behaves exactly as before — same password, same messages — because that
- * behaviour moved into `authApi.mock.ts` rather than being deleted.
+ * It holds session state and delegates every I/O decision to `authApi`; the
+ * tokens themselves are stored by the HTTP adapter (`lib/tokens.ts`).
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -23,7 +16,7 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
-  /** The tenant this session acts as. Null against the mock, which has one. */
+  /** The tenant this session acts as. Null until a session is read. */
   tenant: SessionTenant | null;
 
   login: (email: string, password: string) => Promise<void>;
@@ -35,7 +28,6 @@ interface AuthState {
    * reload — see the comment on `partialize` below.
    */
   restore: () => Promise<void>;
-  setUser: (user: User, token: string) => void;
   /**
    * Re-issues the session in another tenant. Resolves once the new user,
    * tenant and permissions are in the store; throws, leaving the session as it
@@ -56,10 +48,6 @@ export const useAuthStore = create<AuthState>()(
       login: async (email: string, password: string) => {
         const { user, tenant, token } = await authApi.login(email, password);
         set({ user, tenant, token, isAuthenticated: true });
-        // The HTTP adapter has already stored both tokens; the mock has no
-        // real ones. Writing the access token here keeps the key populated for
-        // the mock build, where some screens still read it directly.
-        localStorage.setItem("auth_token", token);
       },
 
       restore: async () => {
@@ -88,11 +76,6 @@ export const useAuthStore = create<AuthState>()(
         // nobody can see or revoke from the UI.
         clearSessionTokens();
         set({ user: null, tenant: null, token: null, isAuthenticated: false });
-      },
-
-      setUser: (user: User, token: string) => {
-        set({ user, token, isAuthenticated: true });
-        localStorage.setItem("auth_token", token);
       },
 
       switchTenant: async (tenantId: string) => {

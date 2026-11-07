@@ -63,9 +63,7 @@ export function useDistributionPlan() {
   //
   // A list row cannot carry which agreement the plan spends: the service
   // records that per stop, so it is only known once the stops have been
-  // fetched. Finding the plan in the list left the panel showing "—" for the SA
-  // on the API build while the mock showed the real one — the exact kind of
-  // difference between the two builds this split exists to prevent.
+  // fetched. Finding the plan in the list left the panel showing "—" for the SA.
   const selectedPlanQuery = useQuery({
     queryKey: [...scopeKey(), "plan", selectedPlanId],
     queryFn: () => getPlan(selectedPlanId!),

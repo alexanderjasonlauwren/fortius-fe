@@ -14,20 +14,19 @@
  * completion timestamps, which are null until the run reaches that stage),
  * `outlet_id`, `driver_id`, `product_id` and `delivery_status`.
  *
- * # Mapping from the real lifecycle onto the mock's two-state one
+ * # Six delivery states onto the report's two
  *
- * The mock's `deliveries` rows carry a binary `Selesai | Tertunda`.
+ * The report counts surat jalan as `Selesai | Tertunda`.
  * `core.deliveries.delivery_status` is `pending | on_route | delivered |
  * partial | failed | cancelled`. `delivered` maps to Selesai and
  * `pending`/`on_route` map to Tertunda -- `partial`, `failed` and
  * `cancelled` map to neither, which is more honest than forcing them into
  * one bucket: `suratJalanSelesai + suratJalanTertunda` can be less than
- * `suratJalan` in this build, where it always equalled it in the mock.
+ * `suratJalan`.
  *
- * `target`/`realisasi` per delivery were invented figures in the mock; the
- * real analogue is `dispatched_qty` (what left the yard, the ceiling) and
- * `delivered_qty` (what the outlet actually accepted) -- the same pairing
- * `delivery/entities.go`'s own header describes.
+ * `target`/`realisasi` per delivery are `dispatched_qty` (what left the yard,
+ * the ceiling) and `delivered_qty` (what the outlet actually accepted) -- the
+ * same pairing `delivery/entities.go`'s own header describes.
  *
  * # Every row in the window, not the newest page
  *
@@ -252,8 +251,7 @@ async function getTopOutlet(range: ReportRange, limit = 8): Promise<TopOutletRow
     totals.set(d.outlet_id, row);
   }
   // Value comes from invoices actually raised, not units × a global price --
-  // matches getTopOutlet's own mock definition and financeApi's own
-  // getAgingReport for the same reason.
+  // the same rule financeApi's aging uses.
   for (const inv of invoicesInWindow) {
     const row = totals.get(inv.outlet_id);
     if (row) row.nilai += inv.total_amount;
@@ -348,10 +346,9 @@ async function exportReport(range: ReportRange): Promise<number> {
 /**
  * The printable monthly recap the agency files.
  *
- * `namaPerusahaan`/`nomorAgen` come from `getSettings()`, which reads
- * "—" for both in this build -- `settingsApi`'s own `DEFAULT_SETTINGS`
- * already documents why: neither field is owned by any endpoint yet. The
- * header prints the placeholder rather than inventing a value.
+ * `namaPerusahaan`/`nomorAgen` come from `getSettings()`, which reads them
+ * from the tenant profile (Profil agen). An unset one prints "—" rather than
+ * an invented value.
  */
 async function printReport(range: ReportRange): Promise<void> {
   const [summary, top, settings] = await Promise.all([

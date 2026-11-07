@@ -42,10 +42,8 @@ function isFatal(err: unknown): boolean {
 
 export interface UseGpsStreamOptions {
   /**
-   * Whether recording can be offered at all: the API build, the agency's own
+   * Whether recording can be offered at all: the agency's own
    * `record_driver_location` switch, and something left to drive to today.
-   * The mock build must never pass true here — a demo build must not prompt
-   * for a browser location permission it can do nothing with.
    */
   enabled: boolean;
   /**

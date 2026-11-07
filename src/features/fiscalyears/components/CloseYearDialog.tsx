@@ -4,8 +4,7 @@
  * outright if the year-end statements are not clean (unmapped accounts,
  * an unbalanced Neraca) or an earlier year with activity is still open --
  * this dialog surfaces whatever that refusal says rather than trying to
- * predict it, since the mock's own simpler ledger cannot produce an
- * unbalanced Neraca by construction. Gap-closing plan, Phase E.
+ * predict it.
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";

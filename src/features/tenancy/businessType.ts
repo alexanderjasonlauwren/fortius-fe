@@ -7,8 +7,8 @@
  * chances for one screen to say "water_depot" at a user.
  *
  * Against the real API this is redundant — the tenant response carries
- * `business_type_name`. It stays for the mock, and as the fallback for a code no
- * one has translated yet: an unknown code falls through unchanged, which reads
+ * `business_type_name`. It stays as the fallback for a code no one has
+ * translated yet: an unknown code falls through unchanged, which reads
  * better than a dash and makes the gap obvious.
  */
 const LABELS: Record<string, string> = {

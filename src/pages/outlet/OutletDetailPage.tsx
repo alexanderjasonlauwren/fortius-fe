@@ -284,9 +284,9 @@ export function OutletDetailPage() {
           <PanelHeader title="Tagihan tertunda" />
           <PanelBody>
             {/*
-              The invoice COUNT needs core.invoices; the AMOUNT is credit_balance
-              on the outlet itself. So the money is shown in both builds and the
-              count only where it is real -- a "0 faktur" beside a non-zero
+              The invoice COUNT needs core.invoices counted per outlet; the
+              AMOUNT is credit_balance on the outlet itself. So the money is
+              always shown and the count only where it is real -- a "0 faktur" beside a non-zero
               balance would be a contradiction the reader has to resolve.
             */}
             {p.statistikTersedia && (

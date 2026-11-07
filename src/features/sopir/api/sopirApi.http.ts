@@ -18,7 +18,7 @@
  *
  * Every filing carries the phone's fix when there is one. The read happens
  * before the request, so a slow GPS delays the submission rather than losing
- * it — same order as the mock, for the same reason.
+ * it.
  */
 import { downscaleImage } from "@/lib/image";
 import { getOne, send } from "@/lib/api";
@@ -39,7 +39,7 @@ import {
   type Transport,
   type Versions,
 } from "../lib/outbox";
-import type { DriverOption, DriverRun, RunStop, StopLine } from "../types";
+import type { DriverRun, RunStop, StopLine } from "../types";
 
 /** Mirrors the backend's DeliveryResponse. */
 interface DeliveryResponse {
@@ -482,16 +482,6 @@ async function discardFiling(id: string): Promise<void> {
 }
 
 /**
- * There is no fleet list to offer: the run comes from the session, so an
- * account that is not a driver has no other driver's day to switch to. The
- * picker the mock backs is a demo affordance, and an empty list is what makes
- * the screen hide it rather than show a control that cannot work.
- */
-async function getDriverOptions(): Promise<DriverOption[]> {
-  return [];
-}
-
-/**
  * Reports a batch of positions for the run tracker.
  *
  * No trip id here either, for the same reason as every other write in this
@@ -520,6 +510,5 @@ export const sopirApiHttp: SopirApi = {
   pendingFilings,
   replayFilings,
   discardFiling,
-  getDriverOptions,
   postGpsFixes,
 };

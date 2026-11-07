@@ -85,15 +85,11 @@ export function applySuggestion(
       driver: at.driver,
       tripNo: at.tripNo,
       urutan: at.urutan,
-      // Only overwritten when the suggestion names a truck. The mock
-      // suggester has no coordinates and never proposes one -- see
-      // `suggestAssignment.ts`'s own `DASAR_KAPASITAS` note -- so leaving an
-      // already-chosen truck alone there is the correct behaviour, not a
-      // fallback for a missing field.
+      // Only overwritten when the suggestion names a truck: a run it left
+      // without one keeps the truck the planner already chose.
       ...(at.vehicleId ? { vehicleId: at.vehicleId, vehicle: at.vehicle ?? row.vehicle } : {}),
-      // Same reasoning for the estimate: the mock has no coordinates to
-      // compute one from, so an absent eta/berangkat leaves the row's
-      // existing value (typically the mock's own hour or "—") rather than
+      // Same for the estimate: a stop with no coordinates has none, and an
+      // absent eta/berangkat leaves the row's existing value rather than
       // erasing it.
       ...(at.eta ? { jamPengiriman: at.eta } : {}),
       ...(at.berangkat ? { berangkat: at.berangkat } : {}),

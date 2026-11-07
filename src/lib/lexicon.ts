@@ -12,8 +12,7 @@
  * `unit`) and asks this module for the tenant's word at render time. Nothing
  * below the UI layer should carry an industry noun as a literal.
  *
- * Module-level rather than a hook, mirroring `setActiveScope` in mocks/scope:
- * these are read from print templates, CSV headers and toast strings that are
+ * Module-level rather than a hook: these are read from print templates, CSV headers and toast strings that are
  * not React components and cannot subscribe to anything.
  *
  * Where a single product *is* in scope — an invoice line, a stop's product

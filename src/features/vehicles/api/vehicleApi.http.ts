@@ -72,8 +72,7 @@ function toView(row: VehicleResponse): VehicleView {
     status: toStatus(row),
     terdaftarPada: row.created_at,
   };
-  // The same decoration the mock applies, so "lapsing within 30 days" means the
-  // same thing in both builds rather than being defined twice.
+  // One definition of "lapsing within 30 days", shared with the list badges.
   return decorateVehicle(vehicle, row.stnk_expires_at, row.kir_expires_at);
 }
 

@@ -1,8 +1,7 @@
 /**
  * The tile source every Leaflet map in the console reads.
  *
- * The public OSM default is fine for the mock build and for a demo running
- * off the internet. An on-premise deployment with no route out sets both
+ * The public OSM default is fine for a demo with internet access. An on-premise deployment with no route out sets both
  * variables to its own tile server; hardcoding OSM's attribution on someone
  * else's tiles would be a licensing claim this console has no basis for.
  *

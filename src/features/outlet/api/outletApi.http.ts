@@ -94,11 +94,10 @@ function toWireStatus(status?: OutletStatus): string | undefined {
 function toView(row: OutletResponse): OutletView {
   return {
     id: row.id,
-    // The scope the mock store partitions itself by. The API build has no need
-    // of it -- row-level security decides what this session can see, on the
-    // server, and a client-side tenant filter would be a second opinion that
-    // can only ever be wrong. Empty rather than invented, and nothing on the
-    // API path reads it.
+    // Not on the wire: row-level security decides what this session can see,
+    // on the server, and a client-side tenant filter would be a second
+    // opinion that can only be wrong. Empty rather than invented; nothing
+    // reads it.
     tenantId: "",
     branchId: row.branch_id,
     kode: row.code,
@@ -134,14 +133,15 @@ function toView(row: OutletResponse): OutletView {
     batasKredit: row.credit_limit,
     blokirOtomatis: row.auto_block_on_overdue,
 
-    // Deliveries and invoices have no service yet, so these four are not
-    // computable here. Reported as zero AND flagged: a zero with the flag down
-    // is a figure the screens hide rather than one they draw a meter from.
+    // Counted from deliveries and invoices, which no endpoint aggregates per
+    // outlet yet; reading every delivery for every row is not an option.
+    // Reported as zero AND flagged: a zero with the flag down is a figure the
+    // screens hide rather than one they draw a meter from.
     terpakaiBulanIni: 0,
     sisaKuota: 0,
     tagihanTertunda: 0,
     // The exception. credit_balance is a column on the outlet, so what this
-    // outlet owes is known even where the invoices behind it are not.
+    // outlet owes is known without counting its invoices.
     nilaiTertunda: row.credit_balance,
     pengirimanTerakhir: undefined,
     statistikTersedia: false,
@@ -279,8 +279,7 @@ interface HistoryDeliveryResponse {
 }
 
 /**
- * The mock's `Selesai | Tertunda` was two states over five real ones.
- * Mirrors `dashboardApi.http.ts`'s own `toDeliveryStatus` — `delivered`/
+ * Five delivery states onto the screen's four. Mirrors `dashboardApi.http.ts`'s own `toDeliveryStatus` — `delivered`/
  * `partial` read as done, `on_route` as under way, `failed` as stuck, and
  * `pending`/`cancelled` fall back to queued.
  */
@@ -327,8 +326,7 @@ export async function getOutletHistory(id: string, limit = 10) {
 
 async function exportOutlet(): Promise<number> {
   const rows = await getOutletList();
-  // The delivery-derived columns the mock exports are dropped rather than
-  // written as zeros: a spreadsheet outlives the screen that explains it, and a
+  // Delivery-derived columns are left out rather than written as zeros: a spreadsheet outlives the screen that explains it, and a
   // column of zeros headed "Terpakai Bulan Ini" is a number someone will add up.
   exportCsv(
     `${outletLabel()}-${timestampSuffix()}`,

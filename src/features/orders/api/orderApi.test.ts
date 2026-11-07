@@ -60,7 +60,7 @@ beforeEach(() => {
 });
 
 describe("getOrders", () => {
-  it("maps order_status onto the mock's own vocabulary", async () => {
+  it("maps order_status onto the console's vocabulary", async () => {
     getList.mockResolvedValue({
       items: [
         wire({ order_status: "requested" }),

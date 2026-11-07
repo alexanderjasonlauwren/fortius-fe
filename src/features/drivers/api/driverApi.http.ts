@@ -192,8 +192,7 @@ interface ScheduleDeliveryResponse {
 }
 
 /**
- * The mock's `Selesai | Tertunda` was two states over five real ones.
- * Mirrors `dashboardApi.http.ts`'s own `toDeliveryStatus` — `delivered`/
+ * Five delivery states onto the schedule's four. Mirrors `dashboardApi.http.ts`'s own `toDeliveryStatus` — `delivered`/
  * `partial` read as done, `on_route` as under way, `failed` as stuck, and
  * `pending`/`cancelled` fall back to queued rather than being forced into a
  * bucket that would misdescribe them.

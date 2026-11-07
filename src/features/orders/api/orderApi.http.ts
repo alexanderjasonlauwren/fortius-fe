@@ -1,13 +1,13 @@
 /**
- * Orders -- what a outlet asks for -- against the real API.
+ * Orders -- what an outlet asks for.
  *
  * `internal/controller/order` over `core.orders` / `core.order_items`. The
- * lifecycle is requested -> approved|rejected -> scheduled, matching the
- * mock's Baru -> Disetujui|Ditolak -> Dijadwalkan exactly; `fulfilled` and
- * `cancelled` exist on the schema's own CHECK but nothing in this build sets
- * them yet, so they fall back to "Baru" below rather than a made-up status.
+ * lifecycle is requested -> approved|rejected -> scheduled -> fulfilled, read
+ * as Baru -> Disetujui|Ditolak -> Dijadwalkan -> Selesai. `cancelled` exists
+ * on the schema's CHECK but nothing sets it yet, so it falls back to "Baru"
+ * below rather than a made-up status.
  *
- * # What the real endpoint does not do that the mock does
+ * # Scheduling does not add a plan line
  *
  * `ScheduleOrder` links one order to a plan (`order_status='scheduled'` +
  * `distribution_order_id`) -- it deliberately does not add a line to

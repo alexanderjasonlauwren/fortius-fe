@@ -1,9 +1,7 @@
 /**
  * "Impor laporan pembanding": download the template, fill it in,
  * upload. Subtotal rows in the upload are always recomputed from the
- * layout's own formulas on the backend (never trusted from the file) --
- * see externalstatementsApi's own doc for why the mock build cannot read
- * the file's content at all, and asks for a label/period instead.
+ * layout's own formulas on the backend (never trusted from the file).
  */
 import { useState } from "react";
 import { Download, Loader2, Upload } from "lucide-react";

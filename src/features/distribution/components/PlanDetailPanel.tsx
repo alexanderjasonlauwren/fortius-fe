@@ -298,10 +298,8 @@ export function PlanDetailPanel({
     setIsSuggesting(true);
     let suggestion: AssignmentSuggestion;
     try {
-      // Over the SAVED plan, in both builds. The service reads the order's own
-      // stops -- it has no way to see a draft that exists only in this
-      // component -- so proposing over unsaved edits would give one build a
-      // different answer from the other for the same screen. The button is
+      // Over the SAVED plan. The service reads the order's own stops -- it has
+      // no way to see a draft that exists only in this component. The button is
       // disabled while the draft is dirty for exactly that reason.
       suggestion = await suggestAssignment(plan.id);
     } catch (error) {
