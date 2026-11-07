@@ -308,6 +308,21 @@ export interface DateRange {
   to?: string;
 }
 
+/** A value-only stock opname: what an inventory asset account holding no
+ *  product stock was counted at, as of a date. The server posts each line's
+ *  difference from the ledger against 5-1900 Selisih Persediaan. */
+export interface InventoryAdjustmentInput {
+  date: string;
+  description?: string;
+  lines: { accountId: string; countedValue: number }[];
+}
+
+export interface InventoryAdjustmentResult {
+  journalId: string;
+  /** Signed: positive when the count was above the ledger. */
+  totalAdjustment: number;
+}
+
 export interface TrialBalanceView {
   rows: TrialBalanceRow[];
   totals: TrialBalanceTotals;
@@ -374,6 +389,9 @@ export interface FinanceApi {
    *  original's sourceType is "manual" or "openingBalance" -- every other
    *  source type already has its own module-specific void/cancel path. */
   reverseJournal(id: string, version: number): Promise<JournalView>;
+  /** Refused for an account products are stocked on (USE_STOCK_COUNT):
+   *  those are counted per product, on the inventory page. */
+  postInventoryAdjustment(input: InventoryAdjustmentInput): Promise<InventoryAdjustmentResult>;
   getTrialBalance(range: { from: string; to: string }): Promise<TrialBalanceView>;
   getProfitAndLoss(range: { from: string; to: string }): Promise<ProfitAndLossView>;
   getChartOfAccounts(): Promise<AccountBalance[]>;

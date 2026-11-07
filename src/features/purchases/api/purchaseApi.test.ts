@@ -196,3 +196,11 @@ describe("payPurchase", () => {
     });
   });
 });
+
+describe("recordSAPurchase", () => {
+  it("posts the tebus against the agreement, so the bill stays linked to it", async () => {
+    send.mockResolvedValue(wire());
+    await purchaseApiHttp.recordSAPurchase(ID, "  ");
+    expect(send).toHaveBeenLastCalledWith("post", "/purchases", { schedule_agreement_id: ID, notes: undefined });
+  });
+});

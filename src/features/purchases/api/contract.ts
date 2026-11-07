@@ -123,6 +123,12 @@ export interface PurchaseApi {
   getOpenPurchases(supplierId?: string): Promise<PurchaseView[]>;
   getPurchase(id: string): Promise<PurchaseView>;
   recordGeneralPurchase(input: RecordGeneralPurchaseInput): Promise<PurchaseView>;
+  /**
+   * The SA tebus: one bill to the supplier for an agreement's whole granted
+   * quota, its lines taken from the agreement's product quotas. Keeps the
+   * link to the agreement that a general bill from PERTAMINA loses.
+   */
+  recordSAPurchase(agreementId: string, notes?: string): Promise<PurchaseView>;
   /** Pays part or all of one bill. */
   recordPurchasePayment(input: RecordPurchasePaymentInput): Promise<PurchaseView>;
   payPurchase(input: PayPurchaseInput): Promise<PurchaseView>;

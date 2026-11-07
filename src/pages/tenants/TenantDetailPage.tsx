@@ -1,7 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { ChevronRight, LogIn } from "lucide-react";
-import { deactivateTenant, getTenant } from "@/features/tenancy/api/tenancyApi";
+import { deactivateTenant, getTenant, updateTenant } from "@/features/tenancy/api/tenancyApi";
+import { holds } from "@/features/rbac/holds";
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import { Field, TextInput, TextareaInput } from "@/components/common/Field";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useScope } from "@/features/tenancy/useScope";
 import { businessTypeLabel } from "@/features/tenancy/businessType";
 import { scopeKey } from "@/lib/scope";
@@ -15,10 +26,12 @@ import { useState } from "react";
 /**
  * One tenant: where it sits, who it is, and the way into it.
  *
- * # Read-only, deliberately
+ * # Read-only, deliberately -- except its name
  *
- * Settings and profile are shown here and edited on /settings — for the tenant
- * you are ACTING as. Reads travel down the tenant tree and writes do not
+ * A tenant's name and description live on iam.tenants, which the tenant and
+ * every ancestor may write; "Ubah nama" edits them here, from inside or
+ * outside, as deactivation does. Settings and profile are shown here and
+ * edited on /settings — for the tenant you are ACTING as. Reads travel down the tenant tree and writes do not
  * (`WITH CHECK (tenant_id = current_tenant_id())` on 55 tables), so a form on
  * this page would have to either fail for every tenant but one, or switch
  * underneath the user without saying so.
@@ -33,6 +46,15 @@ export function TenantDetailPage() {
   const { tenant: acting, setTenant } = useScope();
 
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState<{ nama: string; deskripsi: string; versi: number } | null>(null);
+  const canEdit = holds(PERMISSIONS.SETTINGS_EDIT);
+
+  const rename = useDeskMutation({
+    mutationFn: () => updateTenant(id, editing!),
+    errorTitle: "Tenant tidak diubah",
+    success: "Tenant diubah",
+    onDone: () => setEditing(null),
+  });
 
   // The switch is a token exchange the server may refuse (a tenant visible from
   // above is not necessarily one this user may act as), so navigation waits
@@ -79,11 +101,29 @@ export function TenantDetailPage() {
         }
         actions={
           isActing ? (
-            <Button variant="outline" onClick={() => navigate("/settings")}>
-              Buka pengaturan
-            </Button>
+            <>
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  onClick={() => setEditing({ nama: t.nama, deskripsi: t.deskripsi, versi: t.versi })}
+                >
+                  Ubah nama
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => navigate("/settings")}>
+                Buka pengaturan
+              </Button>
+            </>
           ) : (
             <>
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  onClick={() => setEditing({ nama: t.nama, deskripsi: t.deskripsi, versi: t.versi })}
+                >
+                  Ubah nama
+                </Button>
+              )}
               {/* Deactivation is offered only from OUTSIDE the tenant. Switching
                   into a tenant to switch it off would leave the session acting
                   as something inactive, and every screen would then be scoped to
@@ -177,6 +217,53 @@ export function TenantDetailPage() {
           </PanelBody>
         </Panel>
       </div>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && !rename.isPending && setEditing(null)}>
+        <DialogContent className="sm:max-w-md">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (editing && editing.nama.trim() !== "") rename.mutate(undefined as never);
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Ubah nama tenant</DialogTitle>
+              <DialogDescription>
+                Nama tampil di daftar tenant dan pengalih tenant. Nama legal pada dokumen diatur di
+                profil, lewat Pengaturan tenant itu sendiri.
+              </DialogDescription>
+            </DialogHeader>
+            {editing && (
+              <div className="space-y-4 py-2">
+                <Field label="Nama" htmlFor="tenant-nama" required>
+                  <TextInput
+                    id="tenant-nama"
+                    maxLength={255}
+                    value={editing.nama}
+                    onChange={(e) => setEditing({ ...editing, nama: e.target.value })}
+                  />
+                </Field>
+                <Field label="Deskripsi" htmlFor="tenant-deskripsi">
+                  <TextareaInput
+                    id="tenant-deskripsi"
+                    rows={3}
+                    value={editing.deskripsi}
+                    onChange={(e) => setEditing({ ...editing, deskripsi: e.target.value })}
+                  />
+                </Field>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setEditing(null)} disabled={rename.isPending}>
+                Batal
+              </Button>
+              <Button type="submit" disabled={rename.isPending || !editing || editing.nama.trim() === ""}>
+                Simpan
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         isOpen={confirming}

@@ -22,7 +22,7 @@ import {
   profitAndLossFromTrialBalance,
   type TrialBalanceRow,
 } from "@/features/finance/lib/trialBalance";
-import type { AccountEntity, AccountType, InvoiceStatus } from "@/types/domain";
+import type { AccountEntity, AccountRole, AccountType, InvoiceStatus } from "@/types/domain";
 import { AGING_BUCKETS } from "./contract";
 import type {
   AgingReport,
@@ -49,6 +49,8 @@ import type {
   ProfitAndLossView,
   RecordPaymentInput,
   TrialBalanceView,
+  InventoryAdjustmentInput,
+  InventoryAdjustmentResult,
 } from "./contract";
 
 const PAGE_SIZE = 100;
@@ -785,6 +787,15 @@ async function getJournals(range?: DateRange, query?: JournalQuery, page = 1): P
   }, toJournalView);
 }
 
+async function postInventoryAdjustment(input: InventoryAdjustmentInput): Promise<InventoryAdjustmentResult> {
+  const row = await send<{ journal_id: string; total_adjustment: number }>("post", "/inventory-adjustments", {
+    date: input.date,
+    description: input.description?.trim() || undefined,
+    lines: input.lines.map((l) => ({ account_id: l.accountId, counted_value: l.countedValue })),
+  });
+  return { journalId: row.journal_id, totalAdjustment: row.total_adjustment };
+}
+
 async function createManualJournal(input: CreateManualJournalInput): Promise<JournalView> {
   const row = await send<JournalResponse>("post", "/journals", {
     branch_id: input.branchId,
@@ -836,6 +847,13 @@ const ACCOUNT_TYPE: Record<string, AccountType> = {
  * journal to "5-4000 Beban Umum dan Administrasi", a grouping header still
  * listed as selectable (gap-closing plan, Phase E).
  */
+const ROLE_TO_DOMAIN: Record<string, AccountRole> = {
+  cash: "kas",
+  bank: "bank",
+  receivable: "piutang",
+  inventory: "persediaan",
+};
+
 function toAccountEntity(row: AccountResponse, idToCode: Map<string, string>): AccountEntity {
   return {
     id: row.id,
@@ -844,9 +862,11 @@ function toAccountEntity(row: AccountResponse, idToCode: Map<string, string>): A
     tipe: ACCOUNT_TYPE[row.account_type] ?? "Aset",
     saldoNormal: row.normal_balance === "dr" ? "debit" : "kredit",
     induk: row.parent_id ? idToCode.get(row.parent_id) : undefined,
-    // "payable" (Step 6) has no equivalent in the console's AccountRole
-    // union yet, and nothing here reads .role, so an unrecognised role is
-    // left undefined rather than widening that type for no consumer.
+    // Only the roles a screen reads are mapped -- the inventory adjustment
+    // finds the stock account by "persediaan". Any other role, "payable"
+    // included, stays undefined rather than widening AccountRole for no
+    // consumer.
+    role: row.role ? ROLE_TO_DOMAIN[row.role] : undefined,
     sistem: row.is_system,
     aktif: true,
   };
@@ -1080,6 +1100,7 @@ export const financeApiHttp: FinanceApi = {
   getInvoice,
   getJournals,
   createManualJournal,
+  postInventoryAdjustment,
   reverseJournal,
   getTrialBalance,
   getProfitAndLoss,

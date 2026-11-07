@@ -780,3 +780,20 @@ describe("chart of accounts: create + upgrade (phase P1)", () => {
     expect([flag("1-1100"), flag("1-1101"), flag("5-3300")]).toEqual([true, true, false]);
   });
 });
+
+describe("postInventoryAdjustment", () => {
+  it("sends each counted value by account and reads back the signed total", async () => {
+    send.mockResolvedValue({ journal_id: "j-1", total_adjustment: -2500 });
+    const result = await financeApiHttp.postInventoryAdjustment({
+      date: "2026-11-05",
+      description: " ",
+      lines: [{ accountId: "a-1", countedValue: 7500 }],
+    });
+    expect(send).toHaveBeenLastCalledWith("post", "/inventory-adjustments", {
+      date: "2026-11-05",
+      description: undefined,
+      lines: [{ account_id: "a-1", counted_value: 7500 }],
+    });
+    expect(result).toEqual({ journalId: "j-1", totalAdjustment: -2500 });
+  });
+});

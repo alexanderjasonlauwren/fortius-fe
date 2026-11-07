@@ -48,6 +48,16 @@ export interface TenantDetail extends TenantEntity {
   /** Root first, and stopping at the deepest ancestor the caller may see. */
   leluhur: TenantAncestor[];
   profil?: TenantProfile;
+  deskripsi: string;
+  /** The row's version, sent back with an edit so a concurrent one is refused. */
+  versi: number;
+}
+
+/** What an edit of a tenant's own identity changes. */
+export interface UpdateTenantInput {
+  nama: string;
+  deskripsi: string;
+  versi: number;
 }
 
 /**
@@ -100,6 +110,12 @@ export interface TenancyApi {
   getTenants(): Promise<TenantEntity[]>;
   getTenant(id: ID): Promise<TenantDetail>;
   createTenant(input: CreateTenantInput): Promise<CreateTenantResult>;
+  /**
+   * Renames a tenant or changes its description. Allowed for the tenant itself
+   * and for any ancestor, as iam.tenants' write policy says -- unlike its
+   * settings and profile, which only the acting tenant writes.
+   */
+  updateTenant(id: ID, input: UpdateTenantInput): Promise<void>;
   /** Marks a tenant deleted. Never removes the row. */
   deactivateTenant(id: ID): Promise<void>;
   /**

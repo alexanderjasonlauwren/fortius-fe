@@ -67,6 +67,15 @@ export interface AuthApi {
    */
   logout(): Promise<void>;
 
+  /**
+   * Changes the caller's own password. The server ends every session of the
+   * user's -- this one included -- so the caller signs in again afterwards.
+   */
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
+
+  /** Ends every session of the user's, on every device; answers how many. */
+  logoutAll(): Promise<number>;
+
   /** The tenants this session may switch into, the current one included. */
   listSwitchableTenants(): Promise<SwitchableTenant[]>;
 

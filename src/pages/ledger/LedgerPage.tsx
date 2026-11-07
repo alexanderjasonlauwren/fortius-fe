@@ -15,6 +15,7 @@ import {
 } from "@/features/finance/api/financeApi";
 import { JOURNAL_SOURCE_LABEL, journalSourceHref } from "@/features/finance/lib/journalSource";
 import { ManualJournalDialog } from "@/features/finance/components/ManualJournalDialog";
+import { InventoryAdjustmentDialog } from "@/features/finance/components/InventoryAdjustmentDialog";
 import { ReverseJournalDialog } from "@/features/finance/components/ReverseJournalDialog";
 import { defaultRange } from "@/features/transactions/api/transactionApi";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
@@ -121,6 +122,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
   // The dialog is open for a fresh entry ("new") or a copy of a journal.
   const [journalDialog, setJournalDialog] = useState<"new" | JournalView | null>(null);
   const [reverseTarget, setReverseTarget] = useState<JournalView | null>(null);
+  const [adjusting, setAdjusting] = useState(false);
 
   const rows = journals.data?.items ?? [];
   const total = journals.data?.totalItems;
@@ -141,6 +143,9 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
               ))}
             </SelectInput>
             <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>
+              <Button size="sm" variant="outline" onClick={() => setAdjusting(true)}>
+                Penyesuaian persediaan
+              </Button>
               <Button size="sm" onClick={() => setJournalDialog("new")}>
                 <Plus className="h-3.5 w-3.5" />
                 Jurnal baru
@@ -243,6 +248,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
         <ServerPager paging={{ ...journals.data, onPageChange: setPage }} shown={rows.length} />
       )}
 
+      <InventoryAdjustmentDialog open={adjusting} onClose={() => setAdjusting(false)} />
       <ManualJournalDialog
         // A fresh mount per target, so a duplicate starts from its journal.
         key={journalDialog === "new" ? "new" : journalDialog ? journalDialog.id : "closed"}
