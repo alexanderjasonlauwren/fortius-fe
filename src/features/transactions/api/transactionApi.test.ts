@@ -8,6 +8,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const getList = vi.fn();
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
+  getPage: async (path: string, params: { page?: number; pageSize?: number }, map: (row: unknown) => unknown) => {
+    const result = await getList(path, params);
+    return { items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50, hasNext: false };
+  },
   getOne: vi.fn(),
   send: vi.fn(),
   upload: vi.fn(),
@@ -74,7 +79,7 @@ describe("getTransactions", () => {
   it("maps an unbilled, unfunded delivery honestly -- no invoice fields, nominal 0", async () => {
     getList.mockResolvedValue({ items: [row()] });
 
-    const [tx] = await transactionApiHttp.getTransactions();
+    const { items: [tx] } = await transactionApiHttp.getTransactions();
 
     expect(tx.suratJalan).toBe("SJ-0001");
     expect(tx.invoice).toBe("—");
@@ -109,7 +114,7 @@ describe("getTransactions", () => {
       ],
     });
 
-    const [tx] = await transactionApiHttp.getTransactions();
+    const { items: [tx] } = await transactionApiHttp.getTransactions();
 
     expect(tx.invoice).toBe("INV-0001");
     expect(tx.nominal).toBe(500_000);
@@ -130,7 +135,7 @@ describe("getTransactions", () => {
     ["cancelled", "Antrian"],
   ])("maps delivery_status %s to statusKirim %s", async (wire, expected) => {
     getList.mockResolvedValue({ items: [row({ delivery_status: wire })] });
-    const [tx] = await transactionApiHttp.getTransactions();
+    const { items: [tx] } = await transactionApiHttp.getTransactions();
     expect(tx.statusKirim).toBe(expected);
   });
 
@@ -143,7 +148,7 @@ describe("getTransactions", () => {
     ["credited", "Lunas"],
   ])("maps payment_status %s to statusBayar %s", async (wire, expected) => {
     getList.mockResolvedValue({ items: [row({ payment_status: wire })] });
-    const [tx] = await transactionApiHttp.getTransactions();
+    const { items: [tx] } = await transactionApiHttp.getTransactions();
     expect(tx.statusBayar).toBe(expected);
   });
 
@@ -173,21 +178,34 @@ describe("getTransactions", () => {
     );
   });
 
-  it("filters statusKirim, statusBayar, kecamatan and search client-side", async () => {
-    getList.mockResolvedValue({
-      items: [
-        row({ delivery_status: "delivered" }),
-        row({ delivery_status: "pending", delivery_number: "SJ-0002" }),
-      ],
-    });
-
-    const byStatus = await transactionApiHttp.getTransactions({ statusKirim: "Antrian" });
-    expect(byStatus).toHaveLength(1);
-    expect(byStatus[0].suratJalan).toBe("SJ-0002");
-
-    const bySearch = await transactionApiHttp.getTransactions({ search: "sj-0002" });
-    expect(bySearch).toHaveLength(1);
-    expect(bySearch[0].suratJalan).toBe("SJ-0002");
+  // Regression 2026-11-02: buckets, district and search ran in the browser
+  // over the newest 100 rows, so a busy period showed only those.
+  it("sends the buckets, district and search to the server", async () => {
+    getList.mockResolvedValue({ items: [] });
+    const filtersFor = async (filters: Parameters<typeof transactionApiHttp.getTransactions>[0]) => {
+      getList.mockClear();
+      await transactionApiHttp.getTransactions(filters, 2);
+      const [, params] = getList.mock.calls[0];
+      expect(params.page).toBe(2);
+      return params;
+    };
+    expect((await filtersFor({ statusKirim: "Selesai" })).filters).toEqual([
+      { field: "delivery_status", operator: "in", value: "delivered,partial" },
+    ]);
+    expect((await filtersFor({ statusKirim: "Proses" })).filters).toEqual([
+      { field: "delivery_status", operator: "eq", value: "on_route" },
+    ]);
+    expect((await filtersFor({ statusBayar: "Belum ditagih" })).filters).toEqual([
+      { field: "payment_status", operator: "is_null", value: "true" },
+    ]);
+    expect((await filtersFor({ statusBayar: "Lunas" })).filters).toEqual([
+      { field: "payment_status", operator: "in", value: "paid,waived,credited" },
+    ]);
+    expect((await filtersFor({ kecamatan: "Sidorejo" })).filters).toEqual([
+      { field: "outlet_district", operator: "eq", value: "Sidorejo" },
+    ]);
+    expect((await filtersFor({ search: " sj-0002 " })).search).toBe("sj-0002");
+    expect((await filtersFor({ statusKirim: "Semua", statusBayar: "Semua", kecamatan: "Semua" })).filters).toEqual([]);
   });
 });
 
@@ -208,6 +226,7 @@ describe("getTransactionSummary", () => {
     expect(summary.menunggu).toBe(50_000);
     expect(summary.belumDitagih).toBe(0);
     expect(summary.outlet).toBe(1);
+    expect(summary.lengkap).toBe(true);
   });
 });
 

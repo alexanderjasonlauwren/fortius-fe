@@ -17,6 +17,7 @@ export type {
 const api: PurchaseApi = purchaseApiHttp;
 
 export const getPurchases = api.getPurchases.bind(api);
+export const getOpenPurchases = api.getOpenPurchases.bind(api);
 export const recordGeneralPurchase = api.recordGeneralPurchase.bind(api);
 export const payPurchase = api.payPurchase.bind(api);
 export const getPurchase = api.getPurchase.bind(api);

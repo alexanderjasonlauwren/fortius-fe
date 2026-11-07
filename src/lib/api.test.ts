@@ -9,7 +9,7 @@ vi.stubGlobal("localStorage", {
   removeItem: (k: string) => void store.delete(k),
 });
 
-const { apiClient, setSessionExpiredHandler } = await import("./api");
+const { apiClient, getAllPages, setSessionExpiredHandler } = await import("./api");
 
 function respond(config: InternalAxiosRequestConfig, status: number, data: unknown = {}, headers: Record<string, string> = {}) {
   const response = { status, statusText: String(status), data, headers, config } as AxiosResponse;
@@ -75,5 +75,38 @@ describe("a rate limit never ends the session (regression 2026-10-24 F16)", () =
     await expect(apiClient.post("/payments", {})).rejects.toBeInstanceOf(AxiosError);
     expect(calls).toEqual(["POST /payments"]);
     expect(expired).not.toHaveBeenCalled();
+  });
+});
+
+describe("getAllPages walks a collection instead of reading its first page", () => {
+  /** Serves `pages` pages of two rows each, numbered by the requested page. */
+  function servePages(pages: number) {
+    const requested: number[] = [];
+    apiClient.defaults.adapter = (config) => {
+      const page = Number(new URL(config.url ?? "", "http://x").searchParams.get("page"));
+      requested.push(page);
+      return respond(config, 200, {
+        success: true,
+        data: [{ id: `${page}a` }, { id: `${page}b` }],
+        pagination: { page, page_size: 2, has_next: page < pages, has_prev: page > 1 },
+      });
+    };
+    return requested;
+  }
+
+  it("follows has_next to the last page", async () => {
+    const requested = servePages(3);
+    const result = await getAllPages<{ id: string }>("/invoices");
+    expect(requested).toEqual([1, 2, 3]);
+    expect(result.items.map((row) => row.id)).toEqual(["1a", "1b", "2a", "2b", "3a", "3b"]);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("says so when the ceiling stops it short, rather than returning a quiet partial set", async () => {
+    const requested = servePages(5);
+    const result = await getAllPages<{ id: string }>("/invoices", {}, { maxPages: 2 });
+    expect(requested).toEqual([1, 2]);
+    expect(result.items).toHaveLength(4);
+    expect(result.truncated).toBe(true);
   });
 });

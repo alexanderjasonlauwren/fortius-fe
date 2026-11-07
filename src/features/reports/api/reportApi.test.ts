@@ -6,10 +6,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  * financeApi.test.ts's own pattern.
  */
 
-const getList = vi.fn();
+const getAllPages = vi.fn();
 const getOne = vi.fn();
 vi.mock("@/lib/api", () => ({
-  getList: (...args: unknown[]) => getList(...args),
+  getAllPages: (...args: unknown[]) => getAllPages(...args),
   getOne: (...args: unknown[]) => getOne(...args),
   send: vi.fn(),
   upload: vi.fn(),
@@ -64,7 +64,7 @@ function delivery(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  getList.mockReset();
+  getAllPages.mockReset();
   // No branch has a planning start date unless a test says so.
   getOne.mockReset().mockResolvedValue({ days: [], qty: 0, total: 0 });
   getOutletList.mockReset().mockResolvedValue([
@@ -78,18 +78,35 @@ beforeEach(() => {
   printDocument.mockReset();
 });
 
-/** Routes each fetch to the fixture matching the endpoint it targets. */
+/**
+ * Routes each fetch to the fixture matching the endpoint it targets. The
+ * server applies the date window now, so a fixture holds only what the server
+ * would return for it; `truncated` names lists whose walk hit the ceiling.
+ */
 function mockLists(opts: {
   deliveries?: unknown[];
   payments?: unknown[];
   invoices?: unknown[];
+  truncated?: string[];
 }) {
-  getList.mockImplementation((path: string) => {
-    if (path === "/deliveries") return Promise.resolve({ items: opts.deliveries ?? [] });
-    if (path === "/payments") return Promise.resolve({ items: opts.payments ?? [] });
-    if (path === "/invoices") return Promise.resolve({ items: opts.invoices ?? [] });
+  getAllPages.mockImplementation((path: string) => {
+    const truncated = opts.truncated?.includes(path) ?? false;
+    if (path === "/deliveries") return Promise.resolve({ items: opts.deliveries ?? [], truncated });
+    if (path === "/payments") return Promise.resolve({ items: opts.payments ?? [], truncated });
+    if (path === "/invoices") return Promise.resolve({ items: opts.invoices ?? [], truncated });
     throw new Error(`unexpected path: ${path}`);
   });
+}
+
+/** The half-open UTC window the adapter must send for `range`. */
+function expectedWindow(field: string, range: Parameters<typeof resolveRange>[0]) {
+  const window = resolveRange(range);
+  const exclusiveEnd = new Date(`${window.to}T00:00:00Z`);
+  exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
+  return [
+    { field, operator: "gte", value: window.from },
+    { field, operator: "lt", value: exclusiveEnd.toISOString().slice(0, 10) },
+  ];
 }
 
 describe("getReportSummary", () => {
@@ -103,12 +120,9 @@ describe("getReportSummary", () => {
       payments: [
         { outlet_id: OUTLET_ID, amount: 500_000, payment_date: window.to, payment_status: "verified" },
         { outlet_id: OUTLET_ID, amount: 200_000, payment_date: window.to, payment_status: "rejected" },
-        // Outside the window -- must not be counted.
-        { outlet_id: OUTLET_ID, amount: 999_999, payment_date: "2020-01-01", payment_status: "verified" },
       ],
       invoices: [
         { outlet_id: OUTLET_ID, total_amount: 100_000, outstanding_amount: 40_000, issued_at: window.to },
-        { outlet_id: OUTLET_ID, total_amount: 1, outstanding_amount: 1, issued_at: "2020-01-01" },
       ],
     });
 
@@ -124,6 +138,24 @@ describe("getReportSummary", () => {
     expect(summary.suratJalanSelesai).toBe(1);
     expect(summary.suratJalanTertunda).toBe(1);
     expect(summary.outletDilayani).toBe(1);
+    expect(summary.lengkap).toBe(true);
+  });
+
+  // Regression 2026-11-02: the recap read the newest 100 payments and invoices
+  // and windowed them in the browser, undercounting any busier period.
+  it("asks the server for the window on payments and invoices, not the newest page", async () => {
+    mockLists({ deliveries: [], payments: [], invoices: [] });
+    await reportApiHttp.getReportSummary("30h");
+
+    const paramsFor = (path: string) => getAllPages.mock.calls.find(([p]) => p === path)![1];
+    expect(paramsFor("/payments").filters).toEqual(expectedWindow("payment_date", "30h"));
+    expect(paramsFor("/invoices").filters).toEqual(expectedWindow("issued_at", "30h"));
+  });
+
+  it("reports the figures as incomplete when a list hit the page ceiling", async () => {
+    mockLists({ deliveries: [], payments: [], invoices: [], truncated: ["/payments"] });
+    const summary = await reportApiHttp.getReportSummary("7h");
+    expect(summary.lengkap).toBe(false);
   });
 
   it("counts neither partial, failed nor cancelled deliveries as Selesai or Tertunda", async () => {
@@ -154,16 +186,8 @@ describe("getReportSummary", () => {
     mockLists({ deliveries: [], payments: [], invoices: [] });
     await reportApiHttp.getReportSummary("7h");
 
-    const window = resolveRange("7h");
-    const exclusiveEnd = new Date(`${window.to}T00:00:00Z`);
-    exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
-    const [, params] = getList.mock.calls.find(([path]) => path === "/deliveries")!;
-    expect(params.filters).toEqual(
-      expect.arrayContaining([
-        { field: "date", operator: "gte", value: window.from },
-        { field: "date", operator: "lt", value: exclusiveEnd.toISOString().slice(0, 10) },
-      ]),
-    );
+    const [, params] = getAllPages.mock.calls.find(([path]) => path === "/deliveries")!;
+    expect(params.filters).toEqual(expectedWindow("date", "7h"));
   });
 });
 

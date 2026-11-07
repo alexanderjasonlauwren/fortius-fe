@@ -4,7 +4,7 @@
  * Every field is a straight snake_case-to-camelCase rename of
  * fortius-backend's internal/entities/externalstatement response shapes.
  */
-import { apiClient, getList, getOne, send, upload } from "@/lib/api";
+import { getAllPages, apiClient, getOne, send, upload } from "@/lib/api";
 import type {
   ExternalStatement,
   ExternalStatementLine,
@@ -101,7 +101,7 @@ async function importStatement(input: ImportStatementInput): Promise<ExternalSta
 }
 
 async function listStatements(kind?: StatementKind): Promise<ExternalStatement[]> {
-  const page = await getList<StatementResponse>("/external-statements", {
+  const page = await getAllPages<StatementResponse>("/external-statements", {
     filters: kind ? [{ field: "kind", operator: "eq", value: kind }] : undefined,
     pageSize: 100,
   });

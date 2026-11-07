@@ -32,18 +32,16 @@
  * own seed carries no rows either (`db.audit: []`), so this is not a new
  * gap, just an honest one on both builds.
  */
-import { getList } from "@/lib/api";
+import { getAllPages } from "@/lib/api";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getVehicles } from "@/features/vehicles/api/vehicleApi";
-import { getAgingReport, getPayments } from "@/features/finance/api/financeApi";
+import { getAgingReport, getPendingPayments } from "@/features/finance/api/financeApi";
 import { getOrderTotals } from "@/features/orders/api/orderApi";
 import { getQuotaSummary } from "@/features/sa/api/saApi";
 import { currentJakartaMonth } from "@/features/sa/lib/period";
 import { addDays, isoDate, startOfToday } from "@/lib/date";
 import type { DispatchLane, DispatchRail, DispatchStop, KpiSummary, MonthlyChartPoint, OutletShare, RecentActivity } from "../types";
 import type { DashboardApi } from "./contract";
-
-const PAGE_SIZE = 100;
 
 /** Mirrors the fields of delivery's own DeliveryResponse this adapter needs. */
 interface DeliveryResponse {
@@ -87,18 +85,22 @@ function toDeliveryStatus(status: string): "Antrian" | "Proses" | "Selesai" | "T
  * 16:52 UTC matched `gte` its own day but not `lte` it). The exclusive `lt`
  * bound one day later is the only one that reads "through the end of `to`"
  * correctly.
+ *
+ * Every page of the window, not the newest 100: the month chart covers a
+ * month of surat jalan, which a busy agency passes in days. The ceiling
+ * (5,000 rows) is far above a month's volume; it exists so a bad range cannot
+ * loop without end.
  */
 async function fetchDeliveries(from: string, to: string): Promise<DeliveryResponse[]> {
   const exclusiveEnd = isoDate(addDays(new Date(`${to}T00:00:00Z`), 1));
-  const page = await getList<DeliveryResponse>("/deliveries", {
-    pageSize: PAGE_SIZE,
+  const { items } = await getAllPages<DeliveryResponse>("/deliveries", {
     sort: [{ field: "created_at", direction: "desc" }],
     filters: [
       { field: "date", operator: "gte" as const, value: from },
       { field: "date", operator: "lt" as const, value: exclusiveEnd },
     ],
-  });
-  return page.items;
+  }, { maxPages: 50 });
+  return items;
 }
 
 async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
@@ -111,7 +113,7 @@ async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
       fetchDeliveries(yesterday, yesterday),
       getOutletList(),
       getQuotaSummary(currentJakartaMonth()),
-      getPayments("Menunggu Verifikasi"),
+      getPendingPayments(),
       getAgingReport(),
       includeManualOrders ? getOrderTotals() : Promise.resolve({ baru: 0 }),
     ]);

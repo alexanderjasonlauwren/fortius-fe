@@ -1,3 +1,4 @@
+import type { Paged } from "@/lib/api";
 /**
  * A category's `core.expenses.category` value -- a composite FK into the
  * tenant's own `core.expense_categories.code`, not a fixed CHECK list, so
@@ -87,7 +88,10 @@ export interface ExpenseDecisionInput {
 }
 
 export interface ExpenseApi {
-  getExpenses(filters?: ExpenseFilters): Promise<ExpenseView[]>;
+  /** One server page; `page` is 1-based. */
+  getExpenses(filters?: ExpenseFilters, page?: number): Promise<Paged<ExpenseView>>;
+  /** Every expense waiting for approval. */
+  getPendingExpenses(): Promise<ExpenseView[]>;
   getExpense(id: string): Promise<ExpenseView>;
   createExpense(input: CreateExpenseInput): Promise<ExpenseView>;
   /** Edits a pending expense; its lines are replaced. */

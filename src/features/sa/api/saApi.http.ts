@@ -7,7 +7,7 @@
  * keeps the backend consistent with its published contract and leaves every
  * component untouched — the direction technical-gaps 2.4 chose.
  */
-import { getList, getOne, send, upload } from "@/lib/api";
+import { getAllPages, getOne, send, upload } from "@/lib/api";
 import type { FilterSpec } from "@/lib/listQuery";
 import { getActiveScope, scopeKey } from "@/lib/scope";
 import type {
@@ -216,7 +216,7 @@ const STATUS_TO_WIRE: Partial<Record<SAStatus, string>> = {
  * now, when every answer would be the same one.
  */
 async function defaultBranchID(): Promise<string> {
-  const page = await getList<{ id: string; is_default: boolean }>("/branches", {
+  const page = await getAllPages<{ id: string; is_default: boolean }>("/branches", {
     pageSize: 100,
   });
   const preferred = page.items.find((b) => b.is_default) ?? page.items[0];
@@ -563,7 +563,7 @@ export const saApiHttp: ScheduleAgreementApi = {
       specs.push({ field: "sa_status", operator: "eq", value: wire });
     }
 
-    const page = await getList<AgreementResponse>("/schedule-agreements", {
+    const page = await getAllPages<AgreementResponse>("/schedule-agreements", {
       pageSize: 100,
       search: filters?.search,
       filters: specs,
@@ -766,7 +766,7 @@ export const saApiHttp: ScheduleAgreementApi = {
   },
 
   async getSupplierOptions(): Promise<string[]> {
-    const page = await getList<AgreementResponse>("/schedule-agreements", { pageSize: 100 });
+    const page = await getAllPages<AgreementResponse>("/schedule-agreements", { pageSize: 100 });
     const seen = new Set<string>();
     for (const row of page.items) {
       if (row.supplier_name) seen.add(row.supplier_name);

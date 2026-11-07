@@ -30,7 +30,7 @@
  * `driver_id` moved to `core.dispatch_trips` because a driver is a property of
  * the run rather than of one line.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import { printDocument } from "@/lib/export";
 import { outletLabelTitle, unitLabelTitle } from "@/lib/lexicon";
 import { scopeKey } from "@/lib/scope";
@@ -467,7 +467,7 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
 /* ── the adapter ───────────────────────────────────────────────────────── */
 
 async function getPlanList(): Promise<DistributionPlan[]> {
-  const page = await getList<OrderResponse>("/distribution/orders", {
+  const page = await getAllPages<OrderResponse>("/distribution/orders", {
     pageSize: OPTION_PAGE_SIZE,
     sort: [{ field: "planned_delivery_date", direction: "desc" }],
   });
@@ -676,7 +676,7 @@ export async function addApprovedOrders(planId: string, orderIds: string[]): Pro
 /* ── option lists for the planner ──────────────────────────────────────── */
 
 async function getOutletOptions(): Promise<PlanOption[]> {
-  const page = await getList<OutletResponse>("/outlets", {
+  const page = await getAllPages<OutletResponse>("/outlets", {
     pageSize: OPTION_PAGE_SIZE,
     sort: [{ field: "name" }],
     filters: [{ field: "status", operator: "eq", value: "atv" }],
@@ -689,7 +689,7 @@ async function getOutletOptions(): Promise<PlanOption[]> {
 }
 
 async function getProductOptions(): Promise<ProductOption[]> {
-  const page = await getList<ProductResponse>("/products", {
+  const page = await getAllPages<ProductResponse>("/products", {
     pageSize: OPTION_PAGE_SIZE,
     sort: [{ field: "name" }],
     filters: [{ field: "status", operator: "eq", value: "atv" }],
@@ -762,13 +762,13 @@ async function getSAOutletPlan(saId: string, tanggal: string): Promise<SAOutletP
  */
 async function getDriverOptions(planId: string): Promise<DriverOption[]> {
   const [page, board, fleet] = await Promise.all([
-    getList<{ id: string; code: string; full_name: string; status: string }>("/drivers", {
+    getAllPages<{ id: string; code: string; full_name: string; status: string }>("/drivers", {
       pageSize: OPTION_PAGE_SIZE,
       sort: [{ field: "full_name" }],
       filters: [{ field: "status", operator: "eq", value: "atv" }],
     }),
     getBoard(planId),
-    getList<{ capacity_qty: number; operational_status: string }>("/vehicles", {
+    getAllPages<{ capacity_qty: number; operational_status: string }>("/vehicles", {
       pageSize: OPTION_PAGE_SIZE,
       filters: [{ field: "status", operator: "eq", value: "atv" }],
     }),
@@ -811,7 +811,7 @@ async function getDriverOptions(planId: string): Promise<DriverOption[]> {
 }
 
 async function getVehicleOptions(): Promise<VehicleOption[]> {
-  const page = await getList<VehicleResponse>("/vehicles", {
+  const page = await getAllPages<VehicleResponse>("/vehicles", {
     pageSize: OPTION_PAGE_SIZE,
     sort: [{ field: "plate_number" }],
     filters: [
@@ -886,7 +886,7 @@ async function dispatchTrip(
 }
 
 async function getActiveSaOptions(): Promise<PlanOption[]> {
-  const page = await getList<AgreementListResponse>("/schedule-agreements", {
+  const page = await getAllPages<AgreementListResponse>("/schedule-agreements", {
     pageSize: OPTION_PAGE_SIZE,
     sort: [{ field: "period_end", direction: "desc" }],
     filters: [{ field: "sa_status", operator: "eq", value: "active" }],

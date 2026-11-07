@@ -77,7 +77,7 @@ function dayBucket(iso: string): string {
 export function NotificationPage() {
   const {
     notifications,
-    allNotifications,
+    more,
     isLoading,
     activeFilter,
     setActiveFilter,
@@ -102,14 +102,6 @@ export function NotificationPage() {
     !!notificationSettings &&
     JSON.stringify(form) !== JSON.stringify(notificationSettings);
 
-  const count = (type: string) =>
-    type === "Semua"
-      ? allNotifications.length
-      : type === "Belum dibaca"
-        ? unreadCount
-        : allNotifications.filter((n) => n.type === type).length;
-
-  const readCount = allNotifications.length - unreadCount;
 
   // Group the visible list by day.
   const grouped = useMemo(() => {
@@ -148,7 +140,7 @@ export function NotificationPage() {
             <Button
               variant="outline"
               onClick={() => clearReadMutation.mutate(undefined as never)}
-              disabled={readCount === 0 || clearReadMutation.isPending}
+              disabled={clearReadMutation.isPending}
             >
               <Trash2 className="h-3.5 w-3.5" />
               Bersihkan terbaca
@@ -171,19 +163,19 @@ export function NotificationPage() {
             value={activeFilter}
             onChange={setActiveFilter}
             options={[
-              { value: "Semua" as const, label: "Semua", count: count("Semua") },
+              { value: "Semua" as const, label: "Semua" },
               {
                 value: "Belum dibaca" as const,
                 label: "Belum dibaca",
-                count: count("Belum dibaca"),
+                count: unreadCount,
               },
-              { value: "Alert" as const, label: "Peringatan", count: count("Alert") },
+              { value: "Alert" as const, label: "Peringatan" },
               {
                 value: "Pengingat" as const,
                 label: "Pengingat",
-                count: count("Pengingat"),
+
               },
-              { value: "Sistem" as const, label: "Sistem", count: count("Sistem") },
+              { value: "Sistem" as const, label: "Sistem" },
             ]}
           />
 
@@ -308,6 +300,11 @@ export function NotificationPage() {
                   </ul>
                 </section>
               ))
+            )}
+            {more && !isLoading && (
+              <p className="border-t border-line px-5 py-3 text-xs text-ink-muted">
+                Menampilkan 100 notifikasi terbaru; yang lebih lama tidak dimuat di sini.
+              </p>
             )}
           </Panel>
         </div>

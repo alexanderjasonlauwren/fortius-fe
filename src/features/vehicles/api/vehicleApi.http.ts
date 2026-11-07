@@ -12,7 +12,7 @@
  * count only" is a real answer for a truck nobody has weighed. So the domain
  * type keeps `kapasitasKg` optional and the planner's ceiling stays the count.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import type { VehicleEntity, VehicleStatusEntity } from "@/types/domain";
 import type { VehicleApi, VehicleFilters, VehicleView } from "./contract";
 import { decorateVehicle } from "../lib/view";
@@ -100,7 +100,7 @@ async function getVehicles(filters?: VehicleFilters): Promise<VehicleView[]> {
       ? toWireOperational(filters.status)
       : undefined;
 
-  const page = await getList<VehicleResponse>("/vehicles", {
+  const page = await getAllPages<VehicleResponse>("/vehicles", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "plate_number" }],
     search: filters?.search,

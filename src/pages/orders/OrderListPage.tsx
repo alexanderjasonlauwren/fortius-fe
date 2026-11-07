@@ -1,7 +1,8 @@
 import { scopeKey } from "@/lib/scope";
+import { useResettableState } from "@/hooks/useResettableState";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   CalendarPlus,
   CheckCircle2,
@@ -83,9 +84,11 @@ export function OrderListPage() {
     catatan: "",
   });
 
+  const [page, setPage] = useResettableState([tab, search], () => 1);
   const orders = useQuery({
-    queryKey: [...scopeKey(), "orders", tab, search],
-    queryFn: () => getOrders({ status: tab, search }),
+    queryKey: [...scopeKey(), "orders", tab, search, page],
+    queryFn: () => getOrders({ status: tab, search }, page),
+    placeholderData: keepPreviousData,
   });
   const totals = useQuery({ queryKey: [...scopeKey(), "order-totals"], queryFn: getOrderTotals });
   const plans = useQuery({ queryKey: [...scopeKey(), "schedulable-plans"], queryFn: getSchedulablePlans, enabled: manualIntake });
@@ -160,7 +163,7 @@ export function OrderListPage() {
     }),
   });
 
-  const rows = useMemo(() => orders.data ?? [], [orders.data]);
+  const rows = useMemo(() => orders.data?.items ?? [], [orders.data]);
   const selectableStatus = tab === "Disetujui" ? "Disetujui" : "Baru";
   const selectable = useMemo(
     () => rows.filter((o) => o.status === selectableStatus),
@@ -443,9 +446,7 @@ export function OrderListPage() {
           isLoading={orders.isLoading}
           rowKey={(row) => row.id}
           spineFor={(row) => spineFor(row.status)}
-          pageSize={12}
-          defaultSortKey="kode"
-          defaultSortDir="desc"
+          server={orders.data && { ...orders.data, onPageChange: setPage }}
           emptyIcon={ClipboardList}
           emptyMessage="Tidak ada pesanan"
           emptyDescription={manualIntake ? "Catat pesanan yang masuk lewat telepon atau pesan, lalu setujui untuk dijadwalkan." : "Tidak ada histori pesanan untuk filter ini. Alokasi harian tersedia melalui SIM3LON."}

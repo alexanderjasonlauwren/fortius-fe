@@ -31,7 +31,7 @@
  * interface parity with the mock and silently has nowhere to go, matching
  * `OrderListPage`'s own call site, which never actually passes one.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getList, getOne, getPage, send, type Paged } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { outletLabelTitle, unitLabel, unitLabelTitle } from "@/lib/lexicon";
 import { isoDate, startOfToday } from "@/lib/date";
@@ -124,35 +124,56 @@ function toView(order: OrderResponse): OrderView {
   };
 }
 
-async function getOrders(filters?: {
-  status?: OrderStatus | "Semua";
-  search?: string;
-}): Promise<OrderView[]> {
+type OrderFilters = { status?: OrderStatus | "Semua"; search?: string };
+
+function orderListParams(filters?: OrderFilters) {
   const wireStatus =
     filters?.status && filters.status !== "Semua" ? STATUS_TO_WIRE[filters.status] : undefined;
-  const page = await getList<OrderResponse>("/orders", {
-    pageSize: 100,
+  return {
     search: filters?.search || undefined,
-    filters: wireStatus ? [{ field: "order_status", operator: "eq", value: wireStatus }] : undefined,
-    sort: [{ field: "order_date", direction: "desc" }],
-  });
-  return page.items.map(toView);
+    filters: wireStatus ? [{ field: "order_status", operator: "eq" as const, value: wireStatus }] : undefined,
+    sort: [{ field: "order_date", direction: "desc" as const }],
+  };
 }
 
-/** No aggregate endpoint exists; counted from the same list the screen shows. */
+/** One server page of orders. */
+async function getOrders(filters?: OrderFilters, page = 1): Promise<Paged<OrderView>> {
+  return getPage<OrderResponse, OrderView>("/orders", { ...orderListParams(filters), page, pageSize: 50 }, toView);
+}
+
+/** Every order matching the filters, for the export. */
+async function getAllOrders(filters?: OrderFilters): Promise<OrderView[]> {
+  const { items } = await getAllPages<OrderResponse>("/orders", orderListParams(filters));
+  return items.map(toView);
+}
+
+/**
+ * The status strip. No aggregate endpoint exists, so: the two open statuses
+ * are read whole (they carry a unit total, and stay few), the closed ones are
+ * counted by the server. This used to count the newest 100 orders, so every
+ * figure stopped growing at 100 (fixed 2026-11-02).
+ */
 async function getOrderTotals() {
-  const all = await getOrders();
-  const count = (s: OrderStatus) => all.filter((o) => o.status === s).length;
+  const count = async (status: OrderStatus) => {
+    const page = await getList<OrderResponse>("/orders", { ...orderListParams({ status }), page: 1, pageSize: 1 });
+    return page.pagination.total_items ?? page.items.length;
+  };
+  const [baru, disetujui, dijadwalkan, selesai, ditolak] = await Promise.all([
+    getAllOrders({ status: "Baru" }),
+    getAllOrders({ status: "Disetujui" }),
+    count("Dijadwalkan"),
+    count("Selesai"),
+    count("Ditolak"),
+  ]);
+  const units = (rows: OrderView[]) => rows.reduce((s, o) => s + o.jumlahUnit, 0);
   return {
-    baru: count("Baru"),
-    baruUnit: all.filter((o) => o.status === "Baru").reduce((s, o) => s + o.jumlahUnit, 0),
-    disetujui: count("Disetujui"),
-    disetujuiUnit: all
-      .filter((o) => o.status === "Disetujui")
-      .reduce((s, o) => s + o.jumlahUnit, 0),
-    dijadwalkan: count("Dijadwalkan"),
-    selesai: count("Selesai"),
-    ditolak: count("Ditolak"),
+    baru: baru.length,
+    baruUnit: units(baru),
+    disetujui: disetujui.length,
+    disetujuiUnit: units(disetujui),
+    dijadwalkan,
+    selesai,
+    ditolak,
   };
 }
 
@@ -225,7 +246,7 @@ async function addOrdersToPlan(planId: string, orderIds: string[]): Promise<numb
  * two-way feature import would be a real cycle, not just an inconvenient one).
  */
 async function defaultProductId(): Promise<string> {
-  const page = await getList<{ id: string }>("/products", {
+  const page = await getAllPages<{ id: string }>("/products", {
     pageSize: 1,
     filters: [{ field: "status", operator: "eq", value: "atv" }],
   });
@@ -261,9 +282,16 @@ async function createOrder(input: {
  * back from distribution.
  */
 async function getSchedulablePlans() {
-  const page = await getList<{ id: string; order_number: string; planned_delivery_date: string; order_status: string }>(
+  // Drafts only, from the server, through every page. This read the 100
+  // oldest plans of any status and kept the future drafts among them, so
+  // once a tenant had 100 past plans no plan could be picked at all
+  // (fixed 2026-11-02).
+  const page = await getAllPages<{ id: string; order_number: string; planned_delivery_date: string; order_status: string }>(
     "/distribution/orders",
-    { pageSize: 100, sort: [{ field: "planned_delivery_date" }] },
+    {
+      sort: [{ field: "planned_delivery_date" }],
+      filters: [{ field: "order_status", operator: "eq" as const, value: "draft" }],
+    },
   );
   const today = isoDate(startOfToday());
   return page.items
@@ -272,7 +300,7 @@ async function getSchedulablePlans() {
 }
 
 async function exportOrders(status?: OrderStatus | "Semua"): Promise<number> {
-  const rows = await getOrders({ status });
+  const rows = await getAllOrders({ status });
   exportCsv(
     `pesanan-${timestampSuffix()}`,
     [

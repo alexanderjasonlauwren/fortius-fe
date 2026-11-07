@@ -6,6 +6,7 @@ export { EXPENSE_STATUS_LABEL } from "./contract";
 
 const api: ExpenseApi = expenseApiHttp;
 export const getExpenses = api.getExpenses.bind(api);
+export const getPendingExpenses = api.getPendingExpenses.bind(api);
 export const getExpense = api.getExpense.bind(api);
 export const createExpense = api.createExpense.bind(api);
 export const updateExpense = api.updateExpense.bind(api);

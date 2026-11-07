@@ -1,3 +1,4 @@
+import type { Paged } from "@/lib/api";
 /**
  * What every cash voucher adapter must provide.
  *
@@ -109,7 +110,8 @@ export interface CashVoucherFilters {
 }
 
 export interface CashVoucherApi {
-  listCashVouchers(filters?: CashVoucherFilters): Promise<CashVoucher[]>;
+  /** One server page; `page` is 1-based. */
+  listCashVouchers(filters?: CashVoucherFilters, page?: number): Promise<Paged<CashVoucher>>;
   getCashVoucher(id: string): Promise<CashVoucher>;
   createCashVoucher(input: CreateCashVoucherInput): Promise<CashVoucher>;
   updateCashVoucher(input: UpdateCashVoucherInput): Promise<CashVoucher>;

@@ -1,7 +1,8 @@
 import { scopeKey } from "@/lib/scope";
+import { useResettableState } from "@/hooks/useResettableState";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Download, FileSpreadsheet, ReceiptText, RotateCcw } from "lucide-react";
 import {
   defaultRange,
@@ -58,9 +59,11 @@ export function TransactionListPage() {
     statusBayar: "Semua",
   }));
 
+  const [page, setPage] = useResettableState([filters], () => 1);
   const rows = useQuery({
-    queryKey: [...scopeKey(), "transactions", filters],
-    queryFn: () => getTransactions(filters),
+    queryKey: [...scopeKey(), "transactions", filters, page],
+    queryFn: () => getTransactions(filters, page),
+    placeholderData: keepPreviousData,
   });
   const summary = useQuery({
     queryKey: [...scopeKey(), "transaction-summary", filters],
@@ -104,7 +107,10 @@ export function TransactionListPage() {
     });
 
   const s = summary.data;
-  const data = rows.data ?? [];
+  const data = rows.data?.items ?? [];
+  // The count is the summary's, which reads every matching row; the table
+  // shows one page of them.
+  const total = s?.jumlah ?? 0;
 
   // Read-only by design: this page is for finding and exporting, not editing.
   const columns: Column<TransactionRow>[] = [
@@ -258,14 +264,14 @@ export function TransactionListPage() {
             <Button
               variant="outline"
               onClick={() => csvMutation.mutate(undefined as never)}
-              disabled={csvMutation.isPending || data.length === 0}
+              disabled={csvMutation.isPending || total === 0}
             >
               <Download className="h-3.5 w-3.5" />
               CSV
             </Button>
             <Button
               onClick={() => excelMutation.mutate(undefined as never)}
-              disabled={excelMutation.isPending || data.length === 0}
+              disabled={excelMutation.isPending || total === 0}
             >
               <FileSpreadsheet className="h-3.5 w-3.5" />
               Unduh Excel
@@ -416,12 +422,19 @@ export function TransactionListPage() {
         </div>
       </div>
 
+      {s && !s.lengkap && (
+        <p role="status" className="rounded-md border border-signal/40 bg-signal-soft px-4 py-3 text-xs text-signal-ink">
+          Transaksi pada saringan ini terlalu banyak untuk dijumlah sekaligus, jadi ringkasan adalah batas bawah.
+          Persempit rentang tanggal untuk angka yang lengkap.
+        </p>
+      )}
+
       <Panel>
         <PanelHeader
           title="Daftar transaksi"
           hint={
-            data.length > 0
-              ? `${formatNumber(data.length)} baris · ${formatRupiah(s?.nilai ?? 0)}`
+            total > 0
+              ? `${formatNumber(total)} baris · ${formatRupiah(s?.nilai ?? 0)}`
               : undefined
           }
         />
@@ -435,9 +448,7 @@ export function TransactionListPage() {
               ? "text-draft"
               : spineFor(row.statusBayar)
           }
-          pageSize={25}
-          defaultSortKey="tanggal"
-          defaultSortDir="desc"
+          server={rows.data && { ...rows.data, onPageChange: setPage }}
           emptyIcon={ReceiptText}
           emptyMessage="Tidak ada transaksi pada saringan ini"
           emptyDescription="Longgarkan rentang tanggal atau kosongkan sebagian filter untuk melihat lebih banyak baris."
@@ -450,7 +461,7 @@ export function TransactionListPage() {
           footer={
             <tr>
               <td className="px-4 py-3 text-xs font-semibold text-ink" colSpan={4}>
-                Total {formatNumber(data.length)} baris
+                Total {formatNumber(total)} baris
               </td>
               <td className="data px-4 py-3 text-right text-xs font-semibold text-ink">
                 {formatNumber(s?.unit ?? 0)}

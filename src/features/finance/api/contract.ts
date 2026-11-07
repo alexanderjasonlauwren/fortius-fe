@@ -1,3 +1,4 @@
+import type { Paged } from "@/lib/api";
 /**
  * What every finance adapter must provide.
  *
@@ -134,6 +135,8 @@ export interface AgingReport {
   jatuhTempoTotal: number;
   outletMenunggak: number;
   buckets: readonly string[];
+  /** False when an open-invoice list hit the page ceiling: totals are a floor. */
+  lengkap: boolean;
 }
 
 export interface PaymentView {
@@ -321,9 +324,13 @@ export interface ProfitAndLossView {
 }
 
 export interface FinanceApi {
-  getInvoices(filters?: InvoiceFilters): Promise<InvoiceView[]>;
+  /** One server page; `page` is 1-based. */
+  getInvoices(filters?: InvoiceFilters, page?: number): Promise<Paged<InvoiceView>>;
   getAgingReport(): Promise<AgingReport>;
-  getPayments(status?: string, search?: string): Promise<PaymentView[]>;
+  /** One server page; `page` is 1-based. */
+  getPayments(status?: string, search?: string, page?: number): Promise<Paged<PaymentView>>;
+  /** Every receipt waiting for verification. */
+  getPendingPayments(): Promise<PaymentView[]>;
   /** Open invoices for the allocation picker. */
   getOpenInvoices(outletId: string): Promise<InvoiceView[]>;
   /** "Buat tagihan" (financial-statements plan P5 / gap-closing plan
@@ -349,13 +356,15 @@ export interface FinanceApi {
   /** Reverses fundDistributionStop for a stop not yet dispatched. */
   releaseDistributionStop(input: FundStopInput): Promise<FundingResult>;
   submitCreditNote(input: CreditNoteInput): Promise<CreditNoteView>;
-  getCreditNotes(filters?: CreditNoteFilters): Promise<CreditNoteView[]>;
+  /** One server page; `page` is 1-based. */
+  getCreditNotes(filters?: CreditNoteFilters, page?: number): Promise<Paged<CreditNoteView>>;
   /** Lands an issued credit note on its invoice (or on invoiceId, for a
    *  credit on account). */
   applyCreditNote(id: string, version: number, invoiceId?: string): Promise<CreditNoteView>;
   cancelCreditNote(id: string, version: number, reason: string): Promise<CreditNoteView>;
   getInvoice(id: string): Promise<InvoiceDetailView>;
-  getJournals(range?: DateRange, query?: JournalQuery): Promise<JournalView[]>;
+  /** One server page of the range's journals; `page` is 1-based. */
+  getJournals(range?: DateRange, query?: JournalQuery, page?: number): Promise<Paged<JournalView>>;
   /** "Jurnal umum" (gap-closing plan, Phase E). Refused by the real
    *  backend's own finance.create.journals grant for anyone but
    *  tenant_admin -- the same tier manual journal entry has always sat

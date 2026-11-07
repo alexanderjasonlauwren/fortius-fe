@@ -1,3 +1,4 @@
+import type { Paged } from "@/lib/api";
 /**
  * What every transactions adapter must provide.
  *
@@ -66,6 +67,8 @@ export interface TransactionSummary {
   ditolak: number;
   belumDitagih: number;
   outlet: number;
+  /** False when the walk hit the page ceiling: the figures are a floor. */
+  lengkap: boolean;
 }
 
 export interface TransactionFilterOption {
@@ -89,7 +92,8 @@ export function defaultRange(): { from: string; to: string } {
 }
 
 export interface TransactionsApi {
-  getTransactions(filters?: TransactionFilters): Promise<TransactionRow[]>;
+  /** One server page; `page` is 1-based. */
+  getTransactions(filters?: TransactionFilters, page?: number): Promise<Paged<TransactionRow>>;
   getTransactionSummary(filters?: TransactionFilters): Promise<TransactionSummary>;
   getTransactionFilterOptions(): Promise<TransactionFilterOptions>;
   exportTransactionsExcel(filters?: TransactionFilters): Promise<number>;

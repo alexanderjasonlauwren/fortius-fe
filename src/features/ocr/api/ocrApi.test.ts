@@ -7,6 +7,7 @@ const upload = vi.fn();
 vi.mock("@/lib/api", () => ({
   apiClient: { defaults: { baseURL: "http://localhost:8010/api/v1" } },
   getList: (...args: unknown[]) => getList(...args),
+  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: (...args: unknown[]) => upload(...args),

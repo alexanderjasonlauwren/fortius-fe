@@ -16,7 +16,7 @@ import { OrderListPage } from "./OrderListPage";
 beforeEach(() => {
   state.manual = false; state.pending = false; state.error = false;
   state.plans.mockReset().mockResolvedValue([]); state.outlets.mockReset().mockResolvedValue([]);
-  state.orders.mockReset().mockResolvedValue([{ id: "order", kode: "ORD-HISTORY", status: "Baru", outletId: "outlet", outlet: "Pangkalan A", kecamatan: "Salatiga", jumlahUnit: 50, sisaKuotaOutlet: 100, tanggalMasuk: "2026-09-18T00:00:00Z", tanggalDiminta: "2026-09-19" }]);
+  state.orders.mockReset().mockResolvedValue({ page: 1, pageSize: 50, hasNext: false, items: [{ id: "order", kode: "ORD-HISTORY", status: "Baru", outletId: "outlet", outlet: "Pangkalan A", kecamatan: "Salatiga", jumlahUnit: 50, sisaKuotaOutlet: 100, tanggalMasuk: "2026-09-18T00:00:00Z", tanggalDiminta: "2026-09-19" }] });
 });
 afterEach(cleanup);
 function setup() { const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); return render(<QueryClientProvider client={client}><MemoryRouter><OrderListPage /></MemoryRouter></QueryClientProvider>); }

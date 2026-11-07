@@ -9,7 +9,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { BankSection } from "@/features/settings/components/BankSection";
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, FolderOpen, Plus, Wallet } from "lucide-react";
 import { getBankAccounts } from "@/features/bankaccounts/api/bankAccountApi";
 import {
@@ -40,6 +40,7 @@ import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { getStatusVariant, spineFor } from "@/lib/status";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
+import { useResettableState } from "@/hooks/useResettableState";
 
 type Tab = "transaksi" | "rekening-koran" | "rekonsiliasi" | "rekening";
 
@@ -85,9 +86,14 @@ export function CashBankPage() {
     from: voucherFrom || undefined,
     to: voucherTo || undefined,
   };
+  const [voucherPage, setVoucherPage] = useResettableState(
+    [voucherStatusFilter, voucherTypeFilter, voucherAccountFilter, voucherSearch, voucherFrom, voucherTo],
+    () => 1,
+  );
   const vouchers = useQuery({
-    queryKey: [...scopeKey(), "cash-bank", "vouchers", voucherFilters],
-    queryFn: () => listCashVouchers(voucherFilters),
+    queryKey: [...scopeKey(), "cash-bank", "vouchers", voucherFilters, voucherPage],
+    queryFn: () => listCashVouchers(voucherFilters, voucherPage),
+    placeholderData: keepPreviousData,
     enabled: tab === "transaksi",
   });
 
@@ -178,7 +184,11 @@ export function CashBankPage() {
         <Panel>
           <PanelHeader
             title="Voucher kas & bank"
-            hint={`${vouchers.data?.length ?? 0} voucher`}
+            hint={
+              vouchers.data?.totalItems !== undefined
+                ? `${vouchers.data.totalItems.toLocaleString("id-ID")}${vouchers.data.totalIsFloor ? "+" : ""} voucher`
+                : undefined
+            }
             actions={
               <div className="flex flex-wrap items-center gap-2">
                 <SearchInput value={voucherSearch} onChange={setVoucherSearch} placeholder="Nomor, referensi, kontak" className="w-56" />
@@ -213,14 +223,12 @@ export function CashBankPage() {
           />
           <DataTable
             columns={voucherColumns}
-            data={vouchers.data ?? []}
+            data={vouchers.data?.items ?? []}
             isLoading={vouchers.isLoading}
             rowKey={(row) => row.id}
             onRowClick={setViewing}
             spineFor={(row) => spineFor(VOUCHER_STATUS_LABEL[row.status])}
-            pageSize={12}
-            defaultSortKey="date"
-            defaultSortDir="desc"
+            server={vouchers.data && { ...vouchers.data, onPageChange: setVoucherPage }}
             dense
             emptyIcon={Wallet}
             emptyMessage={voucherSearch || voucherFrom || voucherTo || voucherStatusFilter || voucherTypeFilter || voucherAccountFilter ? "Tidak ada voucher yang cocok" : "Belum ada voucher"}
