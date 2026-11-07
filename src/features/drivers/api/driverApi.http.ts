@@ -185,6 +185,7 @@ interface ScheduleDeliveryResponse {
   id: string;
   delivery_number: string;
   outlet_name?: string;
+  outlet_district?: string;
   dispatched_qty: number;
   delivered_qty: number;
   delivery_status: string;
@@ -214,10 +215,9 @@ function toDeliveryStatus(status: string): "Antrian" | "Proses" | "Selesai" | "T
 /**
  * Today's stop list for one truck, against `GET /deliveries`.
  *
- * `jam` and `kecamatan` stay placeholders (`""` and `"—"`) rather than
- * invented values: no column anywhere in the schema carries a stop's planned
- * clock time (`sopirApi.http.ts`'s own `jamRencana` reads the same way), and
- * `DeliveryResponse` carries an outlet's name but not its district. Sorting
+ * `jam` stays a placeholder (`""`) rather than an invented value: no column
+ * anywhere in the schema carries a stop's planned clock time
+ * (`sopirApi.http.ts`'s own `jamRencana` reads the same way). Sorting
  * therefore falls back to creation order rather than a clock the service
  * does not keep.
  *
@@ -245,7 +245,7 @@ export async function getDriverSchedule(id: string) {
     kode: d.delivery_number,
     jam: "",
     outlet: d.outlet_name ?? "—",
-    kecamatan: "—",
+    kecamatan: d.outlet_district ?? "—",
     target: d.dispatched_qty,
     realisasi: d.delivered_qty,
     status: toDeliveryStatus(d.delivery_status),

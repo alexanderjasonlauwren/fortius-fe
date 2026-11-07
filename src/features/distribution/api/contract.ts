@@ -63,6 +63,13 @@ export interface CreditOverrideInput {
   reason: string;
 }
 
+/** Someone the dispatch accepts as a credit override's second approver. */
+export interface CreditApprover {
+  id: string;
+  nama: string;
+  username: string;
+}
+
 /** What a dispatch attempt actually issued. */
 export interface DispatchResult {
   /** How many surat jalan this run produced — one per stop. */
@@ -182,4 +189,10 @@ export interface DistributionApi {
    * stops) with no override path at all — those are not credit questions.
    */
   dispatchTrip(tripId: string, overrides?: CreditOverrideInput[]): Promise<DispatchResult>;
+  /**
+   * Who holds the override authority tenant-wide here -- exactly whom the
+   * dispatch accepts. The signed-in user may be among them; naming yourself
+   * is refused, so the picker leaves them out.
+   */
+  getCreditApprovers(): Promise<CreditApprover[]>;
 }

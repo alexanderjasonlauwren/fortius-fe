@@ -36,7 +36,8 @@ import { Button } from "@/components/ui/button";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { printDocument } from "@/lib/export";
 import { formatDateId, formatRupiah } from "@/lib/format";
-import { scopeKey } from "@/lib/scope";
+import { getActingTenant, scopeKey } from "@/lib/scope";
+import { getBranches } from "@/features/tenancy/api/tenancyApi";
 import { effectiveLayout, layoutsForPeriod } from "@/features/financialstatements/lib/layouts";
 
 type Tab = "laba-rugi" | "neraca" | "penjelasan" | "komparasi" | "buku-besar";
@@ -75,6 +76,8 @@ function resolvePeriod(year: number, month: number | "semua"): { from: string; t
   return { from, to: clampedTo, asOf: clampedTo };
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 const TABS: Tab[] = ["laba-rugi", "neraca", "penjelasan", "komparasi", "buku-besar"];
 
 export function FinancialStatementsPage() {
@@ -85,9 +88,35 @@ export function FinancialStatementsPage() {
     const t = params.get("tab") as Tab | null;
     return t && TABS.includes(t) ? t : "laba-rugi";
   });
-  const [year, setYear] = useState(() => new Date().getFullYear());
-  const [month, setMonth] = useState<number | "semua">("semua");
+  // ?from=&to= is the period of the report a Buku Besar link came from. It
+  // holds for the ledger until the year or month is changed here, and opens
+  // the selectors on its year.
+  const [glRange, setGlRange] = useState<{ from: string; to: string } | null>(() => {
+    const from = params.get("from");
+    const to = params.get("to");
+    return from && to && ISO_DATE.test(from) && ISO_DATE.test(to) && from <= to ? { from, to } : null;
+  });
+  const [year, setYearState] = useState(() => (glRange ? Number(glRange.from.slice(0, 4)) : new Date().getFullYear()));
+  const [month, setMonthState] = useState<number | "semua">("semua");
+  const setYear = (next: number) => {
+    setGlRange(null);
+    setYearState(next);
+  };
+  const setMonth = (next: number | "semua") => {
+    setGlRange(null);
+    setMonthState(next);
+  };
+  // "" is every branch. Laba Rugi, Neraca and the Excel package take a
+  // branch; the notes and the ledger are tenant-wide on the server, so the
+  // picker is not shown beside them.
+  const [branchId, setBranchId] = useState("");
+  const branches = useQuery({
+    queryKey: [...scopeKey(), "branches", "for-statements"],
+    queryFn: () => getBranches(getActingTenant()),
+  });
+  const branchName = branches.data?.find((b) => b.id === branchId)?.nama;
   const period = resolvePeriod(year, month);
+  const glPeriod = glRange ?? period;
 
   const [glAccount, setGlAccount] = useState<{ id: string; code: string } | null>(() => {
     const account = params.get("account");
@@ -114,12 +143,13 @@ export function FinancialStatementsPage() {
   const bsLayout = effectiveLayout(bsChosen, bsOffered);
 
   const pl = useQuery({
-    queryKey: [...scopeKey(), "financial-statements", "pl", period.from, period.to, plLayout],
-    queryFn: () => getProfitAndLoss({ from: period.from, to: period.to, layout: plLayout || undefined }),
+    queryKey: [...scopeKey(), "financial-statements", "pl", period.from, period.to, plLayout, branchId],
+    queryFn: () =>
+      getProfitAndLoss({ from: period.from, to: period.to, layout: plLayout || undefined, branchId: branchId || undefined }),
   });
   const bs = useQuery({
-    queryKey: [...scopeKey(), "financial-statements", "bs", period.asOf, bsLayout],
-    queryFn: () => getBalanceSheet({ asOf: period.asOf, layout: bsLayout || undefined }),
+    queryKey: [...scopeKey(), "financial-statements", "bs", period.asOf, bsLayout, branchId],
+    queryFn: () => getBalanceSheet({ asOf: period.asOf, layout: bsLayout || undefined, branchId: branchId || undefined }),
   });
   const notes = useQuery({
     queryKey: [...scopeKey(), "financial-statements", "notes", period.asOf, bsLayout],
@@ -127,8 +157,8 @@ export function FinancialStatementsPage() {
     enabled: tab === "penjelasan",
   });
   const gl = useQuery({
-    queryKey: [...scopeKey(), "financial-statements", "gl", glAccount?.id, period.from, period.to],
-    queryFn: () => getGeneralLedger({ accountId: glAccount!.id, from: period.from, to: period.to }),
+    queryKey: [...scopeKey(), "financial-statements", "gl", glAccount?.id, glPeriod.from, glPeriod.to],
+    queryFn: () => getGeneralLedger({ accountId: glAccount!.id, from: glPeriod.from, to: glPeriod.to }),
     enabled: tab === "buku-besar" && !!glAccount,
   });
 
@@ -162,13 +192,16 @@ export function FinancialStatementsPage() {
             : { dateFrom: period.from, dateTo: period.to, asOf: period.asOf }),
           layoutProfitLoss: plLayout || undefined,
           layoutBalanceSheet: bsLayout || undefined,
+          branchId: branchId || undefined,
         },
       ),
     errorTitle: "Unduh laporan gagal",
     success: "Laporan keuangan diunduh",
   });
 
+  // From a statement on this page: the ledger follows the statement's period.
   function openInGeneralLedger(accountId: string, code: string) {
+    setGlRange(null);
     setGlAccount({ id: accountId, code });
     setTab("buku-besar");
   }
@@ -179,9 +212,9 @@ export function FinancialStatementsPage() {
   // dialog, whose "Save as PDF" is the PDF.
   const printable =
     tab === "laba-rugi" && pl.data
-      ? { title: "Laporan Laba Rugi", statement: pl.data, period: `Periode ${formatDateId(period.from)} – ${formatDateId(period.to)}` }
+      ? { title: "Laporan Laba Rugi", statement: pl.data, period: `Periode ${formatDateId(period.from)} – ${formatDateId(period.to)}${branchName ? ` · Cabang ${branchName}` : ""}` }
       : tab === "neraca" && bs.data
-        ? { title: "Neraca", statement: bs.data, period: `Per ${formatDateId(period.asOf)}` }
+        ? { title: "Neraca", statement: bs.data, period: `Per ${formatDateId(period.asOf)}${branchName ? ` · Cabang ${branchName}` : ""}` }
         : null;
 
   return (
@@ -251,6 +284,16 @@ export function FinancialStatementsPage() {
               ))}
             </SelectInput>
           </Field>
+          {(tab === "laba-rugi" || tab === "neraca") && (branches.data?.length ?? 0) > 1 && (
+            <Field label="Cabang" htmlFor="fs-branch">
+              <SelectInput id="fs-branch" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                <option value="">Semua cabang</option>
+                {(branches.data ?? []).map((b) => (
+                  <option key={b.id} value={b.id}>{b.nama}</option>
+                ))}
+              </SelectInput>
+            </Field>
+          )}
           {(tab === "laba-rugi" || tab === "neraca" || tab === "penjelasan") && (
             <Field label="Format" htmlFor="fs-layout" hint="Format 2025 tersedia untuk periode tahun 2025.">
               <SelectInput
@@ -445,7 +488,7 @@ export function FinancialStatementsPage() {
         <Panel>
           <PanelHeader
             title="Buku Besar"
-            hint={glAccount ? `Akun ${glAccount.code || gl.data?.accountCode || ""}${gl.data?.accountName ? ` ${gl.data.accountName}` : ""}, periode ${formatDateId(period.from)} - ${formatDateId(period.to)}` : "Pilih akun dari Laba Rugi atau Neraca"}
+            hint={glAccount ? `Akun ${glAccount.code || gl.data?.accountCode || ""}${gl.data?.accountName ? ` ${gl.data.accountName}` : ""}, periode ${formatDateId(glPeriod.from)} - ${formatDateId(glPeriod.to)}` : "Pilih akun dari Laba Rugi atau Neraca"}
           />
           {!glAccount ? (
             <p className="p-4 text-sm text-ink-muted">

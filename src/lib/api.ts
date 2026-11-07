@@ -261,7 +261,9 @@ interface Envelope<T> {
   request_id: string;
   data: T;
   pagination?: Pagination;
-  error?: { code: string; details?: Violation[] };
+  /** A validation failure's details are its violations; other refusals
+   *  may carry their own shape (a credit breach names its outlet). */
+  error?: { code: string; details?: unknown };
 }
 
 export interface Page<T> {
@@ -279,26 +281,31 @@ export interface Page<T> {
  *
  * `requestId` should appear in any error surface a user can screenshot. It is
  * the only thing that finds the matching server log.
+ *
+ * `details` is the refusal's structured context as sent; `violations` is the
+ * same when it is a validation failure's field list, and empty otherwise.
  */
 export class ApiError extends Error {
   readonly code: string;
   readonly status?: number;
   readonly requestId?: string;
   readonly violations: Violation[];
+  readonly details: unknown;
 
   constructor(init: {
     message: string;
     code: string;
     status?: number;
     requestId?: string;
-    violations?: Violation[];
+    details?: unknown;
   }) {
     super(init.message);
     this.name = "ApiError";
     this.code = init.code;
     this.status = init.status;
     this.requestId = init.requestId;
-    this.violations = init.violations ?? [];
+    this.details = init.details;
+    this.violations = Array.isArray(init.details) ? (init.details as Violation[]) : [];
   }
 }
 
@@ -312,7 +319,7 @@ function toApiError(error: unknown): ApiError {
       code: envelope.error?.code ?? "UNKNOWN",
       status: axiosError.response?.status,
       requestId: envelope.request_id,
-      violations: envelope.error?.details,
+      details: envelope.error?.details,
     });
   }
 

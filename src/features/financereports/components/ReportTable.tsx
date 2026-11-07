@@ -28,7 +28,7 @@ export function ReportTable({ report }: { report: Report }) {
         </thead>
         <tbody>
           {report.rows.map((row, i) => {
-            const href = reportLinkHref(row.link);
+            const href = reportLinkHref(row.link, report.period);
             return (
               <tr
                 key={i}

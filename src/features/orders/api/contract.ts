@@ -33,14 +33,7 @@ export interface OrderApi {
   approveOrder(id: string, catatan?: string): Promise<OrderView>;
   declineOrder(id: string, alasan: string): Promise<OrderView>;
   approveOrderBatch(ids: string[]): Promise<{ approved: number; failures: string[] }>;
-  /**
-   * Pulls approved orders onto a draft plan.
-   *
-   * The mock validates every id before touching any of them, so a batch
-   * either fully applies or fully refuses. The real endpoint decides one
-   * order at a time -- see `orderApi.http.ts`'s own header for what that
-   * means for a batch that fails partway through.
-   */
+  /** Pulls approved orders onto a draft plan: all of them, or none. */
   addOrdersToPlan(planId: string, orderIds: string[]): Promise<number>;
   createOrder(input: {
     outletId: string;

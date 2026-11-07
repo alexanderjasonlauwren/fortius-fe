@@ -20,16 +20,12 @@
  * ("Tetapkan driver di Perencanaan Distribusi sebelum konfirmasi"), and the
  * same is now true of the line itself, not only the driver.
  *
- * `addOrdersToPlan` is also no longer atomic the way the mock's
- * `scheduleOrders` is: the mock validates every order before touching any of
- * them, so a batch either fully applies or fully refuses. The real endpoint
- * decides one order at a time, so a failure partway through a batch leaves
- * the earlier ones already scheduled -- the thrown error says how many.
+ * Scheduling several orders is one request (`POST /orders/schedule`): every
+ * order lands on the plan or none does, and a refusal names the order that
+ * stopped it.
  *
- * There is also no batch-approve endpoint, and `ApproveRequest` carries no
- * note field -- `approveOrder`'s own `catatan` parameter is accepted for
- * interface parity with the mock and silently has nowhere to go, matching
- * `OrderListPage`'s own call site, which never actually passes one.
+ * There is no batch-approve endpoint: `approveOrderBatch` approves one order
+ * at a time and reports the failures.
  */
 import { getAllPages, getList, getOne, getPage, send, type Paged } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
@@ -62,7 +58,13 @@ interface OrderResponse {
   distribution_order_number?: string;
   rejection_reason?: string;
   notes?: string;
+  approval_note?: string;
   approved_at?: string;
+  approved_by_name?: string;
+  outlet_district?: string;
+  /** The outlet's monthly target for these products less what live plans
+   *  carry that month; absent when no target is set. */
+  outlet_month_remaining?: number;
   lines: OrderLineResponse[];
   version: number;
   created_at: string;
@@ -101,25 +103,17 @@ function toView(order: OrderResponse): OrderView {
     tanggalDiminta: order.requested_delivery_date ?? order.order_date,
     status: STATUS_TO_DOMAIN[order.order_status] ?? "Baru",
     planId: order.distribution_order_id,
-    // A rejection's reason takes priority over a free-text note: once an
-    // order is rejected, why is the more useful thing to show beside it.
-    catatan: order.rejection_reason ?? order.notes,
-    // No approver name -- OrderResponse's own header explains why: the
-    // acting user's internal id never leaves the process, and this adapter
-    // is not going to add a second join the response does not carry.
-    diprosesOleh: undefined,
+    // The decision's own words first: why it was rejected, or what the
+    // approver noted. The outlet's request text otherwise.
+    catatan: order.rejection_reason ?? order.approval_note ?? order.notes,
+    // Who approved it. A rejection records no actor on the order.
+    diprosesOleh: order.approved_by_name,
     diprosesPada: order.order_status !== "requested" ? order.updated_at : undefined,
     outlet: order.outlet_name,
-    // Not on OrderResponse -- the outlet's district belongs to the outlet
-    // module, and resolving it here would be a lookup per row on a list
-    // screen. Same "arrives as unknown rather than a fabricated value"
-    // choice distributionApi.http.ts makes for a stop's own decoration.
-    kecamatan: "—",
-    // Likewise not on OrderResponse: the outlet's remaining monthly quota
-    // lives in outlet targets, and a real number here costs one lookup per
-    // row. Infinity rather than 0 -- 0 would flag every order as over
-    // quota, which is the wrong direction to be wrong in.
-    sisaKuotaOutlet: Number.POSITIVE_INFINITY,
+    kecamatan: order.outlet_district ?? "—",
+    // Infinity when no target is set, rather than 0: 0 would flag the order
+    // as over quota, which is the wrong direction to be wrong in.
+    sisaKuotaOutlet: order.outlet_month_remaining ?? Number.POSITIVE_INFINITY,
     kodeRencana: order.distribution_order_number,
   };
 }
@@ -177,10 +171,11 @@ async function getOrderTotals() {
   };
 }
 
-async function approveOrder(id: string): Promise<OrderView> {
+async function approveOrder(id: string, catatan?: string): Promise<OrderView> {
   const current = await getOne<OrderResponse>(`/orders/${id}`);
   return toView(await send<OrderResponse>("post", `/orders/${id}/approve`, {
     version: current.version,
+    note: catatan?.trim() || undefined,
   }));
 }
 
@@ -209,32 +204,22 @@ async function approveOrderBatch(ids: string[]) {
 }
 
 /**
- * Schedules one order onto a plan. Exported (not only used internally) so
- * `distributionApi.http.ts`'s own `addApprovedOrders` can call the same real
- * request rather than carrying a second copy of it.
+ * Schedules approved orders onto a plan in one request: all of them, or none.
+ * Exported so `distributionApi.http.ts`'s own `addApprovedOrders` makes the
+ * same request rather than carrying a second copy of it.
  */
-export async function scheduleOneOrder(orderId: string, planId: string): Promise<void> {
-  const current = await getOne<OrderResponse>(`/orders/${orderId}`);
-  await send("post", `/orders/${orderId}/schedule`, {
-    version: current.version,
+export async function scheduleOrders(planId: string, orderIds: string[]): Promise<number> {
+  if (orderIds.length === 0) return 0;
+  const current = await Promise.all(orderIds.map((id) => getOne<OrderResponse>(`/orders/${id}`)));
+  const scheduled = await send<OrderResponse[]>("post", "/orders/schedule", {
     distribution_order_id: planId,
+    orders: current.map((o) => ({ id: o.id, version: o.version })),
   });
+  return scheduled.length;
 }
 
 async function addOrdersToPlan(planId: string, orderIds: string[]): Promise<number> {
-  let scheduled = 0;
-  for (const id of orderIds) {
-    try {
-      await scheduleOneOrder(id, planId);
-      scheduled += 1;
-    } catch (error) {
-      throw new Error(
-        `${scheduled} dari ${orderIds.length} pesanan terjadwalkan sebelum gagal: ` +
-          `${(error as Error).message}`,
-      );
-    }
-  }
-  return scheduled;
+  return scheduleOrders(planId, orderIds);
 }
 
 /**
@@ -242,7 +227,7 @@ async function addOrdersToPlan(planId: string, orderIds: string[]): Promise<numb
  * implied line -- the same fallback `distributionApi.http.ts`'s own
  * `getDefaultProductId` uses, kept as a separate call rather than an import
  * from that feature so this file has no dependency back onto distribution
- * (which itself depends on this one, for `scheduleOneOrder` below -- a
+ * (which itself depends on this one, for `scheduleOrders` above -- a
  * two-way feature import would be a real cycle, not just an inconvenient one).
  */
 async function defaultProductId(): Promise<string> {

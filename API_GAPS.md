@@ -1,6 +1,6 @@
 # Known API gaps, per feature
 
-**Last verified against the code:** 2026-11-02
+**Last verified against the code:** 2026-11-06
 
 The console talks only to the fortius-backend API (mock mode was removed on
 2026-10-12). Each feature lives in `src/features/<f>/api/` as `contract.ts`
@@ -28,21 +28,21 @@ older notices exist), and an outlet's recent deliveries.
 
 | Feature | Open gaps |
 | --- | --- |
-| assets | No void for an acquisition or a disposal (`open-findings.md` #12). The disposal preview uses depreciation posted to date; the backend uses what is posted through the disposal date, and refuses a disposal dated before a posted run's journal (409). The attachments panel is not mounted on assets, though the backend supports owner type `asset`. |
+| assets | No void for an acquisition or a disposal (`open-findings.md` #12). The disposal preview uses depreciation posted to date; the backend uses what is posted through the disposal date, and refuses a disposal dated before a posted run's journal (409). |
 | cashvouchers | Deleting a draft leaves a gap in the KB series (`business-gaps.md` G8). |
 | dashboard | The dispatch rail has no clock: no planned time of day exists in the schema. Jejak aktivitas is shown only to roles with `audit.read.audit_trails`, and only writes of the last 30 days. |
 | depreciationruns | The "preview before posting" is computed in the browser (`lib/depreciation.ts`, a port of the backend's straight-line formula) because the backend has no dry-run endpoint; the two can drift. |
-| distribution | A plan's stops show address "—", outlet receivable and remaining quota `0` (the receivable badge never appears), and "dibuat oleh" "—": none is on the order-item response. Credit-limit override: the second-approver picker lists every active user, and the outlet a breach names is matched from the error text. Re-uploading a source plan does not update drafts made from the previous upload. |
-| drivers | A driver's schedule shows `jam` and `kecamatan` as placeholders (no planned time of day; the delivery carries the outlet's name, not its district). |
+| distribution | A stop's remaining monthly quota arrives on the row (`sisaKuotaOutlet`) but the planning table has no column for it. Re-uploading a source plan does not update drafts made from the previous upload. |
+| drivers | A driver's schedule shows `jam` empty: no planned time of day exists in the schema. |
 | finance (Piutang, Penerimaan, Buku Besar) | Penerimaan's header no longer counts "belum dialokasikan" receipts: unallocated money cannot be filtered on the server, and the old count covered one tab's first page; the row spine still marks them. |
 | financedashboard | Tenant-wide, not per branch. A tenant still on the 2025 layout shows "—" for `laba_rugi_v2` lines it lacks. The 12-month trend is 12 requests. |
-| financereports | A vendor row does not drill down (vendors have no page). A Buku Besar opened from a report shows the current year, not the report's period. |
-| financialstatements | No branch picker on the page, so every statement is tenant-wide, though the adapter can send `branch_id`. |
+| financereports | A vendor row does not drill down (vendors have no page). |
+| financialstatements | The branch picker (shown when the tenant has more than one branch) covers Laba Rugi, Neraca and the Excel package. Penjelasan Akun, Komparasi and Buku Besar stay tenant-wide: the server takes no branch there. |
 | inventory | Quantities are tenant-wide, not per branch or truck (`core.stock_levels` is unwired — `technical-gaps.md` T9). |
 | notification | All seven rules generate hourly and save with their recipients (role codes, which narrow the permission audience and never widen it) and channels. Email goes out through the backend outbox when the installation has SMTP; **WhatsApp is shown but cannot be switched on** — no provider is chosen and outlet consent (B5) is open. A role nobody holds routes a rule to no one; the panel says so but does not count holders. The rules and channels save as two requests: a failure on the second leaves the first saved (the next load shows it). |
 | ocr | No OCR engine: what is "read" off a receipt is typed by hand. Uploads are scanned only once the installation runs clamd (`technical-gaps.md` T5); an infected file is refused (`FILE_INFECTED`). |
 | openingbalance | The refusal path for a deliberately broken workbook has not been verified against the real API (no scratch tenant without ledger activity existed); it is covered by unit tests only. |
-| orders | `sisaKuotaOutlet` and `kecamatan` are not on `OrderResponse`. An approval note (`catatan`) has no field server-side and is dropped. Scheduling several orders onto a plan is one request per order, not atomic; a failure partway leaves the earlier ones scheduled. |
+| orders | Mass approval is one request per order and reports the failures; scheduling several orders is one all-or-nothing request. A rejected order names no one under "diproses oleh": the order records an approver, not a rejecter. |
 | outlet | "Ditangguhkan" is the backend's `sus` (since 2026-11-02): listed and billable, refused at dispatch. What else a suspension should block is the client's call (`business-gaps.md` C6). |
 | products | Stock shows only for roles with `finance.read.inventory`; others see "Stok belum tersedia". Quantities are tenant-wide (`technical-gaps.md` T9). |
 | purchases | "Catat tebus" (SA detail, active agreements only) bills the whole granted quota at today's cost price; a partial tebus is not possible. |

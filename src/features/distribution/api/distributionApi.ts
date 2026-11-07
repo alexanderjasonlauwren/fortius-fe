@@ -30,12 +30,13 @@ export const getSAOutletPlan = api.getSAOutletPlan.bind(api);
 export const suggestAssignment = api.suggestAssignment.bind(api);
 export const applyAssignment = api.applyAssignment.bind(api);
 export const dispatchTrip = api.dispatchTrip.bind(api);
+export const getCreditApprovers = api.getCreditApprovers.bind(api);
 
 /**
  * Scheduling approved orders onto a plan, real now that `core.orders` has a
  * module to serve it (D3 B-Step 2). `addApprovedOrdersHttp` is not a second
  * implementation of this -- it calls straight into `orderApi.http.ts`'s own
- * `scheduleOneOrder`, so there is exactly one place this request is made.
+ * `scheduleOrders`, so there is exactly one place this request is made.
  */
 export const addApprovedOrders = addApprovedOrdersHttp;
 
