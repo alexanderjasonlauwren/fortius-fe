@@ -5,7 +5,7 @@
  * small backend module built alongside D3 A-Step 3's credit-limit dispatch
  * block: a plain append-only log, no update or delete.
  */
-import { getList, send } from "@/lib/api";
+import { getAllPages, send } from "@/lib/api";
 import type { CreateOutletWarningInput, OutletWarningApi, OutletWarningView } from "./contract";
 import type { ID } from "@/types/domain";
 
@@ -34,7 +34,7 @@ function toView(row: OutletWarningResponse): OutletWarningView {
 }
 
 async function getOutletWarnings(outletId: ID): Promise<OutletWarningView[]> {
-  const page = await getList<OutletWarningResponse>("/outlet-warnings", {
+  const page = await getAllPages<OutletWarningResponse>("/outlet-warnings", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "issued_on", direction: "desc" }],
     filters: [{ field: "outlet_id", operator: "eq" as const, value: outletId }],

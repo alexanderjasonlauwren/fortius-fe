@@ -252,6 +252,8 @@ export const PERMISSIONS = {
   TRANSPORT_TARIFFS_VIEW: "masterdata.read.transport_fee_tariffs",
   TRANSPORT_TARIFFS_CREATE: "masterdata.create.transport_fee_tariffs",
   INVENTORY_VIEW: "finance.read.inventory",
+  // Beranda's "Jejak aktivitas" (GET /audit-trails/recent).
+  AUDIT_VIEW: "audit.read.audit_trails",
   INVENTORY_CREATE: "finance.create.inventory",
   // Client answer 5 (2026-10-18): voids and refunds of overpaid receipts go
   // through a second person's approval. CREATE asks (plus the document's own

@@ -7,10 +7,11 @@ import { VendorSection } from "@/features/settings/components/VendorSection";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { CircleDollarSign, Layers, Plus, ShoppingCart } from "lucide-react";
 import { scopeKey } from "@/lib/scope";
-import { getPurchases, type PurchaseView } from "@/features/purchases/api/purchaseApi";
+import { useResettableState } from "@/hooks/useResettableState";
+import { getOpenPurchases, getPurchases, type PurchaseView } from "@/features/purchases/api/purchaseApi";
 import type { PurchaseFilters } from "@/features/purchases/api/contract";
 import { getVendors } from "@/features/suppliers/api/vendorApi";
 import { RecordPurchaseDialog } from "@/features/purchases/components/RecordPurchaseDialog";
@@ -44,14 +45,19 @@ export function PurchasesPage() {
   const [paying, setPaying] = useState<PurchaseView | null>(null);
   const [payingMany, setPayingMany] = useState(false);
 
+  const [page, setPage] = useResettableState([status, supplierId, search], () => 1);
   const list = useQuery({
-    queryKey: [...scopeKey(), "purchases", status, supplierId, search],
-    queryFn: () => getPurchases({ paymentStatus: status, supplierId: supplierId || undefined, search }),
+    queryKey: [...scopeKey(), "purchases", status, supplierId, search, page],
+    queryFn: () => getPurchases({ paymentStatus: status, supplierId: supplierId || undefined, search }, page),
+    placeholderData: keepPreviousData,
   });
+  // What is owed overall, whichever tab and page is showing: its own read of
+  // every open bill, not a sum over the visible rows.
+  const openBills = useQuery({ queryKey: [...scopeKey(), "purchases", "open", "all"], queryFn: () => getOpenPurchases() });
   const vendors = useQuery({ queryKey: [...scopeKey(), "vendors"], queryFn: getVendors });
 
-  const rows = list.data ?? [];
-  const owed = rows.filter((r) => r.paymentStatus === "unpaid" || r.paymentStatus === "partial");
+  const rows = list.data?.items ?? [];
+  const owed = openBills.data ?? [];
   const totalOwed = owed.reduce((s, r) => s + r.outstanding, 0);
   const overdue = owed.filter((r) => isOverdue(r));
 
@@ -180,7 +186,11 @@ export function PurchasesPage() {
       <Panel>
         <PanelHeader
           title="Daftar tagihan vendor"
-          hint={`${rows.length} baris`}
+          hint={
+            list.data?.totalItems !== undefined
+              ? `${list.data.totalItems.toLocaleString("id-ID")}${list.data.totalIsFloor ? "+" : ""} baris`
+              : undefined
+          }
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <SearchInput value={search} onChange={setSearch} placeholder="Nomor, no. tagihan vendor, vendor" className="w-72" />
@@ -207,8 +217,7 @@ export function PurchasesPage() {
           isLoading={list.isLoading}
           rowKey={(row) => row.id}
           spineFor={(row) => (row.paymentStatus === "paid" ? "text-pine" : isOverdue(row) ? "text-rust" : "text-draft")}
-          pageSize={15}
-          defaultSortKey="due"
+          server={list.data && { ...list.data, onPageChange: setPage }}
           dense
           emptyIcon={ShoppingCart}
           emptyMessage="Tidak ada tagihan vendor"

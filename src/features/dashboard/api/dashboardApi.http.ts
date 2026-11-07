@@ -25,25 +25,27 @@
  * so `DispatchRail.tsx` stops drawing an hour ruler, a "now" line and a
  * late verdict over a position that was never a real time.
  *
- * # Left out, deliberately
+ * # Jejak aktivitas
  *
- * `getRecentAudit` returns `[]` -- nothing writes to `audit.audit_trails`
- * on the real service (see the plan's own "out of scope" note); the mock's
- * own seed carries no rows either (`db.audit: []`), so this is not a new
- * gap, just an honest one on both builds.
+ * `getRecentAudit` reads `GET /audit-trails/recent` (since 2026-11-02): the
+ * acting tenant's latest successful writes, phrased by `activityLabel`. Roles
+ * without `audit.read.audit_trails` are not asked and get an empty list.
  */
-import { getList } from "@/lib/api";
+import { getAllPages, getOne } from "@/lib/api";
+import { holds } from "@/features/rbac/holds";
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import type { AuditEntry } from "@/types/domain";
+import { activityLabel } from "../lib/activityLabel";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getVehicles } from "@/features/vehicles/api/vehicleApi";
-import { getAgingReport, getPayments } from "@/features/finance/api/financeApi";
+import { getAgingReport, getPendingPayments } from "@/features/finance/api/financeApi";
 import { getOrderTotals } from "@/features/orders/api/orderApi";
 import { getQuotaSummary } from "@/features/sa/api/saApi";
+import { getSettings } from "@/features/settings/api/settingsApi";
 import { currentJakartaMonth } from "@/features/sa/lib/period";
 import { addDays, isoDate, startOfToday } from "@/lib/date";
 import type { DispatchLane, DispatchRail, DispatchStop, KpiSummary, MonthlyChartPoint, OutletShare, RecentActivity } from "../types";
 import type { DashboardApi } from "./contract";
-
-const PAGE_SIZE = 100;
 
 /** Mirrors the fields of delivery's own DeliveryResponse this adapter needs. */
 interface DeliveryResponse {
@@ -87,38 +89,46 @@ function toDeliveryStatus(status: string): "Antrian" | "Proses" | "Selesai" | "T
  * 16:52 UTC matched `gte` its own day but not `lte` it). The exclusive `lt`
  * bound one day later is the only one that reads "through the end of `to`"
  * correctly.
+ *
+ * Every page of the window, not the newest 100: the month chart covers a
+ * month of surat jalan, which a busy agency passes in days. The ceiling
+ * (5,000 rows) is far above a month's volume; it exists so a bad range cannot
+ * loop without end.
  */
 async function fetchDeliveries(from: string, to: string): Promise<DeliveryResponse[]> {
   const exclusiveEnd = isoDate(addDays(new Date(`${to}T00:00:00Z`), 1));
-  const page = await getList<DeliveryResponse>("/deliveries", {
-    pageSize: PAGE_SIZE,
+  const { items } = await getAllPages<DeliveryResponse>("/deliveries", {
     sort: [{ field: "created_at", direction: "desc" }],
     filters: [
       { field: "date", operator: "gte" as const, value: from },
       { field: "date", operator: "lt" as const, value: exclusiveEnd },
     ],
-  });
-  return page.items;
+  }, { maxPages: 50 });
+  return items;
 }
 
 async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
   const today = toIso(startOfToday());
   const yesterday = toIso(new Date(startOfToday().getTime() - 86_400_000));
 
-  const [todayRows, yesterdayRows, outlets, quota, pending, aging, orderTotals] =
+  const [todayRows, yesterdayRows, outlets, quota, pending, aging, orderTotals, settings] =
     await Promise.all([
       fetchDeliveries(today, today),
       fetchDeliveries(yesterday, yesterday),
       getOutletList(),
       getQuotaSummary(currentJakartaMonth()),
-      getPayments("Menunggu Verifikasi"),
+      getPendingPayments(),
       getAgingReport(),
       includeManualOrders ? getOrderTotals() : Promise.resolve({ baru: 0 }),
+      getSettings(),
     ]);
+  // What went out today is the target once a run has left; before that, the
+  // tenant's own Target harian (inherited from its group when unset).
+  const dispatchedToday = todayRows.reduce((s, d) => s + d.dispatched_qty, 0);
 
   return {
     dailyDistributed: todayRows.reduce((s, d) => s + d.delivered_qty, 0),
-    dailyTarget: todayRows.reduce((s, d) => s + d.dispatched_qty, 0),
+    dailyTarget: dispatchedToday > 0 ? dispatchedToday : settings.targetHarian,
     // The same figures as the SA page's Kuota cabang card. SIM3LON Penyaluran
     // is the record of what was distributed, so "used" is what it says went
     // out -- not what plans drew from the agreements, which while plans are
@@ -287,8 +297,28 @@ async function getDispatchRail(): Promise<DispatchRail> {
   };
 }
 
-async function getRecentAudit(): Promise<never[]> {
-  return [];
+/** Mirrors the backend's audittrail.RecentEvent. */
+interface RecentEventResponse {
+  occurred_at: string;
+  actor: string;
+  module: string;
+  action: string;
+  entity: string;
+  entity_id?: string;
+}
+
+async function getRecentAudit(limit = 6): Promise<AuditEntry[]> {
+  if (!holds(PERMISSIONS.AUDIT_VIEW)) return [];
+  const rows = await getOne<RecentEventResponse[]>(`/audit-trails/recent?limit=${limit}`);
+  return (rows ?? []).map((row, i) => ({
+    id: `${row.occurred_at}-${i}`,
+    at: row.occurred_at,
+    actor: row.actor,
+    action: row.action,
+    entity: row.entity,
+    entityId: row.entity_id ?? "",
+    summary: activityLabel(row.module, row.entity, row.action),
+  }));
 }
 
 export const dashboardApiHttp: DashboardApi = {

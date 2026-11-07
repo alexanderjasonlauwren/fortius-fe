@@ -8,7 +8,7 @@
  * elsewhere in this codebase), so no translation is needed either way.
  */
 import type { RateBasis } from "../lib/rate";
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import type { ClaimStatus, ID } from "@/types/domain";
 import type {
   BeritaAcaraDocument,
@@ -81,7 +81,7 @@ function toView(row: ClaimResponse): ClaimView {
 }
 
 async function getClaims(filters?: ClaimFilters): Promise<ClaimView[]> {
-  const page = await getList<ClaimResponse>("/transportation-claims", {
+  const page = await getAllPages<ClaimResponse>("/transportation-claims", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "handover_date", direction: "desc" }],
     search: filters?.search,

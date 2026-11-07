@@ -494,7 +494,7 @@ async function printSuratJalan(rowId: string): Promise<void> {
   printDocument(
     `${kode} · Surat Jalan`,
     `
-    <p class="eyebrow">${settings.namaPerusahaan} · Agen ${settings.nomorAgen}</p>
+    <p class="eyebrow">${settings.namaPerusahaan || "—"} · Agen ${settings.nomorAgen || "—"}</p>
     <h1>Surat Jalan</h1>
     <hr class="rule" />
     <div class="meta">

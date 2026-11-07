@@ -7,7 +7,7 @@
  * the suppliers feature. Document-number prefixes are fixed per branch by
  * `provision_branch_sequences()` and are read-only here.
  */
-import { getList } from "@/lib/api";
+import { getAllPages } from "@/lib/api";
 import { getSettings, updateSettings } from "@/features/settings/api/settingsApi";
 import type { NumberingEntity, OperationsEntity } from "@/types/domain";
 import type { SupplierView, SystemApi } from "./contract";
@@ -21,7 +21,7 @@ interface AgreementResponse {
 }
 
 async function getSupplierList(): Promise<SupplierView[]> {
-  const page = await getList<AgreementResponse>("/schedule-agreements", { pageSize: 100 });
+  const page = await getAllPages<AgreementResponse>("/schedule-agreements", { pageSize: 100 });
 
   const bySupplier = new Map<string, { jumlahSA: number; kuotaAktif: number }>();
   for (const row of page.items) {

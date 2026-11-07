@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, StickyNote, XCircle } from "lucide-react";
 import {
   applyCreditNote,
@@ -32,6 +32,7 @@ import { getStatusVariant, spineFor } from "@/lib/status";
 import { formatDateId, formatRupiah } from "@/lib/format";
 import { outletLabel } from "@/lib/lexicon";
 import { scopeKey } from "@/lib/scope";
+import { useResettableState } from "@/hooks/useResettableState";
 
 type StatusFilter = CreditNoteView["status"] | "Semua";
 
@@ -44,9 +45,11 @@ export function CreditNoteSection() {
   const [voiding, setVoiding] = useState<CreditNoteView | null>(null);
   const [reason, setReason] = useState("");
 
+  const [page, setPage] = useResettableState([status, search], () => 1);
   const notes = useQuery({
-    queryKey: [...scopeKey(), "credit-notes", status, search],
-    queryFn: () => getCreditNotes({ status, search }),
+    queryKey: [...scopeKey(), "credit-notes", status, search, page],
+    queryFn: () => getCreditNotes({ status, search }, page),
+    placeholderData: keepPreviousData,
   });
   const outlets = useQuery({ queryKey: [...scopeKey(), "outlets", "names"], queryFn: () => getOutletList() });
   const outletName = new Map((outlets.data ?? []).map((o) => [o.id, o.nama]));
@@ -174,11 +177,11 @@ export function CreditNoteSection() {
         />
         <DataTable
           columns={columns}
-          data={notes.data ?? []}
+          data={notes.data?.items ?? []}
           isLoading={notes.isLoading}
           rowKey={(row) => row.id}
           spineFor={(row) => spineFor(row.status)}
-          pageSize={15}
+          server={notes.data && { ...notes.data, onPageChange: setPage }}
           emptyIcon={StickyNote}
           emptyMessage="Tidak ada nota kredit"
           emptyDescription="Nota kredit diterbitkan dari tagihan yang perlu dikurangi."

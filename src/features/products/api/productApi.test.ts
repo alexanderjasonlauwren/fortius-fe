@@ -15,10 +15,24 @@ const send = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  // getAllPages walks pages through getList; one mocked call is one page.
+  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
+  getPage: async (path: string, params: { page?: number; pageSize?: number }, map: (row: unknown) => unknown) => {
+    const result = await getList(path, params);
+    return {
+      items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50,
+      hasNext: Boolean(result.pagination?.has_next), totalItems: result.pagination?.total_items,
+    };
+  },
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),
 }));
+
+const holds = vi.fn<(permission: string) => boolean>(() => false);
+vi.mock("@/features/rbac/holds", () => ({ holds: (p: string) => holds(p) }));
+const getStock = vi.fn();
+vi.mock("@/features/inventory/api/inventoryApi", () => ({ getStock: (...args: unknown[]) => getStock(...args) }));
 
 const { productApiHttp } = await import("./productApi.http");
 
@@ -43,6 +57,8 @@ function wire(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  holds.mockReset().mockReturnValue(false);
+  getStock.mockReset().mockResolvedValue([]);
   getList.mockReset();
   getOne.mockReset();
   send.mockReset();
@@ -88,7 +104,7 @@ describe("reading", () => {
    * nilaiStok are unavailable. A build once hardcoded the whole summary to
    * zero, which made "3 produk terdaftar" read as "0" on a real catalogue.
    */
-  it("counts real products even though stock figures are unavailable", async () => {
+  it("counts real products for a role that may not read stock", async () => {
     getList.mockResolvedValue({
       items: [wire({ id: "1", status: "atv" }), wire({ id: "2", status: "ina" })],
     });
@@ -200,6 +216,23 @@ describe("writing", () => {
     expect(send.mock.calls[0][2].weight_kg).toBeUndefined();
   });
 
+  // Regression 2026-11-02: the form had no category, so every product the
+  // console created landed in the tenant's first one.
+  it("creates and edits in the category the form chose", async () => {
+    send.mockResolvedValue(wire({ category: "bright_gas" }));
+    await productApiHttp.createOrUpdateProduct({
+      kode: "BG-12", nama: "Bright Gas 12 Kg", ukuran: "12 kg", stokMinimum: 5, kategori: "bright_gas",
+    });
+    expect(getOne).not.toHaveBeenCalledWith("/products/categories");
+    expect(send.mock.calls[0][2].category).toBe("bright_gas");
+
+    send.mockClear();
+    getOne.mockResolvedValue(wire({ version: 2 }));
+    send.mockResolvedValue(wire({ category: "non_subsidi" }));
+    await productApiHttp.createOrUpdateProduct({ id: ID, nama: "LPG 3 Kg", kategori: "non_subsidi" });
+    expect(send.mock.calls[0][2].category).toBe("non_subsidi");
+  });
+
   it("defaults a create to the tenant's first product category", async () => {
     getOne.mockResolvedValue([
       { code: "non_subsidi", name: "Non-Subsidi", sort_order: 1 },
@@ -235,10 +268,42 @@ describe("writing", () => {
     expect(body.version).toBe(4);
   });
 
-  /** ProductListPage only offers "Sesuaikan stok" when stokTersedia is true,
-   *  so reaching this in practice is already a bug elsewhere. */
-  it("refuses a stock adjustment -- core.stock_levels has no service in this build", async () => {
-    await expect(productApiHttp.changeStock(ID, 10, "test")).rejects.toThrow(/belum tersedia/);
+  // Regression 2026-11-02: the list said "Stok belum tersedia" for everyone
+  // although GET /inventory/stock existed.
+  describe("stock from the inventory module", () => {
+    const LOW = "22222222-2222-4222-8222-222222222222";
+
+    beforeEach(() => {
+      holds.mockImplementation((p) => p === "finance.read.inventory");
+      getList.mockResolvedValue({
+        items: [wire({ id: ID, min_stock: 20 }), wire({ id: LOW, min_stock: 50 })],
+      });
+      getStock.mockResolvedValue([
+        { productId: ID, quantity: 120, amount: 2_160_000 },
+        { productId: LOW, quantity: 30, amount: 540_000 },
+      ]);
+    });
+
+    it("lays quantity, value and the low-stock flag over the catalogue", async () => {
+      const rows = await productApiHttp.getProducts();
+      expect(rows.map((r) => [r.stok, r.nilaiStok, r.stokRendah, r.stokTersedia])).toEqual([
+        [120, 2_160_000, false, true],
+        [30, 540_000, true, true],
+      ]);
+    });
+
+    it("honours the low-stock filter and sums the summary", async () => {
+      expect((await productApiHttp.getProducts({ onlyLowStock: true })).map((r) => r.id)).toEqual([LOW]);
+      const summary = await productApiHttp.getStockSummary();
+      expect(summary).toMatchObject({ stokRendah: 1, nilaiStok: 2_700_000, stokTersedia: true });
+    });
+
+    it("does not ask for stock a role may not read", async () => {
+      holds.mockReturnValue(false);
+      const rows = await productApiHttp.getProducts();
+      expect(getStock).not.toHaveBeenCalled();
+      expect(rows.every((r) => !r.stokTersedia)).toBe(true);
+    });
   });
 
   // Gap-closing plan, Phase F: the account-override fields round-trip as

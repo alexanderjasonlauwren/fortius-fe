@@ -68,6 +68,11 @@ export interface ReportSummary {
   suratJalanTertunda: number;
   outletDilayani: number;
   rerataPerHari: number;
+  /**
+   * False when a source list hit the page ceiling, so the figures above are a
+   * floor rather than the period's total. The screen must say so.
+   */
+  lengkap: boolean;
 }
 
 export interface DailyPoint {

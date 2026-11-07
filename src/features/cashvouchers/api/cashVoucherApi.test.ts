@@ -11,6 +11,14 @@ const send = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
+  getPage: async (path: string, params: { page?: number; pageSize?: number }, map: (row: unknown) => unknown) => {
+    const result = await getList(path, params);
+    return {
+      items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50,
+      hasNext: Boolean(result.pagination?.has_next), totalItems: result.pagination?.total_items,
+    };
+  },
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),
@@ -52,7 +60,7 @@ beforeEach(() => {
 
 it("maps a voucher's lines", async () => {
   getList.mockResolvedValue({ items: [wire()] });
-  const rows = await cashVoucherApiHttp.listCashVouchers();
+  const rows = (await cashVoucherApiHttp.listCashVouchers()).items;
   expect(rows).toHaveLength(1);
   expect(rows[0].lines[0].accountCode).toBe("4-3100");
   expect(rows[0].voucherType).toBe("receipt");

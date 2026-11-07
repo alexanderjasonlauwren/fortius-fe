@@ -15,6 +15,15 @@ const send = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  // getAllPages walks pages through getList; one mocked call is one page.
+  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
+  getPage: async (path: string, params: { page?: number; pageSize?: number }, map: (row: unknown) => unknown) => {
+    const result = await getList(path, params);
+    return {
+      items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50,
+      hasNext: Boolean(result.pagination?.has_next), totalItems: result.pagination?.total_items,
+    };
+  },
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),
@@ -160,6 +169,15 @@ describe("filtering", () => {
       { field: "status", operator: "eq", value: "atv" },
       { field: "district", operator: "eq", value: "Sidorejo" },
     ]);
+  });
+
+  // Regression 2026-11-02: "Ditangguhkan" was saved and filtered as 'ina', so a
+  // suspension read back as Nonaktif and its filter listed every inactive outlet.
+  it("reads, filters and writes a suspended outlet as 'sus'", async () => {
+    getList.mockResolvedValue({ items: [wire({ status: "sus" })], pagination: {} });
+    const [row] = await outletApiHttp.getOutletList({ status: "Ditangguhkan" });
+    expect(row.status).toBe("Ditangguhkan");
+    expect(getList.mock.calls[0][1].filters).toEqual([{ field: "status", operator: "eq", value: "sus" }]);
   });
 
   /** "Semua" is the absence of a filter, not a value to send. */

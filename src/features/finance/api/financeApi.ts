@@ -38,6 +38,7 @@ const api: FinanceApi = financeApiHttp;
 export const getInvoices = api.getInvoices.bind(api);
 export const getAgingReport = api.getAgingReport.bind(api);
 export const getPayments = api.getPayments.bind(api);
+export const getPendingPayments = api.getPendingPayments.bind(api);
 export const getOpenInvoices = api.getOpenInvoices.bind(api);
 export const createManualInvoice = api.createManualInvoice.bind(api);
 export const submitPayment = api.submitPayment.bind(api);

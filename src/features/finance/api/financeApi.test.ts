@@ -7,11 +7,22 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  */
 
 const getList = vi.fn();
+const getAllPages = vi.fn();
 const getOne = vi.fn();
 const send = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  getAllPages: (...args: unknown[]) => getAllPages(...args),
+  // getPage is one getList call plus a mapping; built on the mocked getList
+  // so the invoice tests below can keep serving rows through it.
+  getPage: async (path: string, params: { page?: number; pageSize?: number }, map: (row: unknown) => unknown) => {
+    const result = await getList(path, params);
+    return {
+      items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50,
+      hasNext: Boolean(result.pagination?.has_next), totalItems: result.pagination?.total_items,
+    };
+  },
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),
@@ -80,6 +91,10 @@ function invoiceWire(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   getList.mockReset();
+  // By default a walk is one page served by getList; the aging tests override.
+  getAllPages.mockReset().mockImplementation(async (...args: unknown[]) => ({
+    items: (await getList(...args)).items, truncated: false,
+  }));
   getOne.mockReset();
   send.mockReset();
   getOutletList.mockReset();
@@ -97,7 +112,7 @@ describe("invoice status", () => {
       items: [invoiceWire({ payment_status: "waived", outstanding_amount: 0 })],
       pagination: {},
     });
-    const [inv] = await financeApiHttp.getInvoices();
+    const { items: [inv] } = await financeApiHttp.getInvoices();
     expect(inv.status).toBe("Lunas");
   });
 
@@ -109,7 +124,7 @@ describe("invoice status", () => {
       ],
       pagination: {},
     });
-    const [delivery, other] = await financeApiHttp.getInvoices();
+    const { items: [delivery, other] } = await financeApiHttp.getInvoices();
     expect(delivery.suratJalan).toBe("SJ-SLT-20261001-0004");
     expect(other.suratJalan).toBe("—");
   });
@@ -119,11 +134,26 @@ describe("invoice status", () => {
       items: [invoiceWire({ payment_status: "void", void_reason: "salah outlet", outstanding_amount: 100_000 })],
       pagination: {},
     });
-    const [inv] = await financeApiHttp.getInvoices({ status: "Semua" });
+    const { items: [inv] } = await financeApiHttp.getInvoices({ status: "Semua" });
     expect(inv.status).toBe("Batal");
     expect(inv.alasanBatal).toBe("salah outlet");
-    // A void invoice is never open, whatever its outstanding column says.
-    expect(await financeApiHttp.getInvoices({ status: "Belum lunas" })).toEqual([]);
+  });
+
+  // Regression 2026-11-02: status was filtered in the browser over the newest
+  // 100 invoices, so an older open invoice could not be found at all.
+  it("asks the server for each tab's statuses, a void one never among the open", async () => {
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    const statusSent = async (status: string) => {
+      getList.mockClear();
+      await financeApiHttp.getInvoices({ status: status as never }, 3);
+      const [, params] = getList.mock.calls[0];
+      expect(params.page).toBe(3);
+      return params.filters.find((f: { field: string }) => f.field === "payment_status");
+    };
+    expect(await statusSent("Belum lunas")).toEqual({ field: "payment_status", operator: "in", value: "unpaid,partial,overdue" });
+    expect(await statusSent("Lunas")).toEqual({ field: "payment_status", operator: "in", value: "paid,waived,credited" });
+    expect(await statusSent("Jatuh Tempo")).toEqual({ field: "payment_status", operator: "eq", value: "overdue" });
+    expect(await statusSent("Semua")).toBeUndefined();
   });
 
   it("sends a manual invoice's due date, branch and reference, and leaves blanks to the backend", async () => {
@@ -158,13 +188,13 @@ describe("invoice status", () => {
       items: [invoiceWire({ payment_status: "overdue" })],
       pagination: {},
     });
-    expect((await financeApiHttp.getInvoices())[0].status).toBe("Jatuh Tempo");
+    expect((await financeApiHttp.getInvoices()).items[0].status).toBe("Jatuh Tempo");
 
     getList.mockResolvedValue({
       items: [invoiceWire({ payment_status: "partial" })],
       pagination: {},
     });
-    expect((await financeApiHttp.getInvoices())[0].status).toBe("Sebagian");
+    expect((await financeApiHttp.getInvoices()).items[0].status).toBe("Sebagian");
   });
 });
 
@@ -183,17 +213,22 @@ describe("aging", () => {
       ],
       pagination: {},
     });
-    const [inv] = await financeApiHttp.getInvoices();
+    const { items: [inv] } = await financeApiHttp.getInvoices();
     expect(inv.bucket).toBe("31–60 hari");
   });
 
   /** blokirOtomatis only flags an outlet blocked when it is actually overdue. */
+  /** Serves the aging view's open-invoice read. */
+  function serveOpen(items: unknown[], truncated = false) {
+    getAllPages.mockImplementation((path: string) => {
+      if (path !== "/invoices") throw new Error(`unexpected path: ${path}`);
+      return Promise.resolve({ items, truncated });
+    });
+  }
+
   it("only marks an outlet blocked when it is both auto-block and overdue", async () => {
     const overdue = new Date(Date.now() - 5 * 86_400_000).toISOString();
-    getList.mockResolvedValue({
-      items: [invoiceWire({ payment_status: "overdue", due_date: overdue, outstanding_amount: 20_000 })],
-      pagination: {},
-    });
+    serveOpen([invoiceWire({ payment_status: "overdue", due_date: overdue, outstanding_amount: 20_000 })]);
     getOutletList.mockResolvedValue([outlet({ blokirOtomatis: true })]);
     const report = await financeApiHttp.getAgingReport();
     expect(report.rows[0].terblokir).toBe(true);
@@ -201,6 +236,24 @@ describe("aging", () => {
     getOutletList.mockResolvedValue([outlet({ blokirOtomatis: false })]);
     const report2 = await financeApiHttp.getAgingReport();
     expect(report2.rows[0].terblokir).toBe(false);
+  });
+
+  // Regression 2026-11-02: aging read the newest 100 invoices of any status,
+  // so an older unpaid one dropped off once 100 newer invoices existed.
+  it("reads every open invoice through every page, not the newest page", async () => {
+    serveOpen([invoiceWire({ payment_status: "unpaid", outstanding_amount: 70_000 })]);
+    const report = await financeApiHttp.getAgingReport();
+
+    const [, params] = getAllPages.mock.calls[0];
+    expect(params.filters).toEqual([{ field: "payment_status", operator: "in", value: "unpaid,partial,overdue" }]);
+    expect(getList).not.toHaveBeenCalledWith("/invoices", expect.anything());
+    expect(report.grandTotal).toBe(70_000);
+    expect(report.lengkap).toBe(true);
+  });
+
+  it("says the aging totals are a floor when an open-invoice list hit the ceiling", async () => {
+    serveOpen([], true);
+    expect((await financeApiHttp.getAgingReport()).lengkap).toBe(false);
   });
 });
 
@@ -227,7 +280,7 @@ describe("payments", () => {
   /** The plaintext account number never leaves the server -- only the last 4. */
   it("shows the masked account number, never a full one", async () => {
     getList.mockResolvedValue({ items: [paymentWire()], pagination: {} });
-    const [p] = await financeApiHttp.getPayments();
+    const { items: [p] } = await financeApiHttp.getPayments();
     expect(p.noRekening).toBe("•••• 6789");
   });
 
@@ -237,7 +290,7 @@ describe("payments", () => {
       items: [paymentWire({ amount: 100_000, allocated: 40_000 })],
       pagination: {},
     });
-    const [p] = await financeApiHttp.getPayments();
+    const { items: [p] } = await financeApiHttp.getPayments();
     expect(p.belumDialokasikan).toBe(60_000);
   });
 
@@ -247,7 +300,7 @@ describe("payments", () => {
       items: [paymentWire({ amount: 1_000_000, allocated: 500_000, refunded: 300_000 })],
       pagination: {},
     });
-    const [p] = await financeApiHttp.getPayments();
+    const { items: [p] } = await financeApiHttp.getPayments();
     expect(p.belumDialokasikan).toBe(200_000);
     expect(p.dikembalikan).toBe(300_000);
   });
@@ -268,7 +321,7 @@ describe("payments", () => {
       ],
       pagination: {},
     });
-    const [applied, unapplied] = await financeApiHttp.getPayments();
+    const { items: [applied, unapplied] } = await financeApiHttp.getPayments();
     expect(applied.alokasi).toEqual([
       { invoiceId: "inv-1", nomor: "INV-SLT-0001", jumlah: 50_000 },
       { invoiceId: "inv-2", nomor: "INV-SLT-0002", jumlah: 20_000 },
@@ -276,32 +329,30 @@ describe("payments", () => {
     expect(unapplied.alokasi).toEqual([]);
   });
 
-  /**
-   * payment_status only supports `eq` server-side and the console's tabs are
-   * Indonesian labels, not the wire's pending/verified/rejected -- filtering
-   * happens here, after the fetch, translating one vocabulary into the other.
-   */
-  it("filters the Indonesian status tab against the wire's own codes", async () => {
-    getList.mockResolvedValue({
-      items: [
-        paymentWire({ id: "p1", payment_status: "pending" }),
-        paymentWire({ id: "p2", payment_status: "verified" }),
-      ],
-      pagination: {},
-    });
+  // Regression 2026-11-02: the tab filtered the newest 100 receipts in the
+  // browser, so an older pending receipt never showed as waiting.
+  it("sends the tab's status to the server in the wire's own codes", async () => {
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    const statusFor = async (tab?: string) => {
+      getList.mockClear();
+      await financeApiHttp.getPayments(tab, undefined, 2);
+      const [path, params] = getList.mock.calls[0];
+      expect(path).toBe("/payments");
+      expect(params.page).toBe(2);
+      return params.filters;
+    };
+    expect(await statusFor("Terverifikasi")).toEqual([{ field: "payment_status", operator: "eq", value: "verified" }]);
+    expect(await statusFor("Menunggu Verifikasi")).toEqual([{ field: "payment_status", operator: "eq", value: "pending" }]);
+    expect(await statusFor("Semua")).toEqual([]);
+  });
 
-    const verified = await financeApiHttp.getPayments("Terverifikasi");
-    expect(verified.map((p) => p.id)).toEqual(["p2"]);
-
-    getList.mockResolvedValue({
-      items: [
-        paymentWire({ id: "p1", payment_status: "pending" }),
-        paymentWire({ id: "p2", payment_status: "verified" }),
-      ],
-      pagination: {},
-    });
-    const pending = await financeApiHttp.getPayments("Menunggu Verifikasi");
+  it("reads every pending receipt for the count, through every page", async () => {
+    getAllPages.mockResolvedValue({ items: [paymentWire({ id: "p1", payment_status: "pending" })], truncated: false });
+    const pending = await financeApiHttp.getPendingPayments();
     expect(pending.map((p) => p.id)).toEqual(["p1"]);
+    expect(getAllPages).toHaveBeenCalledWith("/payments", expect.objectContaining({
+      filters: [{ field: "payment_status", operator: "eq", value: "pending" }],
+    }));
   });
 
   describe("verify and reject", () => {
@@ -442,7 +493,8 @@ describe("credit notes", () => {
       }],
       pagination: {},
     });
-    const [note] = await financeApiHttp.getCreditNotes({ status: "Terpakai" });
+    const { items: [note] } = await financeApiHttp.getCreditNotes({ status: "Terpakai" }, 2);
+    expect(getList.mock.calls[0][1].page).toBe(2);
     expect(getList.mock.calls[0][1].filters).toEqual([
       { field: "credit_note_status", operator: "eq", value: "applied" },
     ]);
@@ -462,37 +514,21 @@ describe("credit notes", () => {
 });
 
 describe("journals", () => {
-  it("walks every page rather than stopping at the first 100", async () => {
-    getList
-      .mockResolvedValueOnce({
-        items: Array.from({ length: 100 }, (_, i) => journalWire({ id: `p1-${i}` })),
-        pagination: { page: 1, page_size: 100, has_next: true, has_prev: false },
-      })
-      .mockResolvedValueOnce({
-        items: Array.from({ length: 30 }, (_, i) => journalWire({ id: `p2-${i}` })),
-        pagination: { page: 2, page_size: 100, has_next: false, has_prev: true },
-      });
-    getOne.mockImplementation((path: string) => journalWire({ id: path.split("/").pop() }));
-
-    const journals = await financeApiHttp.getJournals();
-
-    expect(journals).toHaveLength(130);
-    expect(getList).toHaveBeenCalledTimes(2);
-    expect(getList.mock.calls[0][1]).toMatchObject({ page: 1 });
-    expect(getList.mock.calls[1][1]).toMatchObject({ page: 2 });
-  });
-
-  it("stops after one page when the server says there is no next", async () => {
+  // Regression 2026-11-02: the list walked at most 20 pages and stopped there
+  // without a word; it is now one server page at a time, with a pager.
+  it("reads the requested page and says whether more exist", async () => {
     getList.mockResolvedValueOnce({
-      items: [journalWire()],
-      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+      items: Array.from({ length: 50 }, (_, i) => journalWire({ id: `p3-${i}` })),
+      pagination: { page: 3, page_size: 50, has_next: true, has_prev: true, total_items: 2_400 },
     });
-    getOne.mockResolvedValueOnce(journalWire());
 
-    const journals = await financeApiHttp.getJournals();
+    const journals = await financeApiHttp.getJournals(undefined, undefined, 3);
 
-    expect(journals).toHaveLength(1);
     expect(getList).toHaveBeenCalledTimes(1);
+    expect(getList.mock.calls[0][1]).toMatchObject({ page: 3, pageSize: 50 });
+    expect(journals.items).toHaveLength(50);
+    expect(journals.hasNext).toBe(true);
+    expect(journals.totalItems).toBe(2_400);
   });
 
   it("reads each journal's lines and source off the list, with no request per journal", async () => {
@@ -512,7 +548,7 @@ describe("journals", () => {
       pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
     });
 
-    const [journal] = await financeApiHttp.getJournals();
+    const { items: [journal] } = await financeApiHttp.getJournals();
 
     expect(getOne).not.toHaveBeenCalled();
     expect(journal.lines).toHaveLength(2);
@@ -530,7 +566,7 @@ describe("journals", () => {
       ],
       pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
     });
-    const journals = await financeApiHttp.getJournals();
+    const { items: journals } = await financeApiHttp.getJournals();
     // Read as "manual" these were offered the reverse action, which the
     // backend then refused.
     expect(journals.map((j) => j.sourceType)).toEqual(["expense", "transportationClaim", "assetAcquisition", "assetDisposal"]);
@@ -541,7 +577,7 @@ describe("journals", () => {
       items: [journalWire({ branch_id: "br-1", branch_name: "Pool Salatiga" })],
       pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
     });
-    const [journal] = await financeApiHttp.getJournals({ from: "2026-10-01", to: "2026-10-31" }, { search: " JV-0018 ", accountId: "a-9" });
+    const { items: [journal] } = await financeApiHttp.getJournals({ from: "2026-10-01", to: "2026-10-31" }, { search: " JV-0018 ", accountId: "a-9" });
     const params = getList.mock.calls[0][1];
     expect(params.search).toBe("JV-0018");
     expect(params.filters).toContainEqual({ field: "account_id", operator: "eq", value: "a-9" });

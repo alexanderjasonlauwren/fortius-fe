@@ -6,7 +6,7 @@
  * in this file keeps the backend consistent with its published contract and
  * leaves every component unaware of which source it is running against.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import type { BranchEntity, ID, TenantEntity } from "@/types/domain";
 import type {
   CreateTenantInput,
@@ -81,7 +81,7 @@ function toDomain(row: TenantResponse): TenantEntity {
 }
 
 export async function getTenants(): Promise<TenantEntity[]> {
-  const page = await getList<TenantResponse>("/tenants", { pageSize: 100 });
+  const page = await getAllPages<TenantResponse>("/tenants", { pageSize: 100 });
   return page.items.map(toDomain);
 }
 
@@ -167,7 +167,7 @@ interface BranchResponse {
 }
 
 export async function getBranches(actingTenantId: ID): Promise<BranchEntity[]> {
-  const page = await getList<BranchResponse>("/branches", { pageSize: 100 });
+  const page = await getAllPages<BranchResponse>("/branches", { pageSize: 100 });
   return page.items.map((row) => ({
     id: row.id,
     tenantId: actingTenantId,

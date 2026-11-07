@@ -6,13 +6,17 @@ import { isoDate, startOfToday } from "@/lib/date";
  * feature APIs into the dashboard's own KPI, chart and rail shapes.
  */
 
-const getList = vi.fn();
+const getAllPages = vi.fn();
+const getOne = vi.fn();
 vi.mock("@/lib/api", () => ({
-  getList: (...args: unknown[]) => getList(...args),
-  getOne: vi.fn(),
+  getAllPages: (...args: unknown[]) => getAllPages(...args),
+  getOne: (...args: unknown[]) => getOne(...args),
   send: vi.fn(),
   upload: vi.fn(),
 }));
+
+const holds = vi.fn<(permission: string) => boolean>(() => true);
+vi.mock("@/features/rbac/holds", () => ({ holds: (p: string) => holds(p) }));
 
 const getOutletList = vi.fn();
 vi.mock("@/features/outlet/api/outletApi", () => ({
@@ -25,10 +29,10 @@ vi.mock("@/features/vehicles/api/vehicleApi", () => ({
 }));
 
 const getAgingReport = vi.fn();
-const getPayments = vi.fn();
+const getPendingPayments = vi.fn();
 vi.mock("@/features/finance/api/financeApi", () => ({
   getAgingReport: (...args: unknown[]) => getAgingReport(...args),
-  getPayments: (...args: unknown[]) => getPayments(...args),
+  getPendingPayments: (...args: unknown[]) => getPendingPayments(...args),
 }));
 
 const getOrderTotals = vi.fn();
@@ -37,6 +41,11 @@ vi.mock("@/features/orders/api/orderApi", () => ({
 }));
 
 const getQuotaSummary = vi.fn();
+const getSettings = vi.fn();
+vi.mock("@/features/settings/api/settingsApi", () => ({
+  getSettings: (...args: unknown[]) => getSettings(...args),
+}));
+
 vi.mock("@/features/sa/api/saApi", () => ({
   getQuotaSummary: (...args: unknown[]) => getQuotaSummary(...args),
 }));
@@ -80,26 +89,39 @@ function quotaSummary(overrides: Record<string, unknown> = {}) {
 
 /** Routes each fetch to the fixture matching the endpoint/date it targets. */
 function mockDeliveries(byDate: Record<string, unknown[]>) {
-  getList.mockImplementation((path: string, params: { filters?: { field: string; value: string }[] }) => {
+  getAllPages.mockImplementation((path: string, params: { filters?: { field: string; value: string }[] }) => {
     if (path !== "/deliveries") throw new Error(`unexpected path: ${path}`);
     const gte = params.filters?.find((f) => f.field === "date")?.value;
-    return Promise.resolve({ items: (gte && byDate[gte]) ?? [] });
+    return Promise.resolve({ items: (gte && byDate[gte]) ?? [], truncated: false });
   });
 }
 
 beforeEach(() => {
-  getList.mockReset();
+  getAllPages.mockReset();
+  getSettings.mockReset().mockResolvedValue({ targetHarian: 0 });
   getOutletList.mockReset().mockResolvedValue([
     { id: OUTLET_ID, nama: "Pangkalan Ahmad", kecamatan: "Sidorejo", status: "Aktif" },
   ]);
   getVehicles.mockReset().mockResolvedValue([{ id: VEHICLE_ID, armada: "Isuzu Elf NMR", kapasitas: 120 }]);
   getAgingReport.mockReset().mockResolvedValue({ grandTotal: 500_000, jatuhTempoTotal: 200_000 });
-  getPayments.mockReset().mockResolvedValue([{ jumlah: 300_000 }, { jumlah: 100_000 }]);
+  getPendingPayments.mockReset().mockResolvedValue([{ jumlah: 300_000 }, { jumlah: 100_000 }]);
   getOrderTotals.mockReset().mockResolvedValue({ baru: 3 });
   getQuotaSummary.mockReset().mockResolvedValue(quotaSummary());
 });
 
 describe("getKpiSummary", () => {
+  // Regression 2026-11-02: Target harian was saved nowhere, so a day with
+  // nothing dispatched yet showed a target of 0.
+  it("measures a day with nothing dispatched against the tenant's Target harian", async () => {
+    mockDeliveries({ [TODAY]: [], [YESTERDAY]: [] });
+    getSettings.mockResolvedValue({ targetHarian: 1320 });
+    expect((await dashboardApiHttp.getKpiSummary()).dailyTarget).toBe(1320);
+  });
+  it("takes what went out as the target once a run has left", async () => {
+    mockDeliveries({ [TODAY]: [delivery({ dispatched_qty: 500 })], [YESTERDAY]: [] });
+    getSettings.mockResolvedValue({ targetHarian: 1320 });
+    expect((await dashboardApiHttp.getKpiSummary()).dailyTarget).toBe(500);
+  });
   it.each([undefined, false])("never requests manual-order totals when intake is external or unknown (%s)", async (includeOrders) => {
     mockDeliveries({ [TODAY]: [], [YESTERDAY]: [] });
     const kpi = await dashboardApiHttp.getKpiSummary(includeOrders);
@@ -127,7 +149,7 @@ describe("getKpiSummary", () => {
     expect(kpi.openOrders).toBe(3);
     expect(kpi.monthlyQuotaTotal).toBe(10_000);
     expect(kpi.monthlyQuotaRemaining).toBe(4_000);
-    expect(getPayments).toHaveBeenCalledWith("Menunggu Verifikasi");
+    expect(getPendingPayments).toHaveBeenCalled();
   });
 
   // The Beranda tile and the SA page's Kuota cabang card must not disagree:
@@ -259,5 +281,27 @@ describe("every function useDashboard.ts passes bare to queryFn", () => {
     ["getRecentActivities", dashboardApiHttp.getRecentActivities],
   ])("%s takes no parameters", (_name, fn) => {
     expect(fn.length).toBe(0);
+  });
+});
+
+// Regression 2026-11-02: "Jejak aktivitas" was always empty -- nothing served
+// the audit trail the middleware writes.
+describe("getRecentAudit", () => {
+  it("reads the tenant's recent writes and says them in words", async () => {
+    holds.mockReturnValue(true);
+    getOne.mockReset().mockResolvedValue([
+      { occurred_at: "2026-11-02T03:00:00Z", actor: "finance", module: "payments", action: "create", entity: "verify" },
+    ]);
+    const rows = await dashboardApiHttp.getRecentAudit(5);
+    expect(getOne).toHaveBeenCalledWith("/audit-trails/recent?limit=5");
+    expect(rows[0]).toMatchObject({ actor: "finance", summary: "Penerimaan kas diverifikasi", at: "2026-11-02T03:00:00Z" });
+  });
+
+  it("does not ask for a trail the role may not read", async () => {
+    holds.mockImplementation((p) => p !== "audit.read.audit_trails");
+    getOne.mockReset();
+    expect(await dashboardApiHttp.getRecentAudit(5)).toEqual([]);
+    expect(getOne).not.toHaveBeenCalled();
+    holds.mockReturnValue(true);
   });
 });

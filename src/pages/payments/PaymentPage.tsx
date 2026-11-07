@@ -1,8 +1,8 @@
 import { scopeKey } from "@/lib/scope";
 import { AttachmentsButton } from "@/features/attachments/components/AttachmentsButton";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Ban, CheckCircle2, Plus, Split, Undo2, Wallet, XCircle } from "lucide-react";
 import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { RefundDialog } from "@/features/approvals/components/RefundDialog";
@@ -10,6 +10,7 @@ import {
   getOpenInvoices,
   getPaymentMethods,
   getPayments,
+  getPendingPayments,
   submitAllocation,
   submitPayment,
   submitPaymentDecision,
@@ -19,6 +20,7 @@ import { getOutletOptions } from "@/features/distribution/api/distributionApi";
 import { getOutletDetail } from "@/features/outlet/api/outletApi";
 import { getBankAccounts } from "@/features/bankaccounts/api/bankAccountApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
+import { useResettableState } from "@/hooks/useResettableState";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -44,10 +46,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatDateId, formatRupiah, formatRupiahShort } from "@/lib/format";
+import { formatDateId, formatNumber, formatRupiah, formatRupiahShort } from "@/lib/format";
 import type { BankNameEntity } from "@/types/domain";
 import { outletLabel, outletLabelTitle } from "@/lib/lexicon";
-import { useResettableState } from "@/hooks/useResettableState";
 
 const TABS = ["Menunggu Verifikasi", "Terverifikasi", "Ditolak", "Semua"];
 const BANKS: BankNameEntity[] = ["BCA", "BNI", "Mandiri", "BRI", "BSI"];
@@ -79,9 +80,17 @@ export function PaymentPage() {
   const outletFromLink = searchParams.get("outlet") ?? "";
   const [recording, setRecording] = useState(!!outletFromLink);
 
+  const [page, setPage] = useResettableState([tab, search], () => 1);
   const payments = useQuery({
-    queryKey: [...scopeKey(), "payments", tab, search],
-    queryFn: () => getPayments(tab, search),
+    queryKey: [...scopeKey(), "payments", tab, search, page],
+    queryFn: () => getPayments(tab, search, page),
+    placeholderData: keepPreviousData,
+  });
+  // Its own read, not the visible page: the count is of every pending
+  // receipt, whichever tab and page is showing.
+  const pending = useQuery({
+    queryKey: [...scopeKey(), "payments", "pending"],
+    queryFn: getPendingPayments,
   });
 
   const decideMutation = useDeskMutation({
@@ -106,13 +115,6 @@ export function PaymentPage() {
     },
   });
 
-  const totals = useMemo(() => {
-    const rows = payments.data ?? [];
-    return {
-      menunggu: rows.filter((p) => p.status === "Menunggu Verifikasi"),
-      belumAlokasi: rows.filter((p) => p.belumDialokasikan > 0.5),
-    };
-  }, [payments.data]);
 
   const columns: Column<PaymentView>[] = [
     {
@@ -284,8 +286,7 @@ export function PaymentPage() {
         }
         meta={
           <span className="text-xs text-ink-muted">
-            <span className="data">{totals.menunggu.length}</span> menunggu verifikasi ·{" "}
-            <span className="data">{totals.belumAlokasi.length}</span> belum dialokasikan
+            <span className="data">{pending.data?.length ?? "–"}</span> menunggu verifikasi
           </span>
         }
       />
@@ -293,7 +294,11 @@ export function PaymentPage() {
       <Panel>
         <PanelHeader
           title="Daftar penerimaan"
-          hint={`${(payments.data ?? []).length} baris`}
+          hint={
+            payments.data?.totalItems !== undefined
+              ? `${formatNumber(payments.data.totalItems)}${payments.data.totalIsFloor ? "+" : ""} baris`
+              : undefined
+          }
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <SearchInput
@@ -312,15 +317,13 @@ export function PaymentPage() {
         />
         <DataTable
           columns={columns}
-          data={payments.data ?? []}
+          data={payments.data?.items ?? []}
           isLoading={payments.isLoading}
           rowKey={(row) => row.id}
           spineFor={(row) =>
             row.belumDialokasikan > 0.5 ? "text-signal" : spineFor(row.status)
           }
-          pageSize={12}
-          defaultSortKey="nomor"
-          defaultSortDir="desc"
+          server={payments.data && { ...payments.data, onPageChange: setPage }}
           emptyIcon={Wallet}
           emptyMessage="Tidak ada penerimaan"
           emptyDescription="Catat transfer yang masuk, lalu alokasikan ke tagihan yang dilunasi."

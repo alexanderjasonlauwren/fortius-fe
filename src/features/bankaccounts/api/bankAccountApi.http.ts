@@ -4,7 +4,7 @@
  * A clean mapping — `internal/controller/bankaccount` is a plain tenant-wide
  * CRUD resource with no model mismatch, unlike `products`' own HTTP adapter.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import type { BankAccountEntity, BankNameEntity } from "@/types/domain";
 import type { BankAccountApi } from "./contract";
 
@@ -42,7 +42,7 @@ function toEntity(row: BankAccountResponse): BankAccountEntity {
 /** 100 is every list definition's MaxPageSize; a tenant's own receiving
  *  accounts will never approach it. */
 async function getBankAccounts(): Promise<BankAccountEntity[]> {
-  const page = await getList<BankAccountResponse>("/bank-accounts", {
+  const page = await getAllPages<BankAccountResponse>("/bank-accounts", {
     pageSize: 100,
     sort: [{ field: "bank_name" }],
   });

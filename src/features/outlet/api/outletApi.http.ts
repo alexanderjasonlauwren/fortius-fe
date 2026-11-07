@@ -20,7 +20,7 @@
  * alike — the server's SearchableColumns say so, and asking anyway is a 422
  * rather than an empty result that looks like "no such outlet".
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getList, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { outletLabel } from "@/lib/lexicon";
 import type { BankNameEntity, OutletEntity, OutletStatus } from "@/types/domain";
@@ -62,7 +62,11 @@ interface OutletResponse {
 const PAGE_SIZE = 100;
 
 /**
- * The schema's three-letter audit flag mapped onto the console's two words.
+ * The schema's three-letter status mapped onto the console's words.
+ *
+ * `sus` (suspended) exists since 2026-11-02: "Ditangguhkan" used to be saved as
+ * `ina` and read back as Nonaktif. A suspended outlet stays listed and billable;
+ * dispatch refuses a run with a stop for it (OUTLET_SUSPENDED).
  *
  * `del` never arrives — the base query filters soft-deleted rows — so it is
  * deliberately absent rather than given a word nobody can reach.
@@ -70,6 +74,13 @@ const PAGE_SIZE = 100;
 const STATUS_TO_DOMAIN: Record<string, OutletStatus> = {
   atv: "Aktif",
   ina: "Nonaktif",
+  sus: "Ditangguhkan",
+};
+
+const STATUS_TO_WIRE: Record<OutletStatus, string> = {
+  Aktif: "atv",
+  Nonaktif: "ina",
+  Ditangguhkan: "sus",
 };
 
 function toStatus(wire: string): OutletStatus {
@@ -77,8 +88,7 @@ function toStatus(wire: string): OutletStatus {
 }
 
 function toWireStatus(status?: OutletStatus): string | undefined {
-  if (!status) return undefined;
-  return status === "Aktif" ? "atv" : "ina";
+  return status ? STATUS_TO_WIRE[status] : undefined;
 }
 
 function toView(row: OutletResponse): OutletView {
@@ -201,7 +211,7 @@ async function fetchAll(filters?: OutletFilters): Promise<OutletResponse[]> {
   const wireStatus =
     filters?.status && filters.status !== "Semua" ? toWireStatus(filters.status) : undefined;
 
-  const page = await getList<OutletResponse>("/outlets", {
+  const page = await getAllPages<OutletResponse>("/outlets", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "name" }],
     search: filters?.search,

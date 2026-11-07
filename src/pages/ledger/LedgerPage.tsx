@@ -1,7 +1,9 @@
 import { scopeKey } from "@/lib/scope";
+import { ServerPager } from "@/components/common/DataTable";
+import { useResettableState } from "@/hooks/useResettableState";
 import { AttachmentsButton } from "@/features/attachments/components/AttachmentsButton";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { BookOpen, CheckCircle2, Copy, Plus, TriangleAlert, Undo2 } from "lucide-react";
 import { leafAccounts } from "@/features/finance/lib/accounts";
@@ -109,23 +111,26 @@ export function LedgerPage() {
 function JournalSection({ range }: { range: { from: string; to: string } }) {
   const [search, setSearch] = useState("");
   const [accountId, setAccountId] = useState("");
+  const [page, setPage] = useResettableState([range, search, accountId], () => 1);
   const journals = useQuery({
-    queryKey: [...scopeKey(), "journals", range, search, accountId],
-    queryFn: () => getJournals(range, { search, accountId: accountId || undefined }),
+    queryKey: [...scopeKey(), "journals", range, search, accountId, page],
+    queryFn: () => getJournals(range, { search, accountId: accountId || undefined }, page),
+    placeholderData: keepPreviousData,
   });
   const accounts = useQuery({ queryKey: [...scopeKey(), "manual-journal", "accounts"], queryFn: getChartOfAccounts });
   // The dialog is open for a fresh entry ("new") or a copy of a journal.
   const [journalDialog, setJournalDialog] = useState<"new" | JournalView | null>(null);
   const [reverseTarget, setReverseTarget] = useState<JournalView | null>(null);
 
-  const rows = journals.data ?? [];
+  const rows = journals.data?.items ?? [];
+  const total = journals.data?.totalItems;
   const filtered = !!search || !!accountId;
 
   return (
     <Panel>
       <PanelHeader
         title="Jurnal umum"
-        hint={`${rows.length} entri pada periode ini · entri yang sudah diposting tidak dapat diubah, hanya dibalik`}
+        hint={`${total !== undefined ? `${total.toLocaleString("id-ID")}${journals.data?.totalIsFloor ? "+" : ""} entri pada periode ini · ` : ""}entri yang sudah diposting tidak dapat diubah, hanya dibalik`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput value={search} onChange={setSearch} placeholder="Nomor atau keterangan" className="w-48" />
@@ -233,6 +238,9 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
             </li>
           ))}
         </ul>
+      )}
+      {journals.data && (journals.data.page > 1 || journals.data.hasNext) && (
+        <ServerPager paging={{ ...journals.data, onPageChange: setPage }} shown={rows.length} />
       )}
 
       <ManualJournalDialog

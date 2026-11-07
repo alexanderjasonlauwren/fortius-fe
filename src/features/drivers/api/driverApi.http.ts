@@ -16,7 +16,7 @@
  * driver with their truck reads the dispatch board — which is also the only
  * place that can answer "which truck, on which day".
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { addDays, isoDate, startOfToday } from "@/lib/date";
 import type { DriverStatusEntity } from "@/types/domain";
@@ -138,7 +138,7 @@ async function fetchAll(filters?: DriverFilters): Promise<DriverResponse[]> {
   const employment =
     filters?.status && filters.status !== "Semua" ? toWireEmployment(filters.status) : undefined;
 
-  const page = await getList<DriverResponse>("/drivers", {
+  const page = await getAllPages<DriverResponse>("/drivers", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "full_name" }],
     search: filters?.search,
@@ -231,7 +231,7 @@ function toDeliveryStatus(status: string): "Antrian" | "Proses" | "Selesai" | "T
 export async function getDriverSchedule(id: string) {
   const today = isoDate(startOfToday());
   const tomorrow = isoDate(addDays(startOfToday(), 1));
-  const page = await getList<ScheduleDeliveryResponse>("/deliveries", {
+  const page = await getAllPages<ScheduleDeliveryResponse>("/deliveries", {
     pageSize: PAGE_SIZE,
     sort: [{ field: "created_at" }],
     filters: [

@@ -7,6 +7,7 @@ import {
   deleteNotification,
   getNotifications,
   getNotificationSettings,
+  getUnreadCount,
   markAllAsRead,
   markAsRead,
   markAsUnread,
@@ -19,10 +20,13 @@ type FilterType = "Semua" | "Belum dibaca" | NotificationType;
 export function useNotification() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("Semua");
 
+  // Each tab is its own server read; the badge is the server's own count,
+  // not a count over whatever was loaded.
   const notifications = useQuery({
-    queryKey: [...scopeKey(), "notifications"],
-    queryFn: getNotifications,
+    queryKey: [...scopeKey(), "notifications", activeFilter],
+    queryFn: () => getNotifications(activeFilter),
   });
+  const unread = useQuery({ queryKey: [...scopeKey(), "unread-count"], queryFn: getUnreadCount });
 
   const notificationSettings = useQuery({
     queryKey: [...scopeKey(), "notification-settings"],
@@ -69,22 +73,17 @@ export function useNotification() {
     success: "Aturan notifikasi disimpan",
   });
 
-  const all = notifications.data ?? [];
-  const filtered = all.filter((n) => {
-    if (activeFilter === "Semua") return true;
-    if (activeFilter === "Belum dibaca") return !n.isRead;
-    return n.type === activeFilter;
-  });
 
   return {
-    notifications: filtered,
-    allNotifications: all,
+    notifications: notifications.data?.items ?? [],
+    /** Older notifications of this tab exist beyond those shown. */
+    more: notifications.data?.more ?? false,
     isLoading: notifications.isLoading,
     isError: notifications.isError,
     error: notifications.error as Error | null,
     activeFilter,
     setActiveFilter,
-    unreadCount: all.filter((n) => !n.isRead).length,
+    unreadCount: unread.data ?? 0,
     markAsReadMutation,
     markAsUnreadMutation,
     markAllAsReadMutation,

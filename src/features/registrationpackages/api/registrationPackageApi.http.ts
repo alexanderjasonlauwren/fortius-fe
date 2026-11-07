@@ -4,7 +4,7 @@
  * Every field is a straight snake_case-to-camelCase rename of
  * fortius-backend's internal/entities/registrationpackage response shapes.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import type {
   CreateRegistrationPackageInput,
   RegistrationPackage,
@@ -61,7 +61,7 @@ function toItemRequest(item: RegistrationPackageItemInput) {
 }
 
 async function listPackages(): Promise<RegistrationPackage[]> {
-  const page = await getList<PackageResponse>("/registration-packages", {
+  const page = await getAllPages<PackageResponse>("/registration-packages", {
     pageSize: 100,
     sort: [{ field: "name" }],
   });

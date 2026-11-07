@@ -7,17 +7,13 @@
  *
  * # Why `stokTersedia` exists
  *
- * `internal/controller/product` is real and mounted, but it is a catalogue
- * module, not a stock module: `core.products` has no quantity column, and
- * stock lives in `core.stock_levels`, which nothing serves yet. Cost/sell
- * pricing is a separate tiered resource but does have a write route now
- * (`POST /products/:id/pricing`) — only the stock half of the mock model is
- * still unbacked. Reporting a live count, a cost-based stock value, or a
- * low-stock flag against an API this build cannot ask would be a confident
- * zero standing in for "unknown" — the same lie `OutletView.statistikTersedia`
- * exists to avoid, and the same fix: a flag the screen checks to hide the
- * panel that cannot be filled, rather than a row of numbers that look like
- * data.
+ * Stock is the inventory module's (`GET /inventory/stock`: quantity, value and
+ * the moving average, per product, tenant-wide), and reading it needs
+ * `finance.read.inventory`, which not every role on the catalogue holds. For a
+ * role without it the flag is false and the screen hides the stock panels,
+ * rather than showing a confident zero standing in for "not yours to see".
+ * Stock never moves from the catalogue: a stock count (stok opname) on
+ * Persediaan posts the difference at the moving average.
  */
 import type { ProductEntity } from "@/types/domain";
 
@@ -29,10 +25,16 @@ export interface ProductView extends ProductEntity {
   nilaiStok: number;
   /**
    * Whether `stok`, `stokMinimum`'s comparison, `nilaiStok` and `stokRendah`
-   * mean anything in this build. False on the API build — see this file's
+   * were read. False when the role may not read inventory — see this file's
    * own header.
    */
   stokTersedia: boolean;
+}
+
+/** One of the tenant's product categories. */
+export interface CategoryOption {
+  code: string;
+  name: string;
 }
 
 export interface UnitOption {
@@ -52,7 +54,7 @@ export interface StockSummary {
   aktif: number;
   stokRendah: number;
   nilaiStok: number;
-  /** See `ProductView.stokTersedia` — false on the API build. */
+  /** See `ProductView.stokTersedia`. */
   stokTersedia: boolean;
 }
 
@@ -64,10 +66,10 @@ export interface ProductApi {
   ): Promise<ProductView>;
   removeProduct(id: string): Promise<void>;
   /** Mock-only in this build — see `productApi.http.ts`'s own note. */
-  changeStock(id: string, delta: number, alasan: string): Promise<ProductView>;
   getStockSummary(): Promise<StockSummary>;
   /** The global measurement units a product's unit names. */
   getUnits(): Promise<UnitOption[]>;
+  getCategories(): Promise<CategoryOption[]>;
   /** A product's transport-fee rates, newest period first. */
   getTariffs(productId: string): Promise<TransportTariff[]>;
   /** Sets a new rate from a date; the open one is closed the day before. */

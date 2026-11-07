@@ -1,51 +1,47 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getList, getOne } = vi.hoisted(() => ({ getList: vi.fn(), getOne: vi.fn() }));
-vi.mock("@/lib/api", () => ({ getList, getOne, send: vi.fn() }));
+const { getAllPages, getOne } = vi.hoisted(() => ({ getAllPages: vi.fn(), getOne: vi.fn() }));
+vi.mock("@/lib/api", () => ({ getAllPages, getOne, send: vi.fn() }));
 import { financeSummaryHttp } from "./financeSummary.http";
 import { reportRangeFromParam, resolveRange } from "@/features/reports/api/contract";
 
 const window = { from: "2026-09-01", to: "2026-09-18" };
-const pagination = { has_next: false, has_prev: false, page: 1, page_size: 100 };
+const windowFilters = (field: string) => [
+  { field, operator: "gte", value: "2026-09-01" },
+  { field, operator: "lt", value: "2026-09-19" },
+];
 
-beforeEach(() => { getList.mockReset(); getOne.mockReset(); });
+beforeEach(() => { getAllPages.mockReset(); getOne.mockReset(); });
 
 describe("dashboard financial totals", () => {
-  it("includes verified cash at both month-to-date boundaries only", async () => {
-    getList.mockResolvedValue({ pagination, items: [
-      { amount: 10, payment_date: "2026-09-01T00:00:00+07:00", payment_status: "verified" },
-      { amount: 20, payment_date: "2026-09-18", payment_status: "verified" },
-      { amount: 50, payment_date: "2026-08-31", payment_status: "verified" },
-      { amount: 50, payment_date: "2026-09-19", payment_status: "verified" },
-      { amount: 50, payment_date: "2026-09-02", payment_status: "pending" },
-    ] });
+  // Regression 2026-11-02: these totals were the newest 100 rows windowed in
+  // the browser, so a busy month could only ever read "incomplete".
+  it("asks the server for verified cash inside the window, through every page", async () => {
+    getAllPages.mockResolvedValue({ truncated: false, items: [{ amount: 10 }, { amount: 20 }] });
     expect(await financeSummaryHttp.getVerifiedCash(window)).toEqual({ complete: true, amount: 30 });
-    expect(getList).toHaveBeenCalledWith("/payments", expect.objectContaining({
-      filters: [{ field: "payment_status", operator: "eq", value: "verified" }],
+    expect(getAllPages).toHaveBeenCalledWith("/payments", expect.objectContaining({
+      filters: [{ field: "payment_status", operator: "eq", value: "verified" }, ...windowFilters("payment_date")],
     }));
   });
 
-  it("uses remaining balances for this month's invoices, excluding older debt", async () => {
-    getList.mockResolvedValue({ pagination, items: [
-      { issued_at: "2026-09-01", outstanding_amount: 40 },
-      { issued_at: "2026-09-18", outstanding_amount: 60 },
-      { issued_at: "2026-08-31", outstanding_amount: 500 },
-      { issued_at: "2026-09-02", outstanding_amount: -10 },
+  it("sums remaining balances of the window's invoices, ignoring credit balances", async () => {
+    getAllPages.mockResolvedValue({ truncated: false, items: [
+      { outstanding_amount: 40 }, { outstanding_amount: 60 }, { outstanding_amount: -10 },
     ] });
     expect(await financeSummaryHttp.getMonthlyReceivables(window)).toEqual({ complete: true, amount: 100 });
-    expect(getList).toHaveBeenCalledTimes(1);
+    expect(getAllPages).toHaveBeenCalledWith("/invoices", expect.objectContaining({
+      filters: windowFilters("issued_at"),
+    }));
   });
 
-  it.each([
-    { has_next: true }, { total_items: 101 }, { total_pages: 2 }, { total_is_floor: true },
-  ])("suppresses totals when pagination indicates omitted records: %j", async (metadata) => {
-    getList.mockResolvedValue({ pagination: { ...pagination, ...metadata }, items: [] });
+  it("suppresses totals when the walk stopped at the page ceiling", async () => {
+    getAllPages.mockResolvedValue({ truncated: true, items: [{ amount: 1, outstanding_amount: 1 }] });
     expect(await financeSummaryHttp.getVerifiedCash(window)).toEqual({ complete: false, amount: null });
     expect(await financeSummaryHttp.getMonthlyReceivables(window)).toEqual({ complete: false, amount: null });
   });
 
   it("returns a genuine zero for a complete empty list", async () => {
-    getList.mockResolvedValue({ pagination, items: [] });
+    getAllPages.mockResolvedValue({ truncated: false, items: [] });
     expect(await financeSummaryHttp.getVerifiedCash(window)).toEqual({ complete: true, amount: 0 });
   });
 
@@ -66,11 +62,11 @@ describe("dashboard financial totals", () => {
     });
     expect(await financeSummaryHttp.getGrossMargin(window)).toEqual({ complete: true, amount: -100 });
     expect(getOne).toHaveBeenCalledWith("/financial-statements/trial-balance?date_from=2026-09-01&date_to=2026-09-18");
-    expect(getList).not.toHaveBeenCalled();
+    expect(getAllPages).not.toHaveBeenCalled();
   });
 
   it("propagates request failures instead of supplying zero", async () => {
-    getList.mockRejectedValue(new Error("unavailable"));
+    getAllPages.mockRejectedValue(new Error("unavailable"));
     await expect(financeSummaryHttp.getVerifiedCash(window)).rejects.toThrow("unavailable");
     await expect(financeSummaryHttp.getMonthlyReceivables(window)).rejects.toThrow("unavailable");
   });

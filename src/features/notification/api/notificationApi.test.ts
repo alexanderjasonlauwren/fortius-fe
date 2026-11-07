@@ -9,8 +9,10 @@ const getList = vi.fn();
 const getOne = vi.fn();
 const send = vi.fn();
 
+const getAllPages = vi.fn();
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  getAllPages: (...args: unknown[]) => getAllPages(...args),
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),
@@ -62,6 +64,7 @@ beforeEach(() => {
 describe("getNotifications", () => {
   it("maps the type vocabulary onto the console's own three categories", async () => {
     getList.mockResolvedValue({
+      pagination: { has_next: false },
       items: [
         wire({ id: "1", type: "reminder" }),
         wire({ id: "2", type: "alert" }),
@@ -69,23 +72,44 @@ describe("getNotifications", () => {
         wire({ id: "4", type: "payment" }),
       ],
     });
-    const rows = await notificationApiHttp.getNotifications();
+    const { items: rows } = await notificationApiHttp.getNotifications();
     expect(rows.map((r) => r.type)).toEqual(["Pengingat", "Alert", "Sistem", "Alert"]);
   });
 
   it("tags a schedule-agreement reminder with the saExpiry rule", async () => {
-    getList.mockResolvedValue({ items: [wire()] });
-    expect((await notificationApiHttp.getNotifications())[0].rule).toBe("saExpiry");
+    getList.mockResolvedValue({ pagination: { has_next: false }, items: [wire()] });
+    expect((await notificationApiHttp.getNotifications()).items[0].rule).toBe("saExpiry");
   });
 
   it("leaves rule undefined for anything that is not a known reminder shape", async () => {
-    getList.mockResolvedValue({ items: [wire({ type: "alert", subject_table: undefined })] });
-    expect((await notificationApiHttp.getNotifications())[0].rule).toBeUndefined();
+    getList.mockResolvedValue({ pagination: { has_next: false }, items: [wire({ type: "alert", subject_table: undefined })] });
+    expect((await notificationApiHttp.getNotifications()).items[0].rule).toBeUndefined();
   });
 
   it("has no href -- subject_id is an internal id, not a routable UUID", async () => {
-    getList.mockResolvedValue({ items: [wire()] });
-    expect((await notificationApiHttp.getNotifications())[0].href).toBeUndefined();
+    getList.mockResolvedValue({ pagination: { has_next: false }, items: [wire()] });
+    expect((await notificationApiHttp.getNotifications()).items[0].href).toBeUndefined();
+  });
+});
+
+// Regression 2026-11-02: "Belum dibaca" and the type tabs filtered the newest
+// 100 of everything, so an older unread notice could not be found.
+describe("inbox tabs", () => {
+  it("reads every unread notification, through every page", async () => {
+    getAllPages.mockResolvedValue({ items: [wire({ id: "u1", is_read: false })], truncated: false });
+    const page = await notificationApiHttp.getNotifications("Belum dibaca");
+    expect(page.items.map((n) => n.id)).toEqual(["u1"]);
+    expect(page.more).toBe(false);
+    expect(getAllPages.mock.calls[0][1].filters).toEqual([{ field: "is_read", operator: "eq", value: "false" }]);
+  });
+
+  it("asks for a tab's own types, and says when older ones exist", async () => {
+    getList.mockResolvedValue({ items: [], pagination: { has_next: true } });
+    const page = await notificationApiHttp.getNotifications("Alert");
+    expect(getList.mock.calls[0][1].filters).toEqual([
+      { field: "type", operator: "in", value: "alert,approval,delivery,payment,quota" },
+    ]);
+    expect(page.more).toBe(true);
   });
 });
 

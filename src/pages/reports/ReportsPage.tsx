@@ -256,6 +256,13 @@ export function ReportsPage() {
         </p>
       )}
 
+      {s && !s.lengkap && (
+        <p role="status" className="rounded-md border border-signal/40 bg-signal-soft px-4 py-3 text-xs text-signal-ink">
+          Data periode ini terlalu banyak untuk dimuat sekaligus, jadi angka di bawah adalah batas bawah,
+          bukan total. Pilih periode yang lebih pendek, atau gunakan Laporan untuk angka yang lengkap.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
           label={`${unitLabelTitle()} terkirim`}

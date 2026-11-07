@@ -365,6 +365,20 @@ export function SettingsPage() {
                 onChange={(e) => set("npwp", e.target.value)}
               />
             </Field>
+            <Field label="Penandatangan" htmlFor="ttd-nama" hint="Nama yang menandatangani BA LO dan dokumen keluar">
+              <TextInput
+                id="ttd-nama"
+                value={form.penandatanganNama ?? ""}
+                onChange={(e) => set("penandatanganNama", e.target.value)}
+              />
+            </Field>
+            <Field label="Jabatan penandatangan" htmlFor="ttd-jabatan">
+              <TextInput
+                id="ttd-jabatan"
+                value={form.penandatanganJabatan ?? ""}
+                onChange={(e) => set("penandatanganJabatan", e.target.value)}
+              />
+            </Field>
             {/* Timezone sits with the legal identity, not with operations: it is
                 iam.tenant_profiles.timezone, and profiles never inherit. A legal
                 entity's timezone belongs with its registered address. */}
@@ -491,24 +505,26 @@ export function SettingsPage() {
                 }}
               />,
             )}
-            {/* No badge: a daily commercial target is the console's own, with
-                no column behind it in iam.tenant_settings, so it cannot inherit
-                against the API. */}
-            <Field
-              label="Target harian"
-              htmlFor="target"
-              hint="Dipakai bila belum ada rencana untuk hari itu."
-            >
+            {/* iam.tenant_settings.daily_target_qty: what Beranda measures a
+                day against when no plan exists for it. Inherited like the
+                hours above. */}
+            {inheritable(
+              "targetHarian",
+              "Target harian",
+              "target",
               <TextInput
                 id="target"
                 type="number"
                 min={1}
-                step="any"
+                step={1}
                 mono
-                value={form.targetHarian}
-                onChange={(e) => set("targetHarian", Number(e.target.value))}
-              />
-            </Field>
+                value={form.targetHarian || ""}
+                onChange={(e) => {
+                  takeOver("targetHarian");
+                  set("targetHarian", Number(e.target.value));
+                }}
+              />,
+            )}
 
           </PanelBody>
         </Panel>

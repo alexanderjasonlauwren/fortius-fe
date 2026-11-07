@@ -10,6 +10,15 @@ const send = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  // getAllPages walks pages through getList; one mocked call is one page.
+  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
+  getPage: async (path: string, params: { page?: number; pageSize?: number }, map: (row: unknown) => unknown) => {
+    const result = await getList(path, params);
+    return {
+      items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50,
+      hasNext: Boolean(result.pagination?.has_next), totalItems: result.pagination?.total_items,
+    };
+  },
   getOne: vi.fn(),
   send: (...args: unknown[]) => send(...args),
   upload: vi.fn(),
@@ -53,7 +62,7 @@ describe("getPurchases", () => {
   it("maps the wire shape", async () => {
     getList.mockResolvedValue({ items: [wire()] });
 
-    const [row] = await purchaseApiHttp.getPurchases();
+    const [row] = (await purchaseApiHttp.getPurchases()).items;
 
     expect(row.purchaseNumber).toBe("PB-202610-0001");
     expect(row.supplierName).toBe("UD. Sumber Logam");
@@ -69,7 +78,7 @@ describe("getPurchases", () => {
   it("reads a list row with lines: null as an empty lines array, not a throw", async () => {
     getList.mockResolvedValue({ items: [wire({ lines: null })] });
 
-    const [row] = await purchaseApiHttp.getPurchases();
+    const [row] = (await purchaseApiHttp.getPurchases()).items;
 
     expect(row.lines).toEqual([]);
   });
@@ -132,21 +141,35 @@ describe("bill payments and voids", () => {
       payment_status: "partial", amount_paid: 40_000, outstanding_amount: 60_000, due_date: "2026-10-31",
       payments: [{ id: "p-1", payment_number: "BYR-1", paid_on: "2026-10-10", amount: 40_000, status: "posted", version: 1 }],
     })] });
-    const [row] = await purchaseApiHttp.getPurchases();
+    const [row] = (await purchaseApiHttp.getPurchases()).items;
     expect(row).toMatchObject({ paymentStatus: "partial", amountPaid: 40_000, outstanding: 60_000, dueDate: "2026-10-31" });
     expect(row.payments[0]).toMatchObject({ number: "BYR-1", amount: 40_000, status: "posted" });
   });
 
-  it("asks the server for one status and answers 'open' (unpaid or partial) itself", async () => {
-    getList.mockResolvedValue({ items: [
-      wire({ id: "a", payment_status: "unpaid" }), wire({ id: "b", payment_status: "partial" }),
-      wire({ id: "c", payment_status: "paid" }), wire({ id: "d", payment_status: "void" }),
-    ] });
-    const open = await purchaseApiHttp.getPurchases({ paymentStatus: "open", supplierId: SUPPLIER_ID, search: "BM" });
-    expect(open.map((r) => r.id)).toEqual(["a", "b"]);
+  // Regression 2026-11-02: "open" was the newest 100 bills filtered here,
+  // so an older unpaid bill could neither be found nor paid.
+  it("asks the server for 'open' as a status set, with the vendor and search", async () => {
+    getList.mockResolvedValue({ items: [wire({ id: "a", payment_status: "unpaid" })] });
+    const open = (await purchaseApiHttp.getPurchases({ paymentStatus: "open", supplierId: SUPPLIER_ID, search: "BM" }, 2)).items;
+    expect(open.map((r) => r.id)).toEqual(["a"]);
     expect(getList.mock.calls[0][1]).toMatchObject({
-      search: "BM", filters: [{ field: "supplier_id", operator: "eq", value: SUPPLIER_ID }],
+      page: 2,
+      search: "BM",
+      filters: [
+        { field: "payment_status", operator: "in", value: "unpaid,partial" },
+        { field: "supplier_id", operator: "eq", value: SUPPLIER_ID },
+      ],
     });
+  });
+
+  it("reads every open bill of a vendor for the pay-several dialog", async () => {
+    getList.mockResolvedValue({ items: [wire({ id: "a" }), wire({ id: "b" })] });
+    const open = await purchaseApiHttp.getOpenPurchases(SUPPLIER_ID);
+    expect(open.map((r) => r.id)).toEqual(["a", "b"]);
+    expect(getList.mock.calls[0][1].filters).toEqual([
+      { field: "payment_status", operator: "in", value: "unpaid,partial" },
+      { field: "supplier_id", operator: "eq", value: SUPPLIER_ID },
+    ]);
   });
 
   it("pays part of a bill", async () => {

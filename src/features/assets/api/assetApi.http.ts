@@ -7,7 +7,7 @@
  * toResponse every single-row read does -- monthlyAmount/accumulatedToDate
  * are real on every row of the list, not just the detail read.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import type {
   AssetApi,
   AssetClass,
@@ -111,7 +111,7 @@ function toView(row: AssetResponse): AssetView {
 }
 
 async function listAssets(): Promise<AssetView[]> {
-  const page = await getList<AssetResponse>("/assets", {
+  const page = await getAllPages<AssetResponse>("/assets", {
     pageSize: 100,
     sort: [{ field: "asset_code" }],
   });

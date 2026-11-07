@@ -9,6 +9,7 @@ import { ArrowLeft, Loader2, Save } from "lucide-react";
 import {
   createOrUpdateProduct,
   getProductDetail,
+  getCategories,
   getUnits,
 } from "@/features/products/api/productApi";
 import { getChartOfAccounts } from "@/features/finance/api/financeApi";
@@ -35,6 +36,7 @@ interface FormState {
   revenueAccountCode: string;
   cogsAccountCode: string;
   unitId: string;
+  kategori: string;
   deskripsi: string;
   merek: string;
   barcode: string;
@@ -54,6 +56,7 @@ const EMPTY: FormState = {
   revenueAccountCode: "",
   cogsAccountCode: "",
   unitId: "",
+  kategori: "",
   deskripsi: "",
   merek: "",
   barcode: "",
@@ -74,6 +77,8 @@ export function ProductFormPage() {
   const accounts = useQuery({ queryKey: [...scopeKey(), "chart-of-accounts"], queryFn: getChartOfAccounts });
   // Units are global (a kilogram does not vary by agency): no scope key.
   const units = useQuery({ queryKey: ["product-units"], queryFn: getUnits, staleTime: Infinity });
+  // Categories belong to the tenant's business type, so the key is scoped.
+  const categories = useQuery({ queryKey: [...scopeKey(), "product-categories"], queryFn: getCategories });
   const postableAccounts = leafAccounts(accounts.data ?? []);
 
   // Seeded from the loaded product, or EMPTY while creating one. Computed
@@ -96,6 +101,7 @@ export function ProductFormPage() {
       revenueAccountCode: p.revenueAccountCode ?? "",
       cogsAccountCode: p.cogsAccountCode ?? "",
       unitId: p.unitId ?? "",
+      kategori: p.kategori ?? "",
       deskripsi: p.deskripsi ?? "",
       merek: p.merek ?? "",
       barcode: p.barcode ?? "",
@@ -122,6 +128,7 @@ export function ProductFormPage() {
     e.preventDefault();
     const next: typeof errors = {};
     if (!form.nama.trim()) next.nama = "Nama produk wajib diisi.";
+    if (!form.kategori) next.kategori = "Pilih kategori produk.";
     if (form.hargaJual <= 0) next.hargaJual = "Harga jual harus lebih dari nol.";
     if (form.hargaBeli > form.hargaJual)
       next.hargaBeli = "Harga beli melebihi harga jual, jadi marginnya negatif.";
@@ -194,6 +201,15 @@ export function ProductFormPage() {
                   placeholder="3 kg"
                   onChange={(e) => set("ukuran", e.target.value)}
                 />
+              </Field>
+
+              <Field label="Kategori" htmlFor="kategori" required error={errors.kategori}>
+                <SelectInput id="kategori" value={form.kategori} onChange={(e) => set("kategori", e.target.value)}>
+                  <option value="">— Pilih kategori —</option>
+                  {(categories.data ?? []).map((c) => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </SelectInput>
               </Field>
 
               <Field label="Satuan" htmlFor="satuan" hint="Satuan hitung: tabung, pcs, kg.">

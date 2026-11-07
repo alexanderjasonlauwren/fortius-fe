@@ -4,7 +4,7 @@
  * Every field is a straight snake_case-to-camelCase rename of
  * fortius-backend's internal/entities/expensecategory response shapes.
  */
-import { getList, send } from "@/lib/api";
+import { getAllPages, send } from "@/lib/api";
 import type {
   CreateExpenseCategoryInput,
   ExpenseCategoryApi,
@@ -48,7 +48,7 @@ function toView(row: ExpenseCategoryResponse): ExpenseCategoryView {
 }
 
 async function getExpenseCategories(): Promise<ExpenseCategoryView[]> {
-  const page = await getList<ExpenseCategoryResponse>("/expense-categories", {
+  const page = await getAllPages<ExpenseCategoryResponse>("/expense-categories", {
     pageSize: 100,
     sort: [{ field: "sort_order" }],
   });

@@ -1,3 +1,4 @@
+import type { Paged } from "@/lib/api";
 /**
  * What every purchase adapter must provide.
  *
@@ -116,7 +117,10 @@ export interface PayPurchaseInput {
 }
 
 export interface PurchaseApi {
-  getPurchases(filters?: PurchaseFilters): Promise<PurchaseView[]>;
+  /** One server page; `page` is 1-based. */
+  getPurchases(filters?: PurchaseFilters, page?: number): Promise<Paged<PurchaseView>>;
+  /** Every unpaid or partly paid bill, optionally one vendor's. */
+  getOpenPurchases(supplierId?: string): Promise<PurchaseView[]>;
   getPurchase(id: string): Promise<PurchaseView>;
   recordGeneralPurchase(input: RecordGeneralPurchaseInput): Promise<PurchaseView>;
   /** Pays part or all of one bill. */

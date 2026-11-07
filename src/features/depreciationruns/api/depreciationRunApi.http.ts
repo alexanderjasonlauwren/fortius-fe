@@ -9,7 +9,7 @@
  * repeating that mistake -- a depreciation run list is at most one row per
  * month ever posted, nowhere near journals' own volume.
  */
-import { getList, getOne, send } from "@/lib/api";
+import { getAllPages, getOne, send } from "@/lib/api";
 import type { DepreciationRunApi, DepreciationRunStatus, DepreciationRunView } from "./contract";
 
 interface RunLineResponse {
@@ -44,7 +44,7 @@ function toView(row: RunResponse): DepreciationRunView {
 }
 
 async function listRuns(): Promise<DepreciationRunView[]> {
-  const page = await getList<RunResponse>("/depreciation-runs", {
+  const page = await getAllPages<RunResponse>("/depreciation-runs", {
     pageSize: 100,
     sort: [{ field: "period", direction: "desc" }],
   });

@@ -4,6 +4,14 @@ const getList = vi.fn();
 const send = vi.fn();
 vi.mock("@/lib/api", () => ({
   getList: (...args: unknown[]) => getList(...args),
+  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
+  getPage: async (path: string, params: { page?: number; pageSize?: number }, map: (row: unknown) => unknown) => {
+    const result = await getList(path, params);
+    return {
+      items: result.items.map(map), page: params.page ?? 1, pageSize: params.pageSize ?? 50,
+      hasNext: Boolean(result.pagination?.has_next), totalItems: result.pagination?.total_items,
+    };
+  },
   getOne: vi.fn(),
   send: (...args: unknown[]) => send(...args),
 }));
@@ -29,7 +37,7 @@ beforeEach(() => { getList.mockReset(); send.mockReset(); });
 describe("expenseApiHttp", () => {
   it("maps expense wire fields and sends exact list filters", async () => {
     getList.mockResolvedValue({ items: [wire] });
-    const [row] = await expenseApiHttp.getExpenses({ category: "fuel", approvalStatus: "pending" });
+    const [row] = (await expenseApiHttp.getExpenses({ category: "fuel", approvalStatus: "pending" })).items;
     expect(row.expenseNumber).toBe("EXP-SLT-202609-0001");
     expect(row.incurredBy).toBe("Driver Satu");
     expect(getList.mock.calls[0][1].filters).toEqual([
@@ -62,7 +70,7 @@ describe("expense corrections", () => {
   it("reads lines, payee and void reason", async () => {
     getList.mockResolvedValue({ items: [{ ...wire, approval_status: "void", void_reason: "nota ganda", payee_name: "Bengkel",
       lines: [{ category: "fuel", category_name: "BBM", amount: 125000 }] }] });
-    const [row] = await expenseApiHttp.getExpenses({ from: "2026-09-01", to: "2026-09-30" });
+    const [row] = (await expenseApiHttp.getExpenses({ from: "2026-09-01", to: "2026-09-30" })).items;
     expect(row).toMatchObject({ approvalStatus: "void", voidReason: "nota ganda", payeeName: "Bengkel" });
     expect(row.lines[0]).toEqual({ category: "fuel", categoryName: "BBM", description: undefined, amount: 125000 });
     expect(getList.mock.calls[0][1].filters).toEqual([

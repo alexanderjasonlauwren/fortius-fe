@@ -1,3 +1,4 @@
+import type { Paged } from "@/lib/api";
 /**
  * What every order adapter must provide.
  *
@@ -18,7 +19,8 @@ export interface OrderView extends OrderEntity {
 }
 
 export interface OrderApi {
-  getOrders(filters?: { status?: OrderStatus | "Semua"; search?: string }): Promise<OrderView[]>;
+  /** One server page; `page` is 1-based. */
+  getOrders(filters?: { status?: OrderStatus | "Semua"; search?: string }, page?: number): Promise<Paged<OrderView>>;
   getOrderTotals(): Promise<{
     baru: number;
     baruUnit: number;
