@@ -40,7 +40,7 @@ older notices exist), and an outlet's recent deliveries.
 | financialstatements | No branch picker on the page, so every statement is tenant-wide, though the adapter can send `branch_id`. |
 | inventory | Quantities are tenant-wide, not per branch or truck (`core.stock_levels` is unwired — `technical-gaps.md` T9). |
 | notification | All seven rules generate hourly and save with their recipients (role codes, which narrow the permission audience and never widen it) and channels. Email goes out through the backend outbox when the installation has SMTP; **WhatsApp is shown but cannot be switched on** — no provider is chosen and outlet consent (B5) is open. A role nobody holds routes a rule to no one; the panel says so but does not count holders. The rules and channels save as two requests: a failure on the second leaves the first saved (the next load shows it). |
-| ocr | No OCR engine: what is "read" off a receipt is typed by hand. Uploaded files are not malware-scanned (`technical-gaps.md` T5). |
+| ocr | No OCR engine: what is "read" off a receipt is typed by hand. Uploads are scanned only once the installation runs clamd (`technical-gaps.md` T5); an infected file is refused (`FILE_INFECTED`). |
 | openingbalance | The refusal path for a deliberately broken workbook has not been verified against the real API (no scratch tenant without ledger activity existed); it is covered by unit tests only. |
 | orders | `sisaKuotaOutlet` and `kecamatan` are not on `OrderResponse`. An approval note (`catatan`) has no field server-side and is dropped. Scheduling several orders onto a plan is one request per order, not atomic; a failure partway leaves the earlier ones scheduled. |
 | outlet | "Ditangguhkan" is the backend's `sus` (since 2026-11-02): listed and billable, refused at dispatch. What else a suspension should block is the client's call (`business-gaps.md` C6). |
@@ -48,7 +48,7 @@ older notices exist), and an outlet's recent deliveries.
 | purchases | "Catat tebus" (SA detail, active agreements only) bills the whole granted quota at today's cost price; a partial tebus is not possible. |
 | sa | SA amendment and cancellation have no endpoint or screen (`business-gaps.md` C8). The source plant is free text (`supplier_name`, B6). |
 | settings | Document-number prefixes are read-only by design. Profil agen saves to the tenant profile at the version it was read at; a save over someone else's newer edit is refused (409) and the page must be reloaded. City, province and postal code are kept as stored (not on the form). |
-| sopir | Filings and photos need a connection (no offline queue); GPS stops while the tab is in the background (`technical-gaps.md` T7). |
+| sopir | GPS stops while the tab is in the background (`technical-gaps.md` T7). Filings and photos made with no signal wait in the phone's outbox (IndexedDB) and are sent with their Idempotency-Key when it is back, so nothing is filed twice; one the server refuses is shown with its reason. A filing still waiting is lost if the driver clears the browser's site data, and the server forgets a key after 24 hours. |
 | transactions | `jamRencana` is always empty; an unbilled delivery shows `nominal` 0. |
 | transportation | Per-trip pricing is not built (tariffs are per kg or per tabung). |
 | users | No invitation flow; the "Diundang" status is dead code. No user export or audit-trail read. |

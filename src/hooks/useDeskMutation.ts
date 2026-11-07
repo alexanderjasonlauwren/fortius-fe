@@ -97,6 +97,8 @@ const FRIENDLY: Record<string, string> = {
   PAYMENT_REFUNDED:
     "Penerimaan ini punya pengembalian dana yang diajukan atau disetujui. Selesaikan pengembalian itu dulu.",
   CONTAINER_NOT_TRADED: "Tabung kosong hanya dihitung jumlahnya; tidak dibeli atau dijual.",
+  FILE_INFECTED: "Berkas ini terdeteksi mengandung malware dan tidak bisa dibuka. Hubungi operator.",
+  FILE_NOT_SCANNED: "Berkas ini belum selesai dipindai keamanannya. Coba lagi beberapa menit lagi.",
   CURRENT_PASSWORD_INCORRECT: "Kata sandi saat ini salah. Periksa lalu coba lagi.",
   AGREEMENT_INACTIVE: "SA ini belum aktif atau sudah berakhir. Hanya SA aktif yang kuotanya bisa direncanakan.",
   AGREEMENT_LAPSED: "Penawaran SA ini sudah lewat batas tebus, jadi kuotanya tidak bisa direncanakan.",

@@ -27,6 +27,7 @@ import {
 import type { RunStop, StopFiling, StopLine } from "@/features/sopir/types";
 import { GEO_STATUS_LABEL, formatDistance } from "@/lib/geo";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
+import { useOutbox } from "@/features/sopir/hooks/useOutbox";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, Meter, Skeleton } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -94,30 +95,48 @@ export function SopirPage() {
     ? `${run.data.driver.id}:${run.data.tanggal}`
     : null;
   const gpsStream = useGpsStream({ enabled: trackingOffered, tripKey });
+  const outbox = useOutbox();
+  const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null);
+
+  // A filing with no signal is saved on the phone and sent later; the toast
+  // says so instead of claiming the office already has it.
+  const savedOffline = (kode: string) => ({
+    tone: "warning" as const,
+    title: `${kode} tersimpan di perangkat`,
+    description: "Belum ada sinyal. Akan dikirim otomatis begitu sinyal kembali.",
+  });
 
   const departMutation = useDeskMutation({
     mutationFn: (deliveryId: string) => departStop(deliveryId),
     errorTitle: "Gagal mencatat keberangkatan",
-    success: (d) => ({
-      title: `${d.kode} berangkat`,
-      description: "Kantor sekarang melihat armada Anda dalam perjalanan.",
-    }),
+    success: (d) =>
+      d.tertunda
+        ? savedOffline(d.kode)
+        : {
+            title: `${d.kode} berangkat`,
+            description: "Kantor sekarang melihat armada Anda dalam perjalanan.",
+          },
   });
 
   const arriveMutation = useDeskMutation({
     mutationFn: (deliveryId: string) => arriveStop(deliveryId),
     errorTitle: "Gagal mencatat kedatangan",
-    success: (d) => ({
-      title: `${d.kode} tiba di lokasi`,
-      description: "Waktu tunggu di lokasi mulai dihitung dari sekarang.",
-    }),
+    success: (d) =>
+      d.tertunda
+        ? savedOffline(d.kode)
+        : {
+            title: `${d.kode} tiba di lokasi`,
+            description: "Waktu tunggu di lokasi mulai dihitung dari sekarang.",
+          },
   });
 
   const completeMutation = useDeskMutation({
     mutationFn: completeStop,
     errorTitle: "Gagal menutup surat jalan",
     success: (d) =>
-      d.fotoGagal
+      d.tertunda
+        ? savedOffline(d.kode)
+        : d.fotoGagal
         ? {
             tone: "warning",
             title: `${d.kode} selesai, foto belum terkirim`,
@@ -133,11 +152,14 @@ export function SopirPage() {
   const holdMutation = useDeskMutation({
     mutationFn: holdStop,
     errorTitle: "Gagal mencatat kendala",
-    success: (d) => ({
-      title: `${d.kode} ditandai tertunda`,
-      description: "Kantor akan menjadwalkan ulang pengiriman ini.",
-      tone: "warning" as const,
-    }),
+    success: (d) =>
+      d.tertunda
+        ? savedOffline(d.kode)
+        : {
+            title: `${d.kode} ditandai tertunda`,
+            description: "Kantor akan menjadwalkan ulang pengiriman ini.",
+            tone: "warning" as const,
+          },
     onDone: () => {
       setHolding(null);
       setAlasan("");
@@ -259,6 +281,54 @@ export function SopirPage() {
             </Panel>
           )}
 
+          {/* What this phone is still holding */}
+          {(outbox.pending.length > 0 || outbox.refused.length > 0) && (
+            <Panel spine={outbox.refused.length > 0 ? "text-rust" : "text-signal"}>
+              <PanelBody className="space-y-3">
+                {outbox.pending.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink">
+                        {outbox.pending.length} catatan menunggu dikirim
+                      </p>
+                      <p className="text-xs text-ink-muted">
+                        Tersimpan di perangkat ini. Dikirim otomatis begitu ada sinyal; jangan keluar
+                        dari akun sebelum terkirim.
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => void outbox.sendNow()}>
+                      Kirim sekarang
+                    </Button>
+                  </div>
+                )}
+                {outbox.refused.map((f) => (
+                  <div key={f.id} className="flex flex-wrap items-start justify-between gap-3 border-t border-line pt-3 first:border-t-0 first:pt-0">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-rust-ink">Ditolak server</p>
+                      <p className="text-xs text-ink-muted">{f.error}</p>
+                    </div>
+                    {/* Two steps: the button sits where "Kirim sekarang" just was,
+                        and a stray tap must not throw away a filing. */}
+                    <Button
+                      size="sm"
+                      variant={confirmDiscard === f.id ? "destructive" : "ghost"}
+                      onClick={() => {
+                        if (confirmDiscard === f.id) {
+                          setConfirmDiscard(null);
+                          void outbox.discard(f.id);
+                        } else {
+                          setConfirmDiscard(f.id);
+                        }
+                      }}
+                    >
+                      {confirmDiscard === f.id ? "Ya, buang" : "Buang"}
+                    </Button>
+                  </div>
+                ))}
+              </PanelBody>
+            </Panel>
+          )}
+
           {/* The run */}
           {(data?.stops ?? []).length === 0 ? (
             <Panel>
@@ -276,6 +346,7 @@ export function SopirPage() {
                   stop={stop}
                   isNext={stop.id === data?.stopBerikutId}
                   rekamLokasi={data?.rekamLokasi ?? false}
+                  waiting={outbox.waitingStops.has(stop.id)}
                   isPending={
                     departMutation.isPending ||
                     arriveMutation.isPending ||
@@ -471,6 +542,7 @@ function StopCard({
   stop,
   isNext,
   rekamLokasi,
+  waiting,
   isPending,
   onDepart,
   onArrive,
@@ -480,6 +552,8 @@ function StopCard({
   stop: RunStop;
   isNext: boolean;
   rekamLokasi: boolean;
+  /** Something for this stop is saved on the phone and not yet sent. */
+  waiting: boolean;
   isPending: boolean;
   onDepart: () => void;
   onArrive: () => void;
@@ -548,6 +622,7 @@ function StopCard({
                 variant={getStatusVariant(stop.status)}
                 label={stop.status}
               />
+              {waiting && <StatusBadge variant="warning" label="Menunggu dikirim" />}
               <span className="data text-2xs text-ink-muted">{stop.kode}</span>
             </p>
           </div>

@@ -13,17 +13,22 @@ import { expect, it, vi, beforeEach, describe } from "vitest";
 
 const getOne = vi.fn();
 const send = vi.fn();
+/** Each filing's send options: its Idempotency-Key and content type. */
+const sentOptions: { idempotencyKey?: string; contentType?: string }[] = [];
 
-vi.mock("@/lib/api", () => ({
+// Filings go through the outbox, which sends each one as an encoded body with
+// an Idempotency-Key. The mock decodes a JSON body back into the object these
+// tests assert, and keeps the options to the side.
+vi.mock("@/lib/api", async (importOriginal) => ({
+  ApiError: (await importOriginal<typeof import("@/lib/api")>()).ApiError,
   getList: vi.fn(),
   getOne: (...args: unknown[]) => getOne(...args),
-  send: (...args: unknown[]) => send(...args),
+  send: (method: string, path: string, body: unknown, options?: { idempotencyKey?: string; contentType?: string }) => {
+    sentOptions.push(options ?? {});
+    const decoded = typeof body === "string" ? JSON.parse(body) : body;
+    return send(method, path, decoded);
+  },
   upload: vi.fn(),
-}));
-
-const uploadAttachment = vi.fn();
-vi.mock("@/features/attachments/api/attachmentApi", () => ({
-  uploadAttachment: (...args: unknown[]) => uploadAttachment(...args),
 }));
 // jsdom has no canvas; the photo goes up as given.
 vi.mock("@/lib/image", () => ({ downscaleImage: async (file: File) => file }));
@@ -34,6 +39,7 @@ vi.mock("@/lib/geo", () => ({
 }));
 
 const { sopirApiHttp } = await import("./sopirApi.http");
+const { ApiError } = await import("@/lib/api");
 
 const D3 = "aaaaaaaa-1111-4111-8111-111111111111";
 const D12 = "bbbbbbbb-2222-4222-8222-222222222222";
@@ -93,9 +99,12 @@ function run(overrides: Record<string, unknown> = {}) {
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   getOne.mockReset();
   send.mockReset();
+  sentOptions.length = 0;
+  // The outbox is the module's; nothing a test left behind may queue the next.
+  for (const f of await sopirApiHttp.pendingFilings()) await sopirApiHttp.discardFiling(f.id);
   // The server answers a filing with the updated document, and the row
   // versioning trigger has moved the counter on. Mocking that rather than an
   // empty object is what lets a completion assert the version it filed at.
@@ -443,9 +452,6 @@ describe("filing against a stop", () => {
     const r = await load();
     const calls: string[] = [];
     send.mockImplementation(async (_m: string, path: string) => calls.push(path));
-    uploadAttachment.mockReset().mockImplementation(async (type: string, id: string) => {
-      calls.push(`upload ${type} ${id}`);
-    });
     const foto = new File(["x"], "drop.jpg", { type: "image/jpeg" });
 
     const receipt = await sopirApiHttp.completeStop({
@@ -460,15 +466,20 @@ describe("filing against a stop", () => {
     expect(calls).toEqual([
       `/deliveries/${D3}/complete`,
       `/deliveries/${D12}/complete`,
-      `upload delivery ${D3}`,
+      `/attachments/delivery/${D3}`,
     ]);
+    expect(sentOptions[2].contentType).toMatch(/^multipart\/form-data; boundary=/);
     expect(receipt.fotoGagal).toBeUndefined();
   });
 
   it("still closes the stop when the photo upload fails, and says so", async () => {
     const r = await load();
-    send.mockResolvedValue(undefined);
-    uploadAttachment.mockReset().mockRejectedValue(new Error("Foto bukti pengiriman harus berupa gambar"));
+    send.mockImplementation(async (_m: string, path: string) => {
+      if (path.startsWith("/attachments/")) {
+        throw new ApiError({ message: "Foto bukti pengiriman harus berupa gambar", code: "VALIDATION_FAILED", status: 422 });
+      }
+      return undefined;
+    });
 
     const receipt = await sopirApiHttp.completeStop({
       deliveryId: r.stops[0].id,
@@ -477,8 +488,10 @@ describe("filing against a stop", () => {
       foto: new File(["x"], "drop.heic", { type: "image/heic" }),
     });
 
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(3);
     expect(receipt.fotoGagal).toMatch(/harus berupa gambar/);
+    // Refused, not queued: retrying the same bytes gets the same answer.
+    expect(await sopirApiHttp.pendingFilings()).toHaveLength(0);
   });
 
   it("refuses to file against a stop it never loaded", async () => {
@@ -486,5 +499,69 @@ describe("filing against a stop", () => {
       /Muat ulang/,
     );
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("filing with no signal", () => {
+  const offline = () => new ApiError({ message: "Network Error", code: "NETWORK" });
+
+  it("keeps a filing the network did not carry, and replays it once with the same key", async () => {
+    const r = await load();
+    send.mockRejectedValue(offline());
+
+    const receipt = await sopirApiHttp.departStop(r.stops[0].id);
+    expect(receipt.tertunda).toBe(true);
+    const waiting = await sopirApiHttp.pendingFilings();
+    expect(waiting.map((f) => [f.kind, f.documentId])).toEqual([
+      ["depart", D3],
+      ["depart", D12],
+    ]);
+
+    const firstKeys = sentOptions.map((o) => o.idempotencyKey);
+    send.mockReset().mockImplementation(async (_m: string, _p: string, body: { version: number }) => ({ version: body.version + 1 }));
+    sentOptions.length = 0;
+    const result = await sopirApiHttp.replayFilings();
+
+    expect(result).toEqual({ sent: 2, refused: 0, offline: false });
+    // The first document's request left before the network gave out; its
+    // replay carries the same key, so the server answers it from its record.
+    expect(sentOptions[0].idempotencyKey).toBe(firstKeys[0]);
+    expect(await sopirApiHttp.pendingFilings()).toHaveLength(0);
+  });
+
+  it("queues an arrival behind a departure that has not gone, and builds it on the departure's answer", async () => {
+    const r = await load();
+    send.mockRejectedValue(offline());
+    await sopirApiHttp.departStop(r.stops[0].id);
+    const arrival = await sopirApiHttp.arriveStop(r.stops[0].id);
+    expect(arrival.tertunda).toBe(true);
+    const arrivals = (await sopirApiHttp.pendingFilings()).filter((f) => f.kind === "arrive");
+    expect(arrivals.every((f) => f.sent === undefined)).toBe(true);
+
+    send.mockReset().mockImplementation(async (_m: string, _p: string, body: { version: number }) => ({ version: body.version + 1 }));
+    await sopirApiHttp.replayFilings();
+
+    const d3 = send.mock.calls.filter((c) => c[1].startsWith(`/deliveries/${D3}/`));
+    expect(d3.map((c) => [c[1].split("/").pop(), c[2].version])).toEqual([
+      ["depart", 1],
+      ["arrive", 2],
+    ]);
+  });
+
+  it("files a second tap of the same button once", async () => {
+    const r = await load();
+    send.mockRejectedValue(offline());
+    await sopirApiHttp.departStop(r.stops[0].id);
+    await sopirApiHttp.departStop(r.stops[0].id);
+    expect((await sopirApiHttp.pendingFilings()).filter((f) => f.kind === "depart")).toHaveLength(2);
+  });
+
+  it("gives every filing its own key, so a retry is recognised and a new filing is not", async () => {
+    const r = await load();
+    await sopirApiHttp.arriveStop(r.stops[0].id);
+    const keys = sentOptions.map((o) => o.idempotencyKey);
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
+    expect(keys.every((k) => typeof k === "string" && k.length > 0)).toBe(true);
   });
 });

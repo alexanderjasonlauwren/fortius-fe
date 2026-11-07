@@ -6,6 +6,7 @@
  * the field one of them forgot. Here that screen is a phone at a pangkalan
  * gate, which is the worst place to find out.
  */
+import type { Filing, ReplayResult } from "../lib/outbox";
 import type { DriverOption, DriverRun } from "../types";
 
 /**
@@ -24,6 +25,11 @@ export interface StopReceipt {
    * happened.
    */
   fotoGagal?: string;
+  /**
+   * Saved on this device and not yet with the server: no signal. It is sent
+   * on its own when the phone is back online.
+   */
+  tertunda?: boolean;
 }
 
 export interface CompleteStopInput {
@@ -78,6 +84,13 @@ export interface SopirApi {
   completeStop(input: CompleteStopInput): Promise<StopReceipt>;
   /** Could not deliver. Leaves the stop open and raises no invoice. */
   holdStop(input: { deliveryId: string; catatan: string }): Promise<StopReceipt>;
+
+  /** Filings saved on this device and not yet with the server, oldest first. */
+  pendingFilings(): Promise<Filing[]>;
+  /** Sends what is waiting; safe to call at any time. */
+  replayFilings(): Promise<ReplayResult>;
+  /** Drops a filing the server refused, once the driver has seen why. */
+  discardFiling(id: string): Promise<void>;
 
   /**
    * Fleet list for accounts that are not themselves a sopir — a dispatcher

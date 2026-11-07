@@ -476,14 +476,23 @@ export async function send<T>(
   // A few endpoints legitimately run long -- e.g. a SIM3LON sync drives a
   // headless browser through a login and several page loads -- and must not be
   // aborted at the default that suits an ordinary write.
-  options?: { timeout?: number },
+  //
+  // idempotencyKey makes a retry of the same request happen once on the
+  // server (middleware.Idempotency); contentType sends `body` as already
+  // encoded bytes -- a replay must send exactly what the first attempt did,
+  // or the server refuses the key as reused for a different request.
+  options?: { timeout?: number; idempotencyKey?: string; contentType?: string },
 ): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (options?.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
+  if (options?.contentType) headers["Content-Type"] = options.contentType;
   try {
     const response = await apiClient.request<Envelope<T>>({
       method,
       url: path,
       data: body,
       timeout: options?.timeout,
+      headers,
     });
     return response.data.data;
   } catch (error) {
