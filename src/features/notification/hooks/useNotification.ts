@@ -12,8 +12,12 @@ import {
   markAsRead,
   markAsUnread,
   saveNotificationSettings,
+  sendTestNotification,
 } from "../api/notificationApi";
-import type { NotificationSettings, NotificationType } from "../types";
+import { listGrantableRoles } from "@/features/users/api/userApi";
+import { holds } from "@/features/rbac/holds";
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import type { NotificationSettings, NotificationType, OutsideChannel } from "../types";
 
 type FilterType = "Semua" | "Belum dibaca" | NotificationType;
 
@@ -28,9 +32,18 @@ export function useNotification() {
   });
   const unread = useQuery({ queryKey: [...scopeKey(), "unread-count"], queryFn: getUnreadCount });
 
+  const canViewRules = holds(PERMISSIONS.REMINDER_SETTINGS_VIEW);
   const notificationSettings = useQuery({
     queryKey: [...scopeKey(), "notification-settings"],
     queryFn: getNotificationSettings,
+    enabled: canViewRules,
+  });
+  // The recipient picker. Without the permission to list roles, the panel
+  // still shows the codes already chosen.
+  const roles = useQuery({
+    queryKey: [...scopeKey(), "grantable-roles"],
+    queryFn: listGrantableRoles,
+    enabled: canViewRules && holds(PERMISSIONS.ROLES_VIEW),
   });
 
   const markAsReadMutation = useDeskMutation({
@@ -73,6 +86,13 @@ export function useNotification() {
     success: "Aturan notifikasi disimpan",
   });
 
+  const testChannelMutation = useDeskMutation({
+    mutationFn: (channel: OutsideChannel) => sendTestNotification(channel),
+    errorTitle: "Pesan uji tidak terkirim",
+    success: (sentTo) => ({ title: "Pesan uji terkirim", description: `Ke ${sentTo}.` }),
+    invalidate: [],
+  });
+
 
   return {
     notifications: notifications.data?.items ?? [],
@@ -89,8 +109,12 @@ export function useNotification() {
     markAllAsReadMutation,
     deleteMutation,
     clearReadMutation,
+    canViewRules,
+    canEditRules: holds(PERMISSIONS.REMINDER_SETTINGS_EDIT),
     notificationSettings: notificationSettings.data,
     isLoadingSettings: notificationSettings.isLoading,
+    roles: roles.data ?? [],
     saveSettingsMutation,
+    testChannelMutation,
   };
 }

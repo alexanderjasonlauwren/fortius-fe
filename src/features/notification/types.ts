@@ -1,12 +1,13 @@
 import type {
   NotifChannel,
   NotificationSettings,
+  OutsideChannel,
   ReminderRule,
   ReminderRuleKey,
 } from "@/types/domain";
 import { outletLabel } from "@/lib/lexicon";
 
-export type { NotifChannel, NotificationSettings, ReminderRule, ReminderRuleKey };
+export type { NotifChannel, NotificationSettings, OutsideChannel, ReminderRule, ReminderRuleKey };
 
 export type NotificationType = "Pengingat" | "Alert" | "Sistem";
 
@@ -50,11 +51,11 @@ export const RULE_META: RuleMeta[] = [
   {
     key: "quotaLow",
     label: "Kuota SA hampir habis",
-    description: "Sisa kuota tidak lagi cukup untuk rencana berikutnya.",
-    ambangLabel: "Picu saat terpakai mencapai",
-    ambangSatuan: "%",
-    ambangMin: 50,
-    ambangMax: 100,
+    description: "Sisa alokasi cabang bulan ini, menurut penyaluran SIM3LON, tinggal sedikit.",
+    ambangLabel: "Picu saat sisa kuota tinggal",
+    ambangSatuan: "% dari alokasi bulan ini",
+    ambangMin: 1,
+    ambangMax: 50,
   },
   {
     key: "stockLow",
@@ -68,7 +69,7 @@ export const RULE_META: RuleMeta[] = [
   {
     key: "paymentPending",
     label: "Pembayaran menunggu verifikasi",
-    description: "Tagihan terbit yang belum diputuskan tim keuangan.",
+    description: "Penerimaan pembayaran yang belum diverifikasi tim keuangan.",
     ambangLabel: "Ingatkan setelah",
     ambangSatuan: "hari",
     ambangMin: 1,
@@ -77,7 +78,7 @@ export const RULE_META: RuleMeta[] = [
   {
     key: "deliveryDelay",
     label: "Keterlambatan pengiriman",
-    description: "Surat jalan belum berangkat melewati jam yang dijadwalkan.",
+    description: "Pengiriman sudah berangkat tetapi belum selesai melewati toleransi.",
     ambangLabel: "Toleransi keterlambatan",
     ambangSatuan: "menit",
     ambangMin: 15,

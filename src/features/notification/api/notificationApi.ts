@@ -12,3 +12,4 @@ export const deleteNotification = api.deleteNotification.bind(api);
 export const clearReadNotifications = api.clearReadNotifications.bind(api);
 export const getNotificationSettings = api.getNotificationSettings.bind(api);
 export const saveNotificationSettings = api.saveNotificationSettings.bind(api);
+export const sendTestNotification = api.sendTestNotification.bind(api);

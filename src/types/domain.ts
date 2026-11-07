@@ -1386,25 +1386,37 @@ export type ReminderRuleKey =
 
 export type NotifChannel = "app" | "whatsapp" | "email";
 
+/** A channel a reminder is sent over besides the inbox, which it always reaches. */
+export type OutsideChannel = Exclude<NotifChannel, "app">;
+
 export interface ReminderRule {
   aktif: boolean;
   /** Threshold; the unit differs per rule and is stated in the UI. */
   ambang: number;
-  /** Roles that receive it. */
-  penerima: UserEntity["role"][];
-  kanal: NotifChannel[];
+  /**
+   * Role codes that narrow who receives it. Empty is everyone already allowed
+   * to see what the reminder is about; a role never widens that.
+   */
+  penerima: string[];
+  /** Outside channels it is also sent over. */
+  kanal: OutsideChannel[];
 }
 
 export interface WhatsappSettings {
   aktif: boolean;
   nomorPengirim: string;
   templatePengingat: string;
+  /** The installation can send WhatsApp at all; off until a provider is chosen. */
+  tersedia: boolean;
 }
 
 export interface NotificationSettings {
   rules: Record<ReminderRuleKey, ReminderRule>;
   whatsapp: WhatsappSettings;
-  email: { aktif: boolean; pengirim: string };
+  /** `pengirim` is the display name on the installation's own address. */
+  email: { aktif: boolean; pengirim: string; tersedia: boolean };
+  /** The versions read, sent back so a concurrent save is refused, not overwritten. */
+  versi: { aturan: number; kanal: number };
 }
 
 /**
