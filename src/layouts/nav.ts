@@ -469,11 +469,22 @@ const DRIVER_ROLE_PERMISSIONS = new Set<string>([
  * console -- the correct outcome, and the one a role name (or an exact
  * one-permission match, which this used to be) got wrong the moment the
  * driver role legitimately grew past a single permission.
+ *
+ * # The second arm: a drifted driver role
+ *
+ * The subset check depends on DRIVER_ROLE_PERMISSIONS matching the backend's
+ * seed by hand, and it has drifted before. Someone who may record deliveries
+ * but not open the plans (`distribution.read.distribution_orders`) works a
+ * run and nothing else -- no seeded office role is shaped like that -- so they
+ * get the driver console too. This is the one decision the menu, the header,
+ * the landing page and the office-only guard all read, so a drift can no
+ * longer show a sopir the office menu while the guard waves them through.
  */
 export function usesDriverConsole(permissions: readonly string[] = []): boolean {
+  if (!permissions.includes(PERMISSIONS.DELIVERIES_EXECUTE)) return false;
   return (
-    permissions.includes(PERMISSIONS.DELIVERIES_EXECUTE) &&
-    permissions.every((code) => DRIVER_ROLE_PERMISSIONS.has(code))
+    permissions.every((code) => DRIVER_ROLE_PERMISSIONS.has(code)) ||
+    !permissions.includes(PERMISSIONS.DISTRIBUTION_VIEW)
   );
 }
 
@@ -527,19 +538,7 @@ export function navGroupsFor(permissions?: readonly string[], mode?: OrderIntake
  * trucks that are not theirs, with their own run two taps away.
  */
 export function landingPathFor(permissions?: readonly string[]): string {
-  if (usesDriverConsole(permissions)) return "/sopir";
-  // The dashboard needs its own grant. Someone without it who can still work
-  // a run belongs on the run, not on a refusal -- which is where every driver
-  // landed while DRIVER_ROLE_PERMISSIONS lagged the backend's role by one
-  // grant. A future drift of that list then costs a driver the narrow menu,
-  // not the way in.
-  if (
-    permissions?.includes(PERMISSIONS.DELIVERIES_EXECUTE) &&
-    !permissions.includes(PERMISSIONS.DISTRIBUTION_VIEW)
-  ) {
-    return "/sopir";
-  }
-  return "/dashboard";
+  return usesDriverConsole(permissions) ? "/sopir" : "/dashboard";
 }
 
 /** Title shown in the header for a given path. */

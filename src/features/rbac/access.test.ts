@@ -125,12 +125,15 @@ describe("the driver console", () => {
     expect(bottomNavFor([PERMISSIONS.DISTRIBUTION_VIEW]).map((i) => i.href)).toContain("/settings");
   });
 
-  // If the list drifts again, a crew member still lands on their run rather
-  // than on a dashboard their role is refused.
-  it("lands a drifted driver role on the run, not on a refused dashboard", () => {
-    const driftedDriver = [PERMISSIONS.DELIVERIES_EXECUTE, "some.future.grant"];
-    expect(usesDriverConsole(driftedDriver)).toBe(false);
+  // If the list drifts again, a crew member is still a crew member everywhere
+  // at once: their run as landing page, the driver menu, and no Pengaturan --
+  // not the office menu on one screen while another treats them as crew.
+  it("treats a drifted driver role as crew in every decision", () => {
+    const driftedDriver = [PERMISSIONS.DELIVERIES_EXECUTE, PERMISSIONS.SETTINGS_VIEW, "some.future.grant"];
+    expect(usesDriverConsole(driftedDriver)).toBe(true);
     expect(landingPathFor(driftedDriver)).toBe("/sopir");
+    expect(navGroupsFor(driftedDriver).flatMap((g) => g.items.map((i) => i.href))).toEqual(["/sopir", "/ocr"]);
+    expect(bottomNavFor(driftedDriver).map((i) => i.href)).not.toContain("/settings");
   });
 
   // The case a role name got wrong the moment anyone held two. A dispatcher who
