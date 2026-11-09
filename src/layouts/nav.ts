@@ -370,6 +370,15 @@ export const DRIVER_NAV_GROUPS: NavGroup[] = [
         hint: "Pemberhentian hari ini dan pencatatan penerimaan",
         permission: PERMISSIONS.DELIVERIES_EXECUTE,
       },
+      {
+        // Struk BBM, tol dan perbaikan dari perjalanan. The driver role holds
+        // the OCR grants for exactly this; the link was simply missing.
+        name: "Bukti Pengeluaran",
+        href: "/ocr",
+        icon: Receipt,
+        hint: "Unggah struk biaya perjalanan",
+        permission: [PERMISSIONS.OCR_VIEW, PERMISSIONS.OCR_ARCHIVE_VIEW],
+      },
     ],
   },
 ];
@@ -388,6 +397,18 @@ export const BOTTOM_NAV: NavItem[] = [
     hint: "Profil agen, harga, pengingat, dan data",
   },
 ];
+
+/**
+ * The links under the menu, for this person.
+ *
+ * A sopir keeps Notifikasi and loses Pengaturan: that page is the agency's
+ * profile, legal identity and operating rules, none of it theirs to read or
+ * change. Their own account -- name, password -- is in the header menu.
+ */
+export function bottomNavFor(permissions?: readonly string[]): NavItem[] {
+  if (!usesDriverConsole(permissions)) return BOTTOM_NAV;
+  return BOTTOM_NAV.filter((item) => item.href !== "/settings");
+}
 
 /** Every group in the application, whichever console it belongs to. */
 export const ALL_NAV_GROUPS: NavGroup[] = [...NAV_GROUPS, ...DRIVER_NAV_GROUPS];
@@ -420,9 +441,11 @@ const DRIVER_ROLE_PERMISSIONS = new Set<string>([
   PERMISSIONS.STOCK_MOVEMENTS_CREATE,
   PERMISSIONS.EXPENSES_VIEW,
   PERMISSIONS.EXPENSES_CREATE,
+  // Granted with expense claims (accounting parity P3.2) and missed here, which
+  // sent every driver to the office console and its refused dashboard.
+  PERMISSIONS.EXPENSE_CATEGORIES_VIEW,
   PERMISSIONS.OCR_CREATE,
   PERMISSIONS.OCR_VIEW,
-  PERMISSIONS.OCR_VERIFY,
   PERMISSIONS.OCR_ARCHIVE_VIEW,
   PERMISSIONS.NOTIFICATIONS_VIEW,
   PERMISSIONS.SETTINGS_VIEW,
@@ -504,7 +527,19 @@ export function navGroupsFor(permissions?: readonly string[], mode?: OrderIntake
  * trucks that are not theirs, with their own run two taps away.
  */
 export function landingPathFor(permissions?: readonly string[]): string {
-  return usesDriverConsole(permissions) ? "/sopir" : "/dashboard";
+  if (usesDriverConsole(permissions)) return "/sopir";
+  // The dashboard needs its own grant. Someone without it who can still work
+  // a run belongs on the run, not on a refusal -- which is where every driver
+  // landed while DRIVER_ROLE_PERMISSIONS lagged the backend's role by one
+  // grant. A future drift of that list then costs a driver the narrow menu,
+  // not the way in.
+  if (
+    permissions?.includes(PERMISSIONS.DELIVERIES_EXECUTE) &&
+    !permissions.includes(PERMISSIONS.DISTRIBUTION_VIEW)
+  ) {
+    return "/sopir";
+  }
+  return "/dashboard";
 }
 
 /** Title shown in the header for a given path. */

@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatNumber, formatPercentId } from "@/lib/format";
-import type { DriverStatusEntity } from "@/types/domain";
+import type { CrewRoleEntity, DriverStatusEntity } from "@/types/domain";
 import { unitLabel } from "@/lib/lexicon";
 
 const STATUSES: (DriverStatusEntity | "Semua")[] = [
@@ -48,6 +48,7 @@ interface FormState {
   telepon: string;
   nomorSim: string;
   status: DriverStatusEntity;
+  peran: CrewRoleEntity;
   // Provisions the driver's mobile-app login. Read only on create: a driver is
   // always a person, and a person here is always a user, so registering one
   // now creates the other in the same step instead of leaving an account to be
@@ -63,6 +64,7 @@ const EMPTY: FormState = {
   telepon: "",
   nomorSim: "",
   status: "Standby",
+  peran: "Sopir",
   akunUsername: "",
   akunEmail: "",
   akunPassword: "",
@@ -150,6 +152,13 @@ export function DriverPage() {
       sortValue: (row) => row.nama,
     },
     {
+      key: "peran",
+      header: "Peran",
+      width: "7rem",
+      render: (row) => <span className="text-sm text-ink">{row.peran ?? "Sopir"}</span>,
+      sortValue: (row) => row.peran ?? "Sopir",
+    },
+    {
       key: "muatan",
       header: "Muatan hari ini",
       width: "12rem",
@@ -232,6 +241,7 @@ export function DriverPage() {
                 telepon: row.telepon,
                 nomorSim: row.nomorSim,
                 status: row.status,
+                peran: row.peran ?? "Sopir",
                 akunUsername: "",
                 akunEmail: "",
                 akunPassword: "",
@@ -379,6 +389,24 @@ export function DriverPage() {
                     value={editing.telepon}
                     onChange={(e) => setEditing({ ...editing, telepon: e.target.value })}
                   />
+                </Field>
+
+                {/* Create-only: the service will not move someone between the
+                    wheel and the seat beside it once they may be on runs. */}
+                <Field
+                  label="Peran"
+                  htmlFor="d-peran"
+                  hint={editing.id ? "Peran tidak dapat diubah setelah data dibuat." : "Kernet ikut di samping sopir dan memakai aplikasi yang sama."}
+                >
+                  <SelectInput
+                    id="d-peran"
+                    value={editing.peran}
+                    disabled={!!editing.id}
+                    onChange={(e) => setEditing({ ...editing, peran: e.target.value as CrewRoleEntity })}
+                  >
+                    <option value="Sopir">Sopir</option>
+                    <option value="Kernet">Kernet</option>
+                  </SelectInput>
                 </Field>
 
                 <Field label="Nomor SIM" htmlFor="d-sim">

@@ -56,6 +56,12 @@ export interface PlanRow {
    */
   vehicleId: string | null;
   vehicle: string;
+  /**
+   * The kernet riding this stop's run, one per run like `vehicleId`. Optional
+   * on the service: a driver may go out alone.
+   */
+  kernetId?: string | null;
+  kernet?: string;
   jamPengiriman: string;
   /**
    * "Kredit" is its own state, not a flavour of "Lunas" -- an on-account

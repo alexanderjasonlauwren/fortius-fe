@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { ShieldOff } from "lucide-react";
 import { useAuthStore } from "@/features/auth/store/authStore";
-import { landingPathFor } from "@/layouts/nav";
+import { landingPathFor, usesDriverConsole } from "@/layouts/nav";
 import { Panel } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,25 @@ export function RequirePermission({
       : true;
 
   if (granted) return <>{children}</>;
+  return <AccessRefused permissions={permissions} />;
+}
 
+/**
+ * Gates an office page away from the driver console.
+ *
+ * For a page whose grant a sopir holds for another reason: the driver role
+ * reads the tenant (`iam.read.tenants`) so the run can show the agency's name
+ * and labels, and the settings page is gated on that same read -- so a
+ * permission check alone let a driver open the agency's profile, legal
+ * identity and operating rules. The backend still refuses any write.
+ */
+export function RequireOfficeConsole({ children }: { children: React.ReactNode }) {
+  const permissions = useAuthStore((s) => s.user?.permissions);
+  if (!usesDriverConsole(permissions)) return <>{children}</>;
+  return <AccessRefused permissions={permissions} />;
+}
+
+function AccessRefused({ permissions }: { permissions?: readonly string[] }) {
   return (
     <Panel spine="text-rust">
       <EmptyState

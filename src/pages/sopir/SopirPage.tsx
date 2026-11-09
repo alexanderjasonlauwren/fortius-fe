@@ -88,8 +88,12 @@ export function SopirPage() {
   // when there is somewhere left to drive to today. `run.data.rekamLokasi` is
   // the agency's own switch, resolved server-side because this account has no
   // permission to read tenant settings directly.
+  //
+  // Never on the kernet's phone: the route comes from the driver's, and two
+  // phones in one cab would file the same trip twice.
   const trackingOffered =
     !!run.data?.rekamLokasi &&
+    run.data.peran !== "Kernet" &&
     (run.data?.stops.some((s) => s.status !== "Selesai" && s.status !== "Tertunda") ?? false);
   const tripKey = run.data?.driver
     ? `${run.data.driver.id}:${run.data.tanggal}`
@@ -215,6 +219,13 @@ export function SopirPage() {
                     <p className="data text-xs text-ink-muted">
                       {data.driver.plat} · {data.driver.armada}
                     </p>
+                    {data.peran === "Kernet" ? (
+                      <p className="text-xs text-ink-muted">
+                        Anda ikut sebagai kernet. Rute direkam dari ponsel sopir.
+                      </p>
+                    ) : (
+                      data.kernet && <p className="text-xs text-ink-muted">Kernet: {data.kernet}</p>
+                    )}
                   </div>
                   <StatusBadge
                     variant={getStatusVariant(data.driver.status)}

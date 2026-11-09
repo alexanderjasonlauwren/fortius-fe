@@ -192,7 +192,16 @@ export interface DriverEntity extends Scoped {
    * from the Users page.
    */
   userId?: ID;
+  /**
+   * Which seat on a run this person takes: the wheel, or beside it. Set once,
+   * when the record is created -- the service refuses to change it, because a
+   * driver already on runs who became a kernet would leave those runs with
+   * nobody licensed driving.
+   */
+  peran?: CrewRoleEntity;
 }
+
+export type CrewRoleEntity = "Sopir" | "Kernet";
 
 export type VehicleStatusEntity = "Aktif" | "Perawatan" | "Nonaktif";
 

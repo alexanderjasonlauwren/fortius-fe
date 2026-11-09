@@ -180,13 +180,18 @@ export function LoginPage() {
           </p>
 
           <form onSubmit={handleSubmit} className="mt-7 space-y-4">
-            <Field label="Email" htmlFor="email" required>
+            {/* Email or username: the service matches either, and crew
+                logins for the driver app have a username and no email. A
+                type="email" field refused them before the request was sent. */}
+            <Field label="Email atau username" htmlFor="email" required>
               <TextInput
                 id="email"
-                type="email"
+                type="text"
                 mono
                 autoComplete="username"
-                placeholder="nama@perusahaan.id"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="nama@perusahaan.id atau username"
                 value={email}
                 invalid={!!error}
                 onChange={(e) => setEmail(e.target.value)}

@@ -60,6 +60,8 @@ interface PlanDetailPanelProps {
   saProductOptions: { id: string; label: string; satuan: string }[];
   driverOptions: DriverOption[];
   vehicleOptions: VehicleOption[];
+  /** Who can ride beside a run's driver. Optional: a run may have no kernet. */
+  kernetOptions?: PlanOption[];
   onSaveDraft: (rows: PlanRow[]) => void;
   onConfirm: () => void;
   onCancelPlan: () => void;
@@ -91,6 +93,9 @@ interface TripGroup {
   key: string;
   driverId: string;
   vehicleId: string | null;
+  /** Every row of a run carries the same kernet, as with the vehicle. */
+  kernetId: string | null;
+  kernet?: string;
   tripNo: number;
   driver: DriverOption | undefined;
   vehicle: VehicleOption | undefined;
@@ -124,6 +129,21 @@ function tripOf(row: PlanRow): number {
   return row.tripNo ?? 1;
 }
 
+/**
+ * The kernet already riding a run, for a stop that joins it.
+ *
+ * A run has one kernet, stamped on each of its rows like the truck. A stop
+ * moved onto a run takes that run's kernet rather than carrying its old one
+ * over -- otherwise the run's rows disagree and which kernet is saved depends
+ * on row order.
+ */
+function kernetOfRun(rows: PlanRow[], driverId: string, tripNo: number, except: Set<string>) {
+  const rider = rows.find(
+    (r) => !except.has(r.id) && r.driverId === driverId && tripOf(r) === tripNo,
+  );
+  return { kernetId: rider?.kernetId ?? null, kernet: rider?.kernet };
+}
+
 function groupIntoTrips(
   rows: PlanRow[],
   drivers: DriverOption[],
@@ -143,6 +163,8 @@ function groupIntoTrips(
         key,
         driverId: row.driverId,
         vehicleId: row.vehicleId,
+        kernetId: row.kernetId ?? null,
+        kernet: row.kernet,
         tripNo,
         driver,
         vehicle,
@@ -196,6 +218,7 @@ export function PlanDetailPanel({
   saProductOptions,
   driverOptions,
   vehicleOptions,
+  kernetOptions = [],
   onSaveDraft,
   onConfirm,
   onCancelPlan,
@@ -340,7 +363,15 @@ export function PlanDetailPanel({
         // same `urutan`, and the service treats a position as belonging to one
         // outlet. `compareStops` sorts a null position last, so the moved stop
         // simply lands at the end of its new run until someone reorders it.
-        if (patch.driverId !== undefined || patch.tripNo !== undefined) next.urutan = null;
+        if (patch.driverId !== undefined || patch.tripNo !== undefined) {
+          next.urutan = null;
+          Object.assign(
+            next,
+            next.driverId
+              ? kernetOfRun(prev, next.driverId, tripOf(next), new Set([id]))
+              : { kernetId: null, kernet: undefined },
+          );
+        }
         return next;
       }),
     );
@@ -378,6 +409,19 @@ export function PlanDetailPanel({
         if (!row.driverId) return row;
         if (`${row.driverId}#${tripOf(row)}` !== tripKey) return row;
         return { ...row, vehicleId: vehicleId || null, vehicle: label };
+      }),
+    );
+    setDirty(true);
+  };
+
+  /** Seats a kernet on a whole run, the way `setTripVehicle` sets its truck. */
+  const setTripKernet = (tripKey: string, kernetId: string) => {
+    const label = kernetOptions.find((k) => k.id === kernetId)?.label;
+    setDraft((prev) =>
+      prev.map((row) => {
+        if (!row.driverId) return row;
+        if (`${row.driverId}#${tripOf(row)}` !== tripKey) return row;
+        return { ...row, kernetId: kernetId || null, kernet: kernetId ? label : undefined };
       }),
     );
     setDirty(true);
@@ -470,6 +514,7 @@ export function PlanDetailPanel({
               // Same reasoning as `patchRow`: a bulk move onto a (possibly new)
               // run cannot keep the old position without risking a collision.
               urutan: null,
+              ...kernetOfRun(prev, bulkDriverId, tripNo, selected),
             }
           : r,
       ),
@@ -869,6 +914,8 @@ export function PlanDetailPanel({
                     vehicleOptions={vehicleOptions}
                     vehicleUsage={vehicleUsage}
                     onVehicleChange={setTripVehicle}
+                    kernetOptions={kernetOptions}
+                    onKernetChange={setTripKernet}
                     onDispatchTrip={onDispatchTrip}
                     isDispatching={
                       !!trip.tripId && trip.tripId === dispatchingTripId
@@ -1366,6 +1413,8 @@ function TripHeader({
   vehicleOptions,
   vehicleUsage,
   onVehicleChange,
+  kernetOptions,
+  onKernetChange,
   onDispatchTrip,
   isDispatching,
 }: {
@@ -1378,6 +1427,8 @@ function TripHeader({
   /** Which trip already has each truck out — see the doc comment where this is built. */
   vehicleUsage: Map<string, TripGroup>;
   onVehicleChange: (tripKey: string, vehicleId: string) => void;
+  kernetOptions: PlanOption[];
+  onKernetChange: (tripKey: string, kernetId: string) => void;
   onDispatchTrip?: (tripId: string, rows: PlanRow[]) => void;
   isDispatching?: boolean;
 }) {
@@ -1450,6 +1501,30 @@ function TripHeader({
             <span className="data text-xs font-medium text-ink-muted">
               {trip.vehicle?.label ?? "Armada tidak ditetapkan"}
             </span>
+          )}
+
+          {/* The kernet, for the whole run like the truck. Optional, so an
+              empty choice is "Tanpa kernet" rather than a missing field. The
+              service refuses one kernet on two drivers' runs of the same
+              number; the message says so on save. */}
+          {editableCrew ? (
+            kernetOptions.length > 0 && (
+              <SelectInput
+                aria-label={`Kernet rit ${trip.tripNo}`}
+                className="h-8 w-48 text-xs"
+                value={trip.kernetId ?? ""}
+                onChange={(e) => onKernetChange(trip.key, e.target.value)}
+              >
+                <option value="">Tanpa kernet</option>
+                {kernetOptions.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.label}
+                  </option>
+                ))}
+              </SelectInput>
+            )
+          ) : (
+            trip.kernet && <span className="text-xs text-ink-muted">Kernet: {trip.kernet}</span>
           )}
 
           {canDispatch && (

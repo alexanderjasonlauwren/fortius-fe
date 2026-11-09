@@ -67,6 +67,16 @@ export function applySuggestion(
     }
   }
 
+  // The service suggests drivers and trucks, never kernets. Whoever was
+  // already riding with a driver keeps riding with them, rather than every
+  // suggestion clearing a seat the dispatcher filled by hand.
+  const kernetOf = new Map<string, { kernetId: string; kernet?: string }>();
+  for (const row of rows) {
+    if (row.driverId && row.kernetId && !kernetOf.has(row.driverId)) {
+      kernetOf.set(row.driverId, { kernetId: row.kernetId, kernet: row.kernet });
+    }
+  }
+
   return rows.map((row) => {
     const at = placement.get(row.outletId);
     // A stop the planner could not place is cleared rather than left on
@@ -76,7 +86,7 @@ export function applySuggestion(
       return {
         ...row,
         driverId: null, driver: "Belum ditetapkan", tripNo: null, urutan: null,
-        berangkat: null,
+        berangkat: null, kernetId: null, kernet: undefined,
       };
     }
     return {
@@ -85,6 +95,8 @@ export function applySuggestion(
       driver: at.driver,
       tripNo: at.tripNo,
       urutan: at.urutan,
+      kernetId: kernetOf.get(at.driverId)?.kernetId ?? null,
+      kernet: kernetOf.get(at.driverId)?.kernet,
       // Only overwritten when the suggestion names a truck: a run it left
       // without one keeps the truck the planner already chose.
       ...(at.vehicleId ? { vehicleId: at.vehicleId, vehicle: at.vehicle ?? row.vehicle } : {}),

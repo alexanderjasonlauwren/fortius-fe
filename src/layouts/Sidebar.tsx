@@ -7,7 +7,7 @@ import { useAuthStore } from "@/features/auth/store/authStore";
 import { getUnreadCount } from "@/features/notification/api/notificationApi";
 import { useRevealActiveGroup, useSidebarStore } from "@/hooks/useSidebar";
 import { APP_NAME, APP_SUBTITLE } from "@/utils/constants";
-import { BOTTOM_NAV, navGroupsFor, type NavItem } from "./nav";
+import { bottomNavFor, navGroupsFor, type NavItem } from "./nav";
 import { useIntakePolicy } from "@/features/distribution/hooks/useIntakePolicy";
 
 interface SidebarProps {
@@ -274,7 +274,7 @@ export function Sidebar({ onClose }: SidebarProps) {
       </nav>
 
       <div className="border-t border-white/10 py-3">
-        {BOTTOM_NAV.map(renderItem)}
+        {bottomNavFor(permissions).map(renderItem)}
 
         <button
           onClick={handleLogout}

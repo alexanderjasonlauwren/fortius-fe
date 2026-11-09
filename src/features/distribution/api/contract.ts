@@ -30,6 +30,8 @@ import type {
 export interface TripAssignment {
   driverId: string;
   vehicleId: string;
+  /** The kernet riding beside the driver; absent for a run taken alone. */
+  kernetId?: string;
   tripNo: number;
   stops: { outletId: string; sequenceNo: number }[];
   /**
@@ -133,6 +135,8 @@ export interface DistributionApi {
    */
   getSAProductOptions(saId: string): Promise<ProductOption[]>;
   getDriverOptions(planId: string): Promise<DriverOption[]>;
+  /** Kernets at the branch, for the seat beside a run's driver. */
+  getKernetOptions(): Promise<PlanOption[]>;
   /** The trucks a run can be put on. Capacity lives here, not on the driver. */
   getVehicleOptions(): Promise<VehicleOption[]>;
   getActiveSaOptions(): Promise<PlanOption[]>;

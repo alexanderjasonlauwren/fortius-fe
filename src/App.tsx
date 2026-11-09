@@ -56,7 +56,7 @@ import { TenantDetailPage } from "./pages/tenants/TenantDetailPage";
 import { NotFoundPage } from "./pages/errors/NotFoundPage";
 import { ErrorBoundary } from "./pages/errors/ErrorBoundary";
 import { ProtectedRoute } from "./features/auth/components/ProtectedRoutes";
-import { RequirePermission } from "./features/rbac/components/RequirePermission";
+import { RequireOfficeConsole, RequirePermission } from "./features/rbac/components/RequirePermission";
 import { PERMISSIONS } from "./features/rbac/permissions";
 import { outletLabel } from "@/lib/lexicon";
 
@@ -344,7 +344,11 @@ const router = createBrowserRouter([
       ) },
 
       { path: "notifications", element: <NotificationPage /> },
-      { path: "settings", element: <SettingsPage /> },
+      { path: "settings", element: (
+        <RequireOfficeConsole>
+          <SettingsPage />
+        </RequireOfficeConsole>
+      ) },
 
       { path: "*", element: <NotFoundPage /> },
     ],

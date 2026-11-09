@@ -24,7 +24,7 @@ import {
 } from "@/features/notification/api/notificationApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { relativeTime } from "@/lib/format";
-import { sectionFor, titleFor } from "./nav";
+import { sectionFor, titleFor, usesDriverConsole } from "./nav";
 import { CommandPalette } from "./CommandPalette";
 import { ScopeSwitcher } from "@/features/tenancy/ScopeSwitcher";
 import { describeRoles } from "@/features/rbac/access";
@@ -300,22 +300,28 @@ export function Header({ onMenuClick }: HeaderProps) {
                     {user?.email}
                   </p>
                 </div>
-                <Link
-                  to="/settings"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-panel-sunk hover:text-ink"
-                >
-                  <UserRound className="h-4 w-4" />
-                  Profil saya
-                </Link>
-                <Link
-                  to="/settings"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-panel-sunk hover:text-ink"
-                >
-                  <Settings className="h-4 w-4" />
-                  Pengaturan
-                </Link>
+                {/* Both open the agency's settings page, which a sopir is not
+                    shown -- see bottomNavFor. */}
+                {!usesDriverConsole(user?.permissions) && (
+                  <>
+                    <Link
+                      to="/settings"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-panel-sunk hover:text-ink"
+                    >
+                      <UserRound className="h-4 w-4" />
+                      Profil saya
+                    </Link>
+                    <Link
+                      to="/settings"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-panel-sunk hover:text-ink"
+                    >
+                      <Settings className="h-4 w-4" />
+                      Pengaturan
+                    </Link>
+                  </>
+                )}
                 {/* Below sm these two stand in for their bar icons. Labelled,
                     because an icon alone in a menu row reads as decoration.
                     Search earns its place here rather than in the bar: at 320px

@@ -89,6 +89,14 @@ export interface DriverRun {
     kapasitas: number;
     status: string;
   } | null;
+  /**
+   * The signed-in person's seat on this run. A kernet works the same stops
+   * under their own login, but the continuous route is recorded from the
+   * driver's phone only: two phones in one cab would file the trip twice.
+   */
+  peran: "Sopir" | "Kernet";
+  /** The kernet riding this run, if any. */
+  kernet?: string;
   tanggal: string;
   stops: RunStop[];
   totals: RunTotals;
