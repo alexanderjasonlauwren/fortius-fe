@@ -107,6 +107,8 @@ interface OrderResponse {
   total_drivers: number;
   total_qty: number;
   notes?: string;
+  /** Present on a single read; a list row leaves it false. */
+  source_managed?: boolean;
   agreement_id?: string;
   agreement_number?: string;
   agreement_remaining?: number;
@@ -344,6 +346,7 @@ function toPlanView(order: OrderResponse): DistributionPlan {
     dibuatOleh: order.created_by ?? "—",
     dikonfirmasiOleh: order.confirmed_by,
     dikonfirmasiPada: order.confirmed_at,
+    sourceManaged: order.source_managed ?? false,
     version: order.version,
   };
 }

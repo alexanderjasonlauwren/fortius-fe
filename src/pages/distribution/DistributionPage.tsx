@@ -97,7 +97,12 @@ export function DistributionPage() {
 
   const handleSaveDraft = (rows: PlanRow[]) => {
     if (selectedPlan) {
-      saveDraftMutation.mutate({ planId: selectedPlan.id, rows, version: selectedPlan.version });
+      saveDraftMutation.mutate({
+        planId: selectedPlan.id,
+        rows,
+        version: selectedPlan.version,
+        sourceManaged: selectedPlan.sourceManaged,
+      });
     }
   };
 
@@ -132,7 +137,7 @@ export function DistributionPage() {
         error={sourceReview.error}
         fillError={fillSourceMutation.variables?.id === selectedPlan.id ? fillSourceMutation.error : null}
         isFilling={fillSourceMutation.isPending && fillSourceMutation.variables?.id === selectedPlan.id}
-        canFill={selectedPlan.status === "Draf" && !isLoadingDetail && planDetail.length === 0}
+        canFill={selectedPlan.status === "Draf" && !selectedPlan.sourceManaged && !isLoadingDetail && planDetail.length === 0}
         onRetry={() => {
           if (selectedPlan.status === "Draf" && !isLoadingDetail && planDetail.length === 0) fillSourceMutation.mutate(selectedPlan);
           else void sourceReview.refetch();
@@ -175,7 +180,7 @@ export function DistributionPage() {
 
           <div className="lg:col-span-9">
             <PlanDetailPanel
-              allowsManualDemand={intakePolicy.allowsManualIntake}
+              allowsManualDemand={intakePolicy.allowsManualIntake && !selectedPlan?.sourceManaged}
               sourceBlocked={sourceBlocked || fillSourceMutation.isPending}
               plan={selectedPlan}
               rows={planDetail}

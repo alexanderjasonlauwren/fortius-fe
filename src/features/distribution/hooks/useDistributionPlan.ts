@@ -161,12 +161,37 @@ export function useDistributionPlan() {
    * and would refuse the whole board; skipping keeps the stops saved and leaves
    * the incomplete run visibly unassigned, which is what the dispatcher is
    * looking at anyway.
+   *
+   * A SIM3LON plan skips the stop write. Its stops change only through
+   * reconciliation and the service refuses any stop save with SOURCE_MANAGED,
+   * which used to stop the assignment from ever being sent -- leaving the plan
+   * with no runs and so impossible to confirm.
    */
   const saveDraftMutation = useDeskMutation({
-    mutationFn: async ({ planId, rows, version }: { planId: string; rows: PlanRow[]; version: number }) => {
+    mutationFn: async ({
+      planId,
+      rows,
+      version,
+      sourceManaged,
+    }: {
+      planId: string;
+      rows: PlanRow[];
+      version: number;
+      sourceManaged: boolean;
+    }) => {
+      const trips = toTripAssignments(rows);
+      if (sourceManaged) {
+        if (trips.length === 0 || !canAssign) {
+          throw new Error(
+            "Titik singgah rencana SIM3LON hanya berubah lewat rekonsiliasi. Tetapkan sopir dan armada untuk menyimpan.",
+          );
+        }
+        await applyAssignment(planId, trips, version);
+        return { trips: trips.length };
+      }
+
       const savedPlan = await saveDraft(planId, rows, version);
 
-      const trips = toTripAssignments(rows);
       // The stop save advances the plan version. Use the exact version that
       // write returned, tied to this mutation's plan, rather than reading the
       // currently selected plan after an await and potentially assigning a
