@@ -33,7 +33,9 @@ vi.mock("@/lib/api", () => ({
 }));
 
 const printDocument = vi.fn();
-vi.mock("@/lib/export", () => ({
+// The real escapeHtml, so the sheet's escaping is what is under test.
+vi.mock("@/lib/export", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/export")>()),
   printDocument: (...args: unknown[]) => printDocument(...args),
 }));
 
@@ -1130,6 +1132,37 @@ describe("printRouteSheet", () => {
 
     const [, html] = printDocument.mock.calls[0];
     expect(html).toContain('<td class="code">—</td>');
+  });
+
+  // The print frame shares the console's origin: a name carrying markup must
+  // print as text, or it runs as whoever pressed "Lembar rute".
+  it("prints typed names and addresses as text, never as markup", async () => {
+    const payload = '<img src=x onerror="alert(1)">';
+    getOutletList.mockResolvedValue([{ id: OUTLET_A, alamat: payload, kecamatan: "Sidorejo" }]);
+    getOne.mockImplementation((path: string) =>
+      Promise.resolve(
+        path.endsWith("/trips")
+          ? {
+              trips: [{
+                trip_no: 1, driver_id: "d1", driver_code: "DRV-1", driver_name: "Ishak",
+                kernet_id: "k1", kernet_name: "<script>steal()</script>",
+                vehicle_id: "v1", plate: "K 8530 HS",
+                stops: [{ sequence_no: 1, outlet_id: OUTLET_A, outlet_code: "P", outlet_name: "A", qty: 30, funded: true }],
+                load_qty: 30, capacity_qty: 560, at_risk_qty: 0, distance_m: 0,
+              }],
+              unroutable: [], summary: {},
+            }
+          : order(),
+      ),
+    );
+
+    await printRouteSheet(PLAN_ID);
+
+    const [, html] = printDocument.mock.calls[0];
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect(html).toContain("Kernet: &lt;script&gt;steal()&lt;/script&gt;");
   });
 
   /** An outlet missing from the list (a fetch race, a soft-deleted row)

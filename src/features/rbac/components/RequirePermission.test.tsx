@@ -45,6 +45,14 @@ describe("an office-only page", () => {
     expect(screen.getByRole("link", { name: "Kembali ke halaman Anda" }).getAttribute("href")).toBe("/sopir");
   });
 
+  // The guard reads the same decision as the menu and the landing page, so a
+  // driver role that gained a grant the console has not heard of is still
+  // refused here (Copilot review on PR #15).
+  it("is refused to a drifted driver role too", () => {
+    open([...driverRole, "some.future.grant"]);
+    expect(screen.queryByText("Profil agen")).toBeNull();
+  });
+
   it("opens for office staff", () => {
     open([PERMISSIONS.SETTINGS_VIEW, PERMISSIONS.DISTRIBUTION_VIEW]);
     expect(screen.getByText("Profil agen")).toBeTruthy();

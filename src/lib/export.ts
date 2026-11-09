@@ -214,7 +214,7 @@ export function printDocument(title: string, bodyHtml: string) {
 
   doc.open();
   doc.write(`<!doctype html><html lang="id"><head><meta charset="utf-8" />
-<title>${title}</title>
+<title>${escapeHtml(title)}</title>
 <style>
   @page { size: A4; margin: 18mm 16mm; }
   * { box-sizing: border-box; }

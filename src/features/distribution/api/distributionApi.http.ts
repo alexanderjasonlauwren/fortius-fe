@@ -29,7 +29,7 @@
  * the run rather than of one line.
  */
 import { getAllPages, getOne, send } from "@/lib/api";
-import { printDocument } from "@/lib/export";
+import { escapeHtml, printDocument } from "@/lib/export";
 import { outletLabelTitle, unitLabelTitle } from "@/lib/lexicon";
 import { scopeKey } from "@/lib/scope";
 import { scheduleOrders } from "@/features/orders/api/orderApi.http";
@@ -1020,24 +1020,28 @@ export async function printRouteSheet(planId: string): Promise<void> {
   // By run and stop position -- the order a driver actually drives it in, not
   // merely grouped by trip number with whatever order the rows arrived in.
   const ordered = [...rows].sort(compareStops);
+  // Every value below that someone typed -- outlet and crew names, addresses,
+  // the agency's own labels -- is escaped: the print frame shares the
+  // console's origin, so markup in a name would run as the signed-in user.
+  const e = escapeHtml;
 
   printDocument(
     `${plan.kode} · Lembar Rute`,
     `
-    <p class="eyebrow">${settings.namaPerusahaan || "—"} · Agen ${settings.nomorAgen || "—"}</p>
+    <p class="eyebrow">${e(settings.namaPerusahaan || "—")} · Agen ${e(settings.nomorAgen || "—")}</p>
     <h1>Lembar Rute Distribusi</h1>
     <hr class="rule" />
     <div class="meta">
-      <div>Kode rencana<strong class="code">${plan.kode}</strong></div>
+      <div>Kode rencana<strong class="code">${e(plan.kode)}</strong></div>
       <div>Tanggal<strong>${new Date(plan.tanggal).toLocaleDateString("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</strong></div>
-      <div>Status<strong>${plan.status}</strong></div>
+      <div>Status<strong>${e(plan.status)}</strong></div>
       <div>Titik singgah<strong>${ordered.length}</strong></div>
     </div>
     <table>
       <thead>
         <tr>
-          <th>#</th><th>Jam</th><th>${outletLabelTitle()}</th><th>Alamat</th><th>Sopir · Kernet / Armada</th>
-          <th style="text-align:right">${unitLabelTitle()}</th><th style="width:90px">Diterima</th>
+          <th>#</th><th>Jam</th><th>${e(outletLabelTitle())}</th><th>Alamat</th><th>Sopir · Kernet / Armada</th>
+          <th style="text-align:right">${e(unitLabelTitle())}</th><th style="width:90px">Diterima</th>
         </tr>
       </thead>
       <tbody>
@@ -1045,11 +1049,11 @@ export async function printRouteSheet(planId: string): Promise<void> {
           .map((r) => {
             const pkl = outletById.get(r.outletId);
             return `<tr>
-              <td class="code">${r.urutan ?? "—"}</td>
-              <td class="code">${r.jamPengiriman}</td>
-              <td>${r.outlet}</td>
-              <td>${pkl ? `${pkl.alamat}, Kec. ${pkl.kecamatan}` : "—"}</td>
-              <td>${r.driverId ? `${r.driver}${r.kernet ? `<br />Kernet: ${r.kernet}` : ""}<br /><span class="code">${r.vehicle}</span>` : "Belum ditetapkan"}</td>
+              <td class="code">${e(r.urutan ?? "—")}</td>
+              <td class="code">${e(r.jamPengiriman)}</td>
+              <td>${e(r.outlet)}</td>
+              <td>${pkl ? `${e(pkl.alamat)}, Kec. ${e(pkl.kecamatan)}` : "—"}</td>
+              <td>${r.driverId ? `${e(r.driver)}${r.kernet ? `<br />Kernet: ${e(r.kernet)}` : ""}<br /><span class="code">${e(r.vehicle)}</span>` : "Belum ditetapkan"}</td>
               <td class="num">${fmt(r.jumlahUnit)}</td>
               <td></td>
             </tr>`;
@@ -1060,7 +1064,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
     </table>
     <div class="sign">
       <div>Petugas gudang<span></span></div>
-      <div>Koordinator distribusi<span>${plan.dikonfirmasiOleh ?? ""}</span></div>
+      <div>Koordinator distribusi<span>${e(plan.dikonfirmasiOleh ?? "")}</span></div>
     </div>`,
   );
 }
