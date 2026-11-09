@@ -306,7 +306,9 @@ export interface QuotaSummaryKind {
 
 /**
  * A branch's quota for one month. Daily quantities are what SIM3LON Penyaluran
- * records per date; dates after today carry nothing yet.
+ * records per date. A date after today can already carry a quantity: SIM3LON
+ * holds the schedule ahead, so that figure is scheduled, not yet distributed,
+ * and `deliveredQty` stops at today.
  */
 export interface QuotaSummary {
   periodMonth: string;

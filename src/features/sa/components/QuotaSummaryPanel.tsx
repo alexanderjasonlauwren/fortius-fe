@@ -65,6 +65,11 @@ function QuotaSummaryBody({ summary }: { summary: QuotaSummary }) {
   const unit = unitLabel();
   const peak = Math.max(0, ...summary.days.map((day) => day.qty));
   const deliveredPct = summary.allocationQty === 0 ? 0 : (summary.deliveredQty / summary.allocationQty) * 100;
+  // SIM3LON already holds a schedule for coming dates. Shown apart
+  // from what was distributed, never added to it: until the date passes it is
+  // a plan, and counting it would shrink Sisa for cylinders still in the depot.
+  const scheduled = summary.days.filter((day) => isAfterToday(summary, day.date) && day.qty > 0);
+  const scheduledQty = scheduled.reduce((sum, day) => sum + day.qty, 0);
 
   return (
     <div className="space-y-6">
@@ -88,17 +93,32 @@ function QuotaSummaryBody({ summary }: { summary: QuotaSummary }) {
             {summary.days.map((day) => {
               const date = localDate(day.date);
               const isToday = day.date === summary.today;
-              const isFuture = summary.today !== null && day.date > summary.today;
-              const label = `${formatDateLong(date)}: ${isFuture ? "belum terjadi" : `${formatNumber(day.qty)} ${unit}`}`;
+              const isFuture = isAfterToday(summary, day.date);
+              const isScheduled = isFuture && day.qty > 0;
+              const label = `${formatDateLong(date)}: ${
+                isScheduled
+                  ? `${formatNumber(day.qty)} ${unit} terjadwal`
+                  : isFuture
+                    ? "belum ada jadwal"
+                    : `${formatNumber(day.qty)} ${unit}`
+              }`;
               return (
                 <li key={day.date} className="flex flex-col items-center gap-1" title={label} aria-label={label}>
                   <span className={cn("data text-2xs", isToday ? "font-semibold text-ink" : "text-ink-muted")}>
-                    {isFuture ? "·" : day.qty === 0 ? "–" : formatNumber(day.qty)}
+                    {isScheduled ? formatNumber(day.qty) : isFuture ? "·" : day.qty === 0 ? "–" : formatNumber(day.qty)}
                   </span>
                   <span className="flex h-12 w-full items-end justify-center">
                     <span
-                      className={cn("w-3/4 rounded-t-sm", isToday ? "bg-signal" : "bg-ink/60")}
-                      style={{ height: peak === 0 || isFuture ? 0 : `${(day.qty / peak) * 100}%` }}
+                      data-kind={isScheduled ? "scheduled" : isFuture ? "open" : "distributed"}
+                      className={cn(
+                        "w-3/4 rounded-t-sm",
+                        isScheduled
+                          ? "border border-b-0 border-dashed border-ink-muted"
+                          : isToday
+                            ? "bg-signal"
+                            : "bg-ink/60",
+                      )}
+                      style={{ height: peak === 0 || (isFuture && !isScheduled) ? 0 : `${(day.qty / peak) * 100}%` }}
                     />
                   </span>
                   <span
@@ -116,8 +136,16 @@ function QuotaSummaryBody({ summary }: { summary: QuotaSummary }) {
         </div>
         <p className="text-xs leading-relaxed text-ink-muted">
           Setiap kolom adalah jumlah {unit} yang disalurkan ke pangkalan pada tanggal itu, menurut Penyaluran SIM3LON.
-          Tanggal yang belum lewat masih kosong (·); hari tanpa penyaluran, misalnya Minggu, tercatat 0 (–).
+          Tanggal mendatang yang sudah terjadwal di SIM3LON tampil bergaris putus-putus dan belum dihitung tersalurkan;
+          tanggal mendatang tanpa jadwal kosong (·); hari tanpa penyaluran, misalnya Minggu, tercatat 0 (–).
         </p>
+        {scheduledQty > 0 && (
+          <p className="text-xs text-ink">
+            Terjadwal{" "}
+            <span className="data font-semibold">{formatNumber(scheduledQty)}</span> {unit} untuk{" "}
+            {formatNumber(scheduled.length)} tanggal mendatang.
+          </p>
+        )}
       </section>
 
       <section className="space-y-3 border-t border-line pt-4">
@@ -152,6 +180,11 @@ function QuotaSummaryBody({ summary }: { summary: QuotaSummary }) {
       </section>
     </div>
   );
+}
+
+/** Strictly after today: today's figure is already counted as distributed. */
+function isAfterToday(summary: QuotaSummary, date: string): boolean {
+  return summary.today !== null && date > summary.today;
 }
 
 function QuotaFigure({ label, value, suffix, meaning, detail, tone }: {
