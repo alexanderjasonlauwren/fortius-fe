@@ -131,6 +131,9 @@ interface TripResponse {
   driver_id: string;
   driver_code: string;
   driver_name: string;
+  /** Absent for a run the driver takes alone, and on a suggestion. */
+  kernet_id?: string;
+  kernet_name?: string;
   vehicle_id: string;
   plate: string;
   stops: {
@@ -387,6 +390,8 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
       driver: string;
       vehicleId: string;
       vehicle: string;
+      kernetId: string | null;
+      kernet?: string;
       tripNo: number;
       tripId: string | null;
       tripStatus?: string;
@@ -402,6 +407,8 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
         driver: trip.driver_name,
         vehicleId: trip.vehicle_id,
         vehicle: trip.plate,
+        kernetId: trip.kernet_id ?? null,
+        kernet: trip.kernet_name,
         tripNo: trip.trip_no,
         tripId: trip.id ?? null,
         tripStatus: trip.trip_status,
@@ -431,6 +438,8 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
       driver: crew?.driver ?? "Belum ditetapkan",
       vehicleId: crew?.vehicleId ?? null,
       vehicle: crew?.vehicle ?? "Belum ditetapkan",
+      kernetId: crew?.kernetId ?? null,
+      kernet: crew?.kernet,
       // The service plans a delivery date, not a time of day -- this is an
       // estimate from the board's own schedule, when it has one, and "—"
       // otherwise rather than a clock only the demo fills.
@@ -761,12 +770,29 @@ async function getSAOutletPlan(saId: string, tanggal: string): Promise<SAOutletP
  * on any trip is offered with no capacity — the planner can still assign them,
  * and the service settles the vehicle when the assignment is applied.
  */
+async function getKernetOptions(): Promise<PlanOption[]> {
+  const page = await getAllPages<{ id: string; code: string; full_name: string }>("/drivers", {
+    pageSize: OPTION_PAGE_SIZE,
+    sort: [{ field: "full_name" }],
+    filters: [
+      { field: "status", operator: "eq", value: "atv" },
+      { field: "employment_status", operator: "eq", value: "active" },
+      { field: "crew_role", operator: "eq", value: "kernet" },
+    ],
+  });
+  return page.items.map((k) => ({ id: k.id, label: k.full_name, sublabel: k.code }));
+}
+
 async function getDriverOptions(planId: string): Promise<DriverOption[]> {
   const [page, board, fleet] = await Promise.all([
     getAllPages<{ id: string; code: string; full_name: string; status: string }>("/drivers", {
       pageSize: OPTION_PAGE_SIZE,
       sort: [{ field: "full_name" }],
-      filters: [{ field: "status", operator: "eq", value: "atv" }],
+      // Drivers only: the service refuses a kernet at the wheel.
+      filters: [
+        { field: "status", operator: "eq", value: "atv" },
+        { field: "crew_role", operator: "eq", value: "driver" },
+      ],
     }),
     getBoard(planId),
     getAllPages<{ capacity_qty: number; operational_status: string }>("/vehicles", {
@@ -842,6 +868,8 @@ async function applyAssignment(planId: string, trips: TripAssignment[], version:
     trips: trips.map((trip) => ({
       driver_id: trip.driverId,
       vehicle_id: trip.vehicleId,
+      // Omitted rather than sent empty, like the departure time below.
+      ...(trip.kernetId ? { kernet_id: trip.kernetId } : {}),
       trip_no: trip.tripNo,
       stops: trip.stops.map((stop) => ({
         outlet_id: stop.outletId,
@@ -1008,7 +1036,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
     <table>
       <thead>
         <tr>
-          <th>#</th><th>Jam</th><th>${outletLabelTitle()}</th><th>Alamat</th><th>Driver / Armada</th>
+          <th>#</th><th>Jam</th><th>${outletLabelTitle()}</th><th>Alamat</th><th>Sopir · Kernet / Armada</th>
           <th style="text-align:right">${unitLabelTitle()}</th><th style="width:90px">Diterima</th>
         </tr>
       </thead>
@@ -1021,7 +1049,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
               <td class="code">${r.jamPengiriman}</td>
               <td>${r.outlet}</td>
               <td>${pkl ? `${pkl.alamat}, Kec. ${pkl.kecamatan}` : "—"}</td>
-              <td>${r.driverId ? `${r.driver}<br /><span class="code">${r.vehicle}</span>` : "Belum ditetapkan"}</td>
+              <td>${r.driverId ? `${r.driver}${r.kernet ? `<br />Kernet: ${r.kernet}` : ""}<br /><span class="code">${r.vehicle}</span>` : "Belum ditetapkan"}</td>
               <td class="num">${fmt(r.jumlahUnit)}</td>
               <td></td>
             </tr>`;
@@ -1053,6 +1081,7 @@ export const distributionApiHttp: DistributionApi = {
   getProductOptions,
   getSAProductOptions,
   getDriverOptions,
+  getKernetOptions,
   getVehicleOptions,
   getActiveSaOptions,
   getSAOutletPlan,

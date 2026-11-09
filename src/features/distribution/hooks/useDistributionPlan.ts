@@ -10,6 +10,7 @@ import {
   dispatchTrip,
   getActiveSaOptions,
   getDriverOptions,
+  getKernetOptions,
   getOutletOptions,
   getProductOptions,
   getSAProductOptions,
@@ -120,6 +121,11 @@ export function useDistributionPlan() {
   const vehicleOptions = useQuery({
     queryKey: [...scopeKey(), "vehicle-options"],
     queryFn: getVehicleOptions,
+  });
+
+  const kernetOptions = useQuery({
+    queryKey: [...scopeKey(), "kernet-options"],
+    queryFn: getKernetOptions,
   });
 
   const productOptions = useQuery({
@@ -331,6 +337,7 @@ export function useDistributionPlan() {
     setSelectedPlanId,
     outletOptions: outletOptions.data ?? [],
     vehicleOptions: vehicleOptions.data ?? [],
+    kernetOptions: kernetOptions.data ?? [],
     productOptions: productOptions.data ?? [],
     saProductOptions: saProductOptions.data ?? [],
     driverOptions: driverOptions.data ?? [],
@@ -360,7 +367,7 @@ export function useDistributionPlan() {
 export function toTripAssignments(rows: PlanRow[]) {
   const byRun = new Map<
     string,
-    { driverId: string; vehicleId: string; tripNo: number; stops: { outletId: string; sequenceNo: number }[]; berangkat?: string }
+    { driverId: string; vehicleId: string; kernetId?: string; tripNo: number; stops: { outletId: string; sequenceNo: number }[]; berangkat?: string }
   >();
 
   // Sorted once, up front, so each run's stops are pushed in the order the
@@ -377,6 +384,8 @@ export function toTripAssignments(rows: PlanRow[]) {
     const run = byRun.get(key) ?? {
       driverId: row.driverId,
       vehicleId: row.vehicleId,
+      // A run property stamped on every row, like the vehicle.
+      kernetId: row.kernetId ?? undefined,
       tripNo,
       stops: [],
       // Every row on a run carries the same departure -- it is a property of

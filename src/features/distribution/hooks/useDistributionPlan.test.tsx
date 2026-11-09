@@ -15,7 +15,7 @@ vi.mock("../api/sourcePlanReview", () => ({ getSourcePlanReview: state.review })
 vi.mock("../api/distributionApi", () => ({
   getPlanList: async () => state.plans,
   getPlan: async () => state.plans[0], getPlanDetail: async () => [],
-  getActiveSaOptions: async () => [], getDriverOptions: async () => [], getOutletOptions: async () => [],
+  getActiveSaOptions: async () => [], getDriverOptions: async () => [], getKernetOptions: async () => [], getOutletOptions: async () => [],
   getProductOptions: async () => [], getSAProductOptions: async () => [], getVehicleOptions: async () => [],
   createPlan: state.create, createSourcePlan: state.createSource, saveDraft: state.save, applyAssignment: state.apply, cancelDistributionPlan: vi.fn(),
   confirmPlan: vi.fn(), dispatchTrip: vi.fn(), addApprovedOrders: vi.fn(), printRouteSheet: vi.fn(),
@@ -233,6 +233,15 @@ describe("toTripAssignments", () => {
       statusBayar: "Lunas" as const, sisaKuotaOutlet: 0, piutang: 0, piutangJatuhTempo: 0,
     };
   }
+
+  it("carries the run's kernet into the assignment", () => {
+    const rows = [{ ...stopRow("a", 1), kernetId: "k1" }, { ...stopRow("b", 2), kernetId: "k1" }];
+
+    const [trip] = toTripAssignments(rows);
+
+    expect(trip.kernetId).toBe("k1");
+    expect(toTripAssignments([stopRow("c", 1)])[0].kernetId).toBeUndefined();
+  });
 
   it("numbers each run in urutan order, not array order", () => {
     // Array order is A, B, C; urutan says B, C, A -- the array order used to

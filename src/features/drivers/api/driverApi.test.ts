@@ -161,6 +161,21 @@ describe("getDriverSchedule", () => {
 });
 
 describe("writing", () => {
+  // The role is chosen once: the service has no update for it, because a
+  // driver already on runs who became a kernet would leave nobody licensed
+  // at the wheel. An update that sent it would be a 422 on the whole edit.
+  it("sends the crew role on create only", async () => {
+    send.mockResolvedValue(wire({ crew_role: "kernet" }));
+    getOne.mockResolvedValue(wire({ version: 2, crew_role: "kernet" }));
+
+    const created = await driverApiHttp.createOrUpdateDriver({ kode: "KNT-1", nama: "Ary", telepon: "081234567890", peran: "Kernet" });
+    await driverApiHttp.createOrUpdateDriver({ id: ID, nama: "Ary N.", peran: "Sopir" });
+
+    expect(send.mock.calls[0][2].crew_role).toBe("kernet");
+    expect(send.mock.calls[1][2]).not.toHaveProperty("crew_role");
+    expect(created.peran).toBe("Kernet");
+  });
+
   it("reads the version before updating and sends it back", async () => {
     getOne.mockResolvedValue(wire({ version: 5 }));
     send.mockResolvedValue(wire({ version: 6 }));

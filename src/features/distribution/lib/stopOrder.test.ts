@@ -37,6 +37,36 @@ describe("compareStops", () => {
 describe("applySuggestion", () => {
   const vehicles: VehicleOption[] = [{ id: "v1", label: "H 1234 AB", kapasitas: 300 }];
 
+  // The service never suggests a kernet. Re-suggesting used to be harmless;
+  // with kernets it would clear a seat the dispatcher filled by hand on every
+  // press, so whoever rode with a driver keeps riding with them.
+  it("keeps the kernet already riding with each driver", () => {
+    const rows = [
+      row({ id: "a", outlet: "Pangkalan A", driverId: "d1", tripNo: 1, kernetId: "k1", kernet: "Ary" }),
+      row({ id: "b", outlet: "Pangkalan B" }),
+      row({ id: "c", outlet: "Pangkalan C", driverId: "d2", tripNo: 1, kernetId: "k2", kernet: "Budi" }),
+    ];
+    const trip = (driverId: string, outletId: string) => ({
+      tripNo: 1, driverId, driver: driverId, vehicleId: "v1", armada: "H 1234 AB",
+      kapasitas: 300, muatan: 30, muatanBerisiko: 0,
+      stops: [{ outletId, outlet: outletId, jumlahUnit: 30, urutan: 1, lunas: true }],
+    });
+    const suggestion: AssignmentSuggestion = {
+      // b joins d1's run; c is left unplaced.
+      trips: [trip("d1", "a"), { ...trip("d1", "b"), stops: [{ outletId: "b", outlet: "b", jumlahUnit: 30, urutan: 2, lunas: true }] }],
+      unroutable: [],
+      dasar: "test",
+    };
+
+    const byId = new Map(applySuggestion(rows, suggestion, vehicles).map((r) => [r.id, r]));
+
+    expect(byId.get("a")?.kernetId).toBe("k1");
+    expect(byId.get("b")?.kernetId).toBe("k1");
+    expect(byId.get("b")?.kernet).toBe("Ary");
+    // Unplaced: off every run, so off every kernet too.
+    expect(byId.get("c")?.kernetId).toBeNull();
+  });
+
   it("keeps the suggested order and truck, not the array order", () => {
     // Rows arrive alphabetical (A, B, C), as `toPlanRows` sorts an
     // unassigned board -- the suggestion puts them C, A, B on one truck.

@@ -41,6 +41,7 @@ interface DriverResponse {
   total_deliveries: number;
   on_time_deliveries: number;
   employment_status: string;
+  crew_role?: string;
   status: string;
   version: number;
   created_at: string;
@@ -81,6 +82,7 @@ function toView(row: DriverResponse): DriverView {
     telepon: row.phone,
     nomorSim: row.sim_number ?? "—",
     status: toStatus(row.employment_status),
+    peran: row.crew_role === "kernet" ? "Kernet" : "Sopir",
     bergabungPada: row.created_at,
 
     // Counted from core.deliveries, which has no service. Flagged rather than
@@ -120,6 +122,10 @@ function toWire(input: DriverWriteInput, forUpdate: boolean) {
   // No plate, model or capacity. There are no columns for them, and the request
   // types do not declare them -- binding refuses an unrecognised field, so
   // sending one is a 422 rather than a value quietly dropped.
+
+  // Create-only, like the account: the service has no way to change a role
+  // once someone may already be seated on runs in it.
+  if (!forUpdate) put("crew_role", input.peran === "Kernet" ? "kernet" : "driver");
 
   // The account is create-only: the service accepts it only alongside a new
   // driver row, and re-sending it on update would ask to provision a second

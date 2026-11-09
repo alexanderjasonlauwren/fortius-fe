@@ -135,6 +135,16 @@ describe("reading the run", () => {
     expect(off.rekamLokasi).toBe(false);
   });
 
+  // The kernet works the same run under their own login. The screen keys the
+  // GPS stream off this, so a kernet's phone never files the route twice.
+  it("says which seat the signed-in person holds", async () => {
+    const asKernet = await load(run({ crew_role: "kernet", kernet_name: "Ary" }));
+    expect(asKernet.peran).toBe("Kernet");
+    expect(asKernet.kernet).toBe("Ary");
+
+    expect((await load(run({ crew_role: "driver" }))).peran).toBe("Sopir");
+  });
+
   it("keeps a two-product drop as one stop the driver parks at once", async () => {
     const r = await load();
 

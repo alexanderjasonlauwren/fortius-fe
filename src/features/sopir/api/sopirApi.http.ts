@@ -84,6 +84,9 @@ interface RunResponse {
   driver_name?: string;
   vehicle_id?: string;
   plate?: string;
+  kernet_name?: string;
+  /** The session's seat: "driver" or "kernet". Absent on an empty run. */
+  crew_role?: string;
   stops: StopResponse[];
   // The agency's own switch, resolved server-side because this account has
   // no permission to read tenant settings directly.
@@ -240,6 +243,8 @@ async function getMyRun(_driverId: string, tanggal?: string): Promise<DriverRun>
     // From the run, not assumed -- the driver's own account cannot read
     // tenant settings, so the server resolves this and hands it back.
     rekamLokasi: run.record_driver_location,
+    peran: run.crew_role === "kernet" ? "Kernet" : "Sopir",
+    kernet: run.kernet_name,
     driver: run.driver_id
       ? {
           id: run.driver_id,

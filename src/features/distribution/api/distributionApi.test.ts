@@ -473,6 +473,31 @@ describe("stop mapping", () => {
     expect(rows[0].tripNo).toBe(2);
   });
 
+  // A run's kernet is a run property, stamped on each of its stops like the
+  // truck, so the picker shows who is riding and a re-save keeps them.
+  it("takes the run's kernet from the board", async () => {
+    getOne.mockResolvedValueOnce(order()).mockResolvedValueOnce({
+      trips: [
+        {
+          trip_no: 1, driver_id: "d1", driver_code: "DRV-001", driver_name: "Ishak",
+          kernet_id: "k1", kernet_name: "Ary",
+          vehicle_id: "v1", plate: "K 8530 HS",
+          stops: [
+            { sequence_no: 1, outlet_id: OUTLET_A, outlet_code: "PKL-001", outlet_name: "Pangkalan Ahmad", qty: 30, funded: true },
+          ],
+          load_qty: 30, capacity_qty: 560, at_risk_qty: 0, distance_m: 4200,
+        },
+      ],
+      unroutable: [],
+      summary: { distance_m: 4200, trips: 1, outlets: 1 },
+    });
+
+    const [row] = await distributionApiHttp.getPlanDetail(PLAN_ID);
+
+    expect(row.kernetId).toBe("k1");
+    expect(row.kernet).toBe("Ary");
+  });
+
   /**
    * The board is read back the way it will be driven, not alphabetically --
    * `suggest()` used to be thrown away the moment a board was saved, because
@@ -566,6 +591,23 @@ describe("driver options", () => {
     // 560, not 9000: a truck in the workshop is not one the depot can give.
     expect(driver.kapasitas).toBe(560);
     expect(driver.muatan).toBe(0);
+  });
+
+  // The service refuses a kernet at the wheel, so the driver list asks for
+  // drivers only and the kernet list for kernets only.
+  it("lists drivers and kernets for their own seats", async () => {
+    getList.mockResolvedValue({ items: [], pagination: {} });
+    getOne.mockRejectedValue(new Error("no board"));
+
+    await distributionApiHttp.getDriverOptions(PLAN_ID);
+    await distributionApiHttp.getKernetOptions();
+
+    const roleOf = (call: unknown[]) =>
+      (call[1] as { filters?: { field: string; value: string }[] }).filters?.find((f) => f.field === "crew_role")?.value;
+    const driverCall = getList.mock.calls.find((c) => c[0] === "/drivers" && roleOf(c) === "driver");
+    const kernetCall = getList.mock.calls.find((c) => c[0] === "/drivers" && roleOf(c) === "kernet");
+    expect(driverCall).toBeTruthy();
+    expect(kernetCall).toBeTruthy();
   });
 });
 
@@ -673,6 +715,19 @@ describe("saving", () => {
 });
 
 describe("committing the board", () => {
+  it("sends a run's kernet, and omits it for a run without one", async () => {
+    send.mockResolvedValue({});
+
+    await distributionApiHttp.applyAssignment(PLAN_ID, [
+      { driverId: "d1", vehicleId: "v1", kernetId: "k1", tripNo: 1, stops: [{ outletId: OUTLET_A, sequenceNo: 1 }] },
+      { driverId: "d2", vehicleId: "v2", tripNo: 1, stops: [{ outletId: OUTLET_B, sequenceNo: 1 }] },
+    ], 3);
+
+    const [, , body] = send.mock.calls[0];
+    expect(body.trips[0].kernet_id).toBe("k1");
+    expect(body.trips[1]).not.toHaveProperty("kernet_id");
+  });
+
   /**
    * The vehicle travels with the driver, because the service will not take one
    * without the other: `dispatch_trips.vehicle_id` is NOT NULL. Sending a run

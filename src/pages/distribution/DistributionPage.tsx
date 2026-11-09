@@ -50,6 +50,7 @@ export function DistributionPage() {
     setSelectedPlanId,
     outletOptions,
     vehicleOptions,
+    kernetOptions,
     productOptions,
     saProductOptions,
     driverOptions,
@@ -190,6 +191,7 @@ export function DistributionPage() {
               saProductOptions={saProductOptions}
               driverOptions={driverOptions}
               vehicleOptions={vehicleOptions}
+              kernetOptions={kernetOptions}
               onSaveDraft={handleSaveDraft}
               onConfirm={() => setConfirming(true)}
               onCancelPlan={() => setCancelling(true)}

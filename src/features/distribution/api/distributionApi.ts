@@ -24,6 +24,7 @@ export const getOutletOptions = api.getOutletOptions.bind(api);
 export const getProductOptions = api.getProductOptions.bind(api);
 export const getSAProductOptions = api.getSAProductOptions.bind(api);
 export const getDriverOptions = api.getDriverOptions.bind(api);
+export const getKernetOptions = api.getKernetOptions.bind(api);
 export const getVehicleOptions = api.getVehicleOptions.bind(api);
 export const getActiveSaOptions = api.getActiveSaOptions.bind(api);
 export const getSAOutletPlan = api.getSAOutletPlan.bind(api);
