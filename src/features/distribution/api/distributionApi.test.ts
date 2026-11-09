@@ -200,6 +200,15 @@ describe("plan mapping", () => {
     expect(plan.nomorSA).toBe("SA-2026-09-001");
   });
 
+  // The save path branches on this: a SIM3LON plan must not send its stops.
+  it("reports whether SIM3LON manages the plan's stops", async () => {
+    getOne.mockResolvedValue(order({ source_managed: true }));
+    expect((await distributionApiHttp.getPlan(PLAN_ID)).sourceManaged).toBe(true);
+
+    getOne.mockResolvedValue(order());
+    expect((await distributionApiHttp.getPlan(PLAN_ID)).sourceManaged).toBe(false);
+  });
+
   /** The service's five states, in the console's four words. */
   it("maps in_progress onto Terkonfirmasi rather than inventing a word", async () => {
     getOne.mockResolvedValue(order({ order_status: "in_progress" }));

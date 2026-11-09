@@ -19,6 +19,12 @@ export interface DistributionPlan {
   dikonfirmasiOleh?: string;
   dikonfirmasiPada?: string;
   /**
+   * The stops were drawn from a SIM3LON import and change only through
+   * reconciliation. The service refuses a stop save on such a plan, so saving
+   * it sends the crew assignment alone.
+   */
+  sourceManaged: boolean;
+  /**
    * The optimistic-locking counter the caller must echo back to save, assign,
    * confirm or cancel.
    *

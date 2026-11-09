@@ -121,7 +121,7 @@ describe("source-backed plan creation", () => {
     }];
     let savePromise!: Promise<unknown>;
     act(() => {
-      savePromise = result.current.saveDraftMutation.mutateAsync({ planId: plan.id, rows, version: 1 });
+      savePromise = result.current.saveDraftMutation.mutateAsync({ planId: plan.id, rows, version: 1, sourceManaged: false });
     });
     await waitFor(() => expect(state.save).toHaveBeenCalledWith(plan.id, rows, 1));
 
@@ -161,10 +161,64 @@ describe("source-backed plan creation", () => {
       sisaKuotaOutlet: 0, piutang: 0, piutangJatuhTempo: 0,
     }];
     await act(async () => {
-      await result.current.saveDraftMutation.mutateAsync({ planId: plan.id, rows, version: 1 });
+      await result.current.saveDraftMutation.mutateAsync({ planId: plan.id, rows, version: 1, sourceManaged: false });
     });
 
     expect(state.save).toHaveBeenCalled();
+    expect(state.apply).not.toHaveBeenCalled();
+  });
+
+  // The service refuses a stop save on a SIM3LON plan with SOURCE_MANAGED.
+  // Sending it first meant the crew never reached the service, the plan kept
+  // zero runs, and confirmation was refused as not dispatch-ready.
+  it("sends only the crew assignment for a SIM3LON plan, at the plan's own version", async () => {
+    state.plans = [{ ...plan, sourceManaged: true, version: 2 }];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(useDistributionPlan, { wrapper });
+    await waitFor(() => expect(result.current.selectedPlan?.id).toBe(plan.id));
+
+    const rows = [{
+      id: "row-a", outletId: "outlet-a", outlet: "A", alamat: "Alamat A",
+      lines: [{ productId: "product", jumlah: 50 }], jumlahUnit: 50,
+      driverId: "driver-a", driver: "Driver A", vehicleId: "vehicle-a", vehicle: "Truck A",
+      jamPengiriman: "08:00", tripNo: 1, statusBayar: "Belum Lunas" as const,
+      sisaKuotaOutlet: 0, piutang: 0, piutangJatuhTempo: 0,
+    }];
+    await act(async () => {
+      await result.current.saveDraftMutation.mutateAsync({ planId: plan.id, rows, version: 2, sourceManaged: true });
+    });
+
+    expect(state.save).not.toHaveBeenCalled();
+    expect(state.apply).toHaveBeenCalledWith(
+      plan.id,
+      [{ driverId: "driver-a", vehicleId: "vehicle-a", tripNo: 1, stops: [{ outletId: "outlet-a", sequenceNo: 1 }] }],
+      2,
+    );
+  });
+
+  it("refuses to report a SIM3LON plan saved when there is no crew to send", async () => {
+    state.canAssign = false;
+    state.plans = [{ ...plan, sourceManaged: true }];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(useDistributionPlan, { wrapper });
+    await waitFor(() => expect(result.current.selectedPlan?.id).toBe(plan.id));
+
+    const rows = [{
+      id: "row-a", outletId: "outlet-a", outlet: "A", alamat: "Alamat A",
+      lines: [{ productId: "product", jumlah: 50 }], jumlahUnit: 50,
+      driverId: "driver-a", driver: "Driver A", vehicleId: "vehicle-a", vehicle: "Truck A",
+      jamPengiriman: "08:00", tripNo: 1, statusBayar: "Belum Lunas" as const,
+      sisaKuotaOutlet: 0, piutang: 0, piutangJatuhTempo: 0,
+    }];
+    await act(async () => {
+      await expect(
+        result.current.saveDraftMutation.mutateAsync({ planId: plan.id, rows, version: 1, sourceManaged: true }),
+      ).rejects.toThrow("rekonsiliasi");
+    });
+
+    expect(state.save).not.toHaveBeenCalled();
     expect(state.apply).not.toHaveBeenCalled();
   });
 });
