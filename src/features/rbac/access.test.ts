@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { describeAccess, describeRoles } from "./access";
 import { PERMISSIONS } from "./permissions";
-import { NAV_GROUPS, navGroupsFor, landingPathFor, titleFor, usesDriverConsole } from "@/layouts/nav";
+import { NAV_GROUPS, bottomNavFor, navGroupsFor, landingPathFor, titleFor, usesDriverConsole } from "@/layouts/nav";
 
 describe("financial report navigation", () => {
   // Accounting parity P6 (client decision): Menu utama is Beranda, then the
@@ -96,11 +96,52 @@ describe("the driver console", () => {
     expect(navGroupsFor(driver)).not.toEqual(navGroupsFor([PERMISSIONS.SA_VIEW]));
   });
 
+  // The seeded driver role, exactly as fortius-backend grants it
+  // (seeds/04-role-permissions, rolePermissionMap["driver"]). The console's
+  // copy drifted once -- expense categories were added on the backend only --
+  // and every driver landed on a dashboard they were refused.
+  it("recognises the backend's whole driver role", () => {
+    const seededDriverRole = [
+      "distribution.read.deliveries", "distribution.update.deliveries",
+      "distribution.read.delivery_proofs", "distribution.create.delivery_proofs",
+      "distribution.create.gps_tracks",
+      "inventory.read.stock_movements", "inventory.create.stock_movements",
+      "distribution.read.expenses", "distribution.create.expenses",
+      "finance.read.expense_categories",
+      "ocr.create.ocr_inbox", "ocr.read.ocr_extractions", "ocr.read.ocr_archive",
+      "notification.read.notifications", "iam.read.tenants",
+    ];
+
+    expect(usesDriverConsole(seededDriverRole)).toBe(true);
+    expect(landingPathFor(seededDriverRole)).toBe("/sopir");
+  });
+
+  // Pengaturan is the agency's profile and operating rules; a sopir's own
+  // account lives in the header menu.
+  it("leaves Pengaturan out of a sopir's menu, and keeps it for the office", () => {
+    const driver = [PERMISSIONS.DELIVERIES_EXECUTE, PERMISSIONS.SETTINGS_VIEW];
+    expect(bottomNavFor(driver).map((i) => i.href)).not.toContain("/settings");
+    expect(bottomNavFor(driver).map((i) => i.href)).toContain("/notifications");
+    expect(bottomNavFor([PERMISSIONS.DISTRIBUTION_VIEW]).map((i) => i.href)).toContain("/settings");
+  });
+
+  // If the list drifts again, a crew member still lands on their run rather
+  // than on a dashboard their role is refused.
+  it("lands a drifted driver role on the run, not on a refused dashboard", () => {
+    const driftedDriver = [PERMISSIONS.DELIVERIES_EXECUTE, "some.future.grant"];
+    expect(usesDriverConsole(driftedDriver)).toBe(false);
+    expect(landingPathFor(driftedDriver)).toBe("/sopir");
+  });
+
   // The case a role name got wrong the moment anyone held two. A dispatcher who
   // can also execute deliveries needs the whole console, and asking
   // `role === "driver"` would have taken it away from them.
   it("is not where someone who can execute deliveries AND plan them lands", () => {
-    const dispatcher = [PERMISSIONS.DELIVERIES_EXECUTE, PERMISSIONS.DISTRIBUTION_EDIT];
+    const dispatcher = [
+      PERMISSIONS.DELIVERIES_EXECUTE,
+      PERMISSIONS.DISTRIBUTION_VIEW,
+      PERMISSIONS.DISTRIBUTION_EDIT,
+    ];
 
     expect(usesDriverConsole(dispatcher)).toBe(false);
     expect(landingPathFor(dispatcher)).toBe("/dashboard");
@@ -139,7 +180,6 @@ describe("the driver console", () => {
       PERMISSIONS.EXPENSES_CREATE,
       PERMISSIONS.OCR_CREATE,
       PERMISSIONS.OCR_VIEW,
-      PERMISSIONS.OCR_VERIFY,
       PERMISSIONS.OCR_ARCHIVE_VIEW,
       PERMISSIONS.NOTIFICATIONS_VIEW,
       PERMISSIONS.SETTINGS_VIEW,
@@ -149,7 +189,8 @@ describe("the driver console", () => {
     expect(landingPathFor(seededDriver)).toBe("/sopir");
 
     const shown = navGroupsFor(seededDriver).flatMap((g) => g.items.map((i) => i.href));
-    expect(shown).toEqual(["/sopir"]);
+    // The run, and the receipts for it -- nothing of the office's.
+    expect(shown).toEqual(["/sopir", "/ocr"]);
     expect(shown).not.toContain("/tenants");
     expect(shown).not.toContain("/expenses");
   });

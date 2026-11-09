@@ -15,6 +15,7 @@ import { ReviewReceiptDialog } from "@/features/ocr/components/ReviewReceiptDial
 import { useOpenReceipt } from "@/features/ocr/hooks/useOpenReceipt";
 import { isReviewable, RECEIPT_STATUS_LABEL, RECEIPT_STATUS_VARIANT } from "@/features/ocr/lib/status";
 import { PERMISSIONS } from "@/features/rbac/permissions";
+import { useAuthStore } from "@/features/auth/store/authStore";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader } from "@/components/common/Panel";
@@ -91,12 +92,20 @@ export function OcrPage() {
     },
   ];
 
+  const canVerify = useAuthStore((state) => state.hasPermission(PERMISSIONS.OCR_VERIFY));
+
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Keuangan"
         title="Bukti Pengeluaran"
-        description="Unggah foto struk atau PDF nota, periksa isinya, lalu arsipkan di kategori biaya dan catat sebagai pengeluaran."
+        description={
+          // Someone who cannot verify -- a sopir -- uploads and waits; telling
+          // them to check and archive describes the office's half of the job.
+          canVerify
+            ? "Unggah foto struk atau PDF nota, periksa isinya, lalu arsipkan di kategori biaya dan catat sebagai pengeluaran."
+            : "Unggah foto struk atau PDF nota dari perjalanan. Kantor memeriksa dan mencatatnya sebagai pengeluaran."
+        }
         actions={
           <CanAccess permission={PERMISSIONS.OCR_CREATE}>
             <Button onClick={() => setUploading(true)}><Upload className="h-3.5 w-3.5" />Unggah bukti</Button>
