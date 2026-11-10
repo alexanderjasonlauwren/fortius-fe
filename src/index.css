@@ -203,6 +203,23 @@
 
 @layer components {
   /**
+   * A dialog's body never grows wider than the dialog.
+   *
+   * DialogContent is a grid with an implicit `auto` column, and an auto track
+   * is sized to its widest child's max-content -- a SelectInput's is its whole
+   * selected label, before `truncate` can apply. A long label (production's
+   * SA reads "… · PT Pertamina Patra Niaga · sisa 20.450") widened the column
+   * past the dialog, and `overflow-y: auto` turned that into a sideways
+   * scroll with the submit button cut off. minmax(0, 1fr) caps the column at
+   * the dialog's width, so labels truncate as intended. Set here rather than
+   * in src/components/ui/, which is generated; a dialog that names its own
+   * grid-cols-* utility still wins, being a later layer.
+   */
+  [data-slot="dialog-content"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /**
    * The shell is a two-column grid on desktop, and collapsing animates
    * `grid-template-columns` — one property on one element.
    *
