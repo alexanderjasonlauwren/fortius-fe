@@ -32,12 +32,25 @@ interface ExtractionResponse {
   suggested_category?: string;
   suggested_expense_category?: string;
   duplicate_of?: string;
+  archived?: boolean;
+  payment_id?: string;
+  payment_number?: string;
+  transfer?: {
+    bank?: string;
+    sender_name?: string;
+    sender_account?: string;
+    recipient_name?: string;
+    customer_id?: string;
+    biller_name?: string;
+    outlet?: { id: string; name: string };
+  };
 }
 
 interface ArchiveResponse {
   id: string;
   extraction_id: string;
-  category: ExpenseCategory;
+  /** Absent for a transfer proof filed under a payment. */
+  category?: ExpenseCategory;
   archived_at: string;
 }
 
@@ -78,6 +91,18 @@ function toReceipt(row: ExtractionResponse, category?: ExpenseCategory): Receipt
     suggestedCategory: row.suggested_category,
     suggestedExpenseCategory: row.suggested_expense_category,
     duplicateOf: row.duplicate_of,
+    archived: !!row.archived,
+    paymentId: row.payment_id,
+    paymentNumber: row.payment_number,
+    transfer: row.transfer && {
+      bank: row.transfer.bank,
+      senderName: row.transfer.sender_name,
+      senderAccount: row.transfer.sender_account,
+      recipientName: row.transfer.recipient_name,
+      customerId: row.transfer.customer_id,
+      billerName: row.transfer.biller_name,
+      outlet: row.transfer.outlet,
+    },
   };
 }
 
@@ -102,7 +127,9 @@ async function getReceipts(search?: string): Promise<ReceiptExtraction[]> {
     }),
     getAllPages<ArchiveResponse>("/ocr/archive", { sort: [{ field: "archived_at", direction: "desc" }] }),
   ]);
-  const categoryOf = new Map(archive.items.map((row) => [row.extraction_id, row.category]));
+  const categoryOf = new Map(
+    archive.items.flatMap((row) => (row.category ? [[row.extraction_id, row.category] as const] : [])),
+  );
   return extractions.items.map((row) => toReceipt(row, categoryOf.get(row.id)));
 }
 
@@ -142,4 +169,24 @@ async function receiptFileUrl(id: string): Promise<string> {
   return new URL(url, apiClient.defaults.baseURL).href;
 }
 
-export const ocrApiHttp: OcrApi = { getReceipts, uploadReceipt, reviewReceipt, receiptFileUrl };
+async function uploadTransferProof(file: File): Promise<ReceiptExtraction> {
+  return toReceipt(await upload<ExtractionResponse>("/ocr/transfer-proofs", file, "file"));
+}
+
+async function getTransferProof(id: string): Promise<ReceiptExtraction> {
+  return toReceipt(await getOne<ExtractionResponse>(`/ocr/transfer-proofs/${id}`));
+}
+
+async function getTransferProofs(): Promise<ReceiptExtraction[]> {
+  return (await getOne<ExtractionResponse[]>("/ocr/transfer-proofs")).map((row) => toReceipt(row));
+}
+
+async function transferProofFileUrl(id: string): Promise<string> {
+  const { url } = await getOne<{ url: string }>(`/ocr/transfer-proofs/${id}/file`);
+  return new URL(url, apiClient.defaults.baseURL).href;
+}
+
+export const ocrApiHttp: OcrApi = {
+  getReceipts, uploadReceipt, reviewReceipt, receiptFileUrl,
+  uploadTransferProof, getTransferProof, getTransferProofs, transferProofFileUrl,
+};

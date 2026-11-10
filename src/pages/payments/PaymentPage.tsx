@@ -3,7 +3,7 @@ import { AttachmentsButton } from "@/features/attachments/components/Attachments
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Ban, CheckCircle2, Plus, Split, Undo2, Wallet, XCircle } from "lucide-react";
+import { Ban, CheckCircle2, FileSearch, Plus, Split, Undo2, Wallet, XCircle } from "lucide-react";
 import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { RefundDialog } from "@/features/approvals/components/RefundDialog";
 import {
@@ -19,6 +19,11 @@ import {
 import { getOutletOptions } from "@/features/distribution/api/distributionApi";
 import { getOutletDetail } from "@/features/outlet/api/outletApi";
 import { getBankAccounts } from "@/features/bankaccounts/api/bankAccountApi";
+import { getTransferProof, transferProofFileUrl, type ReceiptExtraction } from "@/features/ocr/api/ocrApi";
+import { useOpenReceipt } from "@/features/ocr/hooks/useOpenReceipt";
+import { IN_FLIGHT_POLL_MS, isInFlight } from "@/features/ocr/lib/status";
+import { TransferProofPanel } from "@/features/finance/components/TransferProofPanel";
+import { isRecordable, prefillFromProof, type ProofPrefill } from "@/features/finance/lib/transferProof";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { useResettableState } from "@/hooks/useResettableState";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
@@ -60,8 +65,12 @@ function todayIso() {
 }
 
 export function PaymentPage() {
-  const [tab, setTab] = useState("Menunggu Verifikasi");
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  // ?q=<payment number>, from the receipt a payment was recorded from: that
+  // payment whatever its status, not only the ones still waiting.
+  const searchFromLink = searchParams.get("q") ?? "";
+  const [tab, setTab] = useState(searchFromLink ? "Semua" : "Menunggu Verifikasi");
+  const [search, setSearch] = useState(searchFromLink);
   const [decision, setDecision] = useState<{
     payment: PaymentView;
     action: "verify" | "reject";
@@ -76,9 +85,12 @@ export function PaymentPage() {
   // Arriving from Alokasi Dana Pengiriman's "Alokasikan" dialog with no receipt yet
   // recorded: ?outlet=<id> opens this dialog with that outlet pre-selected,
   // so recording one is a single trip rather than a menu hunt back here.
-  const [searchParams] = useSearchParams();
   const outletFromLink = searchParams.get("outlet") ?? "";
-  const [recording, setRecording] = useState(!!outletFromLink);
+  // From a pangkalan's bukti transfer reviewed on Bukti Pengeluaran:
+  // ?bukti=<extraction id> opens this dialog recording from it.
+  const proofFromLink = searchParams.get("bukti") ?? "";
+  const [recording, setRecording] = useState(!!outletFromLink || !!proofFromLink);
+  const { open: openProof, opening: openingProof } = useOpenReceipt(transferProofFileUrl);
 
   const [page, setPage] = useResettableState([tab, search], () => 1);
   const payments = useQuery({
@@ -211,6 +223,14 @@ export function PaymentPage() {
       width: "1%",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
+          {row.buktiTransfer && (
+            <CanAccess permission={PERMISSIONS.PAYMENT_PROOFS_VIEW}>
+              <Button size="xs" variant="ghost" aria-label={`Lihat bukti transfer ${row.nomor}`} title="Bukti transfer"
+                disabled={openingProof === row.buktiTransfer} onClick={() => void openProof(row.buktiTransfer!)}>
+                <FileSearch className="h-3 w-3" />
+              </Button>
+            </CanAccess>
+          )}
           <AttachmentsButton ownerType="payment" ownerId={row.id} label={row.nomor} />
           {row.belumDialokasikan > 0.5 && row.status !== "Ditolak" && (
             <Button size="xs" variant="outline" onClick={() => setAllocating(row)}>
@@ -335,6 +355,7 @@ export function PaymentPage() {
         open={recording}
         onOpenChange={setRecording}
         initialOutletId={outletFromLink}
+        initialProofId={proofFromLink}
       />
       <AllocateDialog payment={allocating} onClose={() => setAllocating(null)} />
 
@@ -606,19 +627,33 @@ function RecordPaymentDialog({
   open,
   onOpenChange,
   initialOutletId = "",
+  initialProofId = "",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialOutletId?: string;
+  initialProofId?: string;
 }) {
-  const [rest, setRest] = useState({
-    outletId: initialOutletId,
+  const blank = (outletId: string) => ({
+    outletId,
     jumlah: 0,
     tanggal: todayIso(),
     keterangan: "",
     metodeId: "",
     referensi: "",
     rekeningTujuanId: "",
+  });
+  const [rest, setRest] = useState(() => blank(initialOutletId));
+  // The bukti transfer this receipt is recorded from, and what filling the
+  // form from it supplied.
+  const [proofId, setProofId] = useState<string | undefined>(initialProofId || undefined);
+  const [fromProof, setFromProof] = useState<ProofPrefill | null>(null);
+  // Polls only while the engine reads it, as the receipt queue does.
+  const proof = useQuery({
+    queryKey: [...scopeKey(), "transfer-proof", proofId],
+    queryFn: () => getTransferProof(proofId!),
+    enabled: open && !!proofId,
+    refetchInterval: (query) => (query.state.data && isInFlight(query.state.data) ? IN_FLIGHT_POLL_MS : false),
   });
 
   const outlet = useQuery({
@@ -647,9 +682,12 @@ function RecordPaymentDialog({
   // back to the BNI default rather than an empty field, since SIM3LON is
   // itself described as tied to BNI Direct (flow doc §8) -- not a claim
   // every pangkalan uses it, just the better blank guess.
-  const [bankInfo, setBankInfo] = useResettableState([selectedOutlet.data], () => ({
-    bank: (selectedOutlet.data?.bank ?? "BNI") as BankNameEntity,
-    noRekening: selectedOutlet.data?.noRekening ?? "",
+  // A proof's bank and sender account win over the outlet's defaults: the
+  // outlet's detail arrives after the proof picked it, and would otherwise
+  // overwrite what the transfer itself says.
+  const [bankInfo, setBankInfo] = useResettableState([selectedOutlet.data, fromProof], () => ({
+    bank: (fromProof?.bank ?? selectedOutlet.data?.bank ?? "BNI") as BankNameEntity,
+    noRekening: fromProof?.noRekening ?? selectedOutlet.data?.noRekening ?? "",
   }));
   // Allocations belong to one pangkalan's invoices; choosing another
   // pangkalan starts them over.
@@ -686,10 +724,36 @@ function RecordPaymentDialog({
     setAlokasi(next);
   };
 
+  const applyProof = (read: ReceiptExtraction) => {
+    const filled = prefillFromProof(read, BANKS, new Set((outlet.data ?? []).map((o) => o.id)));
+    const transfer = methodList.find((m) => m.kode === "bank_transfer");
+    setRest({
+      ...rest,
+      outletId: filled.outletId ?? rest.outletId,
+      jumlah: filled.jumlah ?? rest.jumlah,
+      tanggal: filled.tanggal ?? rest.tanggal,
+      referensi: filled.referensi ?? rest.referensi,
+      metodeId: transfer?.id ?? rest.metodeId,
+    });
+    setFromProof(filled);
+  };
+  const changeProof = (id: string | undefined) => {
+    setProofId(id);
+    setFromProof(null);
+  };
+  const close = () => {
+    // A recorded proof is archived; carrying it, or this receipt's values,
+    // into the next one would record the same transfer twice.
+    setRest(blank(""));
+    changeProof(undefined);
+    onOpenChange(false);
+  };
+
   const mutation = useDeskMutation({
     mutationFn: () =>
       submitPayment({
         ...form,
+        buktiTransfer: proofId,
         metodeId: method?.id,
         rekeningTujuanId: form.rekeningTujuanId || defaultAccount?.id,
         alokasi: Object.entries(alokasi)
@@ -704,7 +768,7 @@ function RecordPaymentDialog({
           ? `Sisa ${formatRupiah(p.belumDialokasikan)} belum dialokasikan ke tagihan.`
           : "Seluruhnya sudah dialokasikan ke tagihan.",
     }),
-    onDone: () => onOpenChange(false),
+    onDone: close,
   });
 
   const canSubmit =
@@ -712,10 +776,11 @@ function RecordPaymentDialog({
     form.jumlah > 0 &&
     !!form.tanggal &&
     sisaAlokasi >= 0 &&
-    (!needsReference || !!form.referensi.trim() || !!form.noRekening.trim());
+    (!needsReference || !!form.referensi.trim()) &&
+    (!proofId || (!!proof.data && isRecordable(proof.data)));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Catat penerimaan kas</DialogTitle>
@@ -724,6 +789,10 @@ function RecordPaymentDialog({
             alokasikan nanti dari daftar.
           </DialogDescription>
         </DialogHeader>
+
+        <CanAccess permission={PERMISSIONS.PAYMENT_PROOFS_CREATE}>
+          <TransferProofPanel proofId={proofId} proof={proof.data} onProofChange={changeProof} onApply={applyProof} />
+        </CanAccess>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label={outletLabelTitle()} htmlFor="p-pkl" required className="sm:col-span-2">
@@ -882,7 +951,7 @@ function RecordPaymentDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={close}>
             Batal
           </Button>
           <Button

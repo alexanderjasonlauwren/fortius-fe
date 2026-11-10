@@ -7,10 +7,15 @@
  * it came from and how sure the engine was; the reviewer corrects what is
  * wrong, or types what the engine could not read. Only changed values are
  * sent back, so the engine's own answer stays beside the correction.
+ *
+ * A pangkalan's payment to the agent is not approved here: it is recorded in
+ * Penerimaan Kas from this same proof, which archives it there. Here it can
+ * only be sent back or rejected.
  */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, FileSearch } from "lucide-react";
+import { AlertTriangle, FileSearch, Wallet } from "lucide-react";
+import { Link } from "react-router-dom";
 import { reviewReceipt, type ReceiptExtraction } from "@/features/ocr/api/ocrApi";
 import type { Confidence, ReviewReceiptInput } from "@/features/ocr/api/contract";
 import { useOpenReceipt } from "@/features/ocr/hooks/useOpenReceipt";
@@ -21,6 +26,8 @@ import { getExpenseCategories } from "@/features/expensecategories/api/expenseCa
 import type { ExpenseCategoryView } from "@/features/expensecategories/api/contract";
 import { getBankAccounts } from "@/features/bankaccounts/api/bankAccountApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
+import { CanAccess } from "@/features/rbac/components/CanAccess";
+import { PERMISSIONS } from "@/features/rbac/permissions";
 import { Field, SegmentedControl, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -50,7 +57,7 @@ interface FormState {
 const BANK_METHODS = new Set(["debit_card", "credit_card", "qris", "ewallet"]);
 
 const initial = (row: ReceiptExtraction): FormState => ({
-  outcome: "approved",
+  outcome: isPangkalanPayment(row) ? "needs_review" : "approved",
   note: "",
   merchantName: row.merchantName ?? "",
   txnDate: row.txnDate ?? "",
@@ -178,9 +185,17 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
               </p>
             )}
             {pangkalanPayment && (
-              <p className="col-span-2 rounded-md bg-signal-soft px-3 py-2 text-xs text-signal-ink">
-                Ini bukti penebusan LPG dari pangkalan: uang yang diterima, bukan pengeluaran. Arsipkan di sini, lalu catat di menu Pembayaran.
-              </p>
+              <div className="col-span-2 flex flex-wrap items-center gap-2 rounded-md bg-signal-soft px-3 py-2 text-xs text-signal-ink">
+                <span className="min-w-0 flex-1">
+                  Ini bukti penebusan LPG dari pangkalan: uang yang diterima, bukan pengeluaran. Kasir mencatatnya di
+                  Penerimaan Kas dari bukti ini; di sini hanya bisa dikembalikan atau ditolak.
+                </span>
+                <CanAccess permissions={[PERMISSIONS.PAYMENTS_CREATE, PERMISSIONS.PAYMENT_PROOFS_CREATE]} requireAll>
+                  <Button asChild size="xs" variant="outline">
+                    <Link to={`/payments?bukti=${encodeURIComponent(receipt.id)}`}><Wallet className="h-3 w-3" />Catat penerimaan</Link>
+                  </Button>
+                </CanAccess>
+              </div>
             )}
             {receipt.reviewReasons.length > 0 && (
               <div className="col-span-2 text-2xs text-ink-muted">
@@ -217,7 +232,7 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
             <Field className="col-span-2" label="Keputusan" htmlFor="ocr-outcome">
               <SegmentedControl value={form.outcome} onChange={(outcome) => set({ outcome })}
                 options={[
-                  { value: "approved" as const, label: "Setujui" },
+                  ...(pangkalanPayment ? [] : [{ value: "approved" as const, label: "Setujui" }]),
                   { value: "needs_review" as const, label: "Perlu dicek ulang" },
                   { value: "rejected" as const, label: "Tolak" },
                 ]} />

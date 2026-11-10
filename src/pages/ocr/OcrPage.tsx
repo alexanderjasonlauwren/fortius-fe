@@ -85,7 +85,9 @@ export function OcrPage() {
             <StatusBadge label={PROCESS_STATUS_LABEL[row.processStatus]} variant={PROCESS_STATUS_VARIANT[row.processStatus]} />
           ) : (
             <StatusBadge
-              label={row.status === "approved" && row.category ? `${RECEIPT_STATUS_LABEL.approved} · ${categoryLabel(row.category)}` : RECEIPT_STATUS_LABEL[row.status]}
+              label={row.status === "approved" && row.category ? `${RECEIPT_STATUS_LABEL.approved} · ${categoryLabel(row.category)}`
+                : row.status === "approved" && row.paymentNumber ? `${RECEIPT_STATUS_LABEL.approved} · Penerimaan kas`
+                : RECEIPT_STATUS_LABEL[row.status]}
               variant={RECEIPT_STATUS_VARIANT[row.status]} />
           )}
           {row.duplicateOf && <span className="mt-0.5 block text-2xs text-rust-ink">Bukti transfer ganda</span>}
@@ -94,10 +96,14 @@ export function OcrPage() {
       ),
     },
     {
-      key: "expense", header: "Pengeluaran",
+      // An expense filed from a receipt, or the payment a pangkalan's bukti
+      // transfer was recorded as.
+      key: "expense", header: "Dicatat sebagai",
       render: (row) => row.expenseNumber
         ? <Link className="data text-xs text-ink underline-offset-2 hover:underline" to={`/expenses?q=${encodeURIComponent(row.expenseNumber)}`}>{row.expenseNumber}</Link>
-        : <span className="text-2xs text-ink-muted">—</span>,
+        : row.paymentNumber
+          ? <Link className="data text-xs text-ink underline-offset-2 hover:underline" to={`/payments?q=${encodeURIComponent(row.paymentNumber)}`}>{row.paymentNumber}</Link>
+          : <span className="text-2xs text-ink-muted">—</span>,
     },
     {
       key: "action", header: "",
