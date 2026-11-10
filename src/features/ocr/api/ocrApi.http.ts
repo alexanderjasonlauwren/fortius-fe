@@ -1,6 +1,9 @@
 import { apiClient, getAllPages, getOne, send, upload } from "@/lib/api";
 import type { ExpenseCategory } from "@/features/expenses/api/contract";
-import type { OcrApi, ReceiptExtraction, ReceiptStatus, ReviewReceiptInput, ReviewReceiptResult, UploadReceiptInput } from "./contract";
+import type {
+  Confidence, DocumentType, OcrApi, ProcessStatus, ReceiptCorrections, ReceiptExtraction, ReceiptStatus,
+  ReviewReceiptInput, ReviewReceiptResult, UploadReceiptInput,
+} from "./contract";
 
 interface ExtractionResponse {
   id: string;
@@ -14,6 +17,21 @@ interface ExtractionResponse {
   last_note?: string;
   expense_id?: string;
   expense_number?: string;
+  process_status?: ProcessStatus;
+  process_error?: string;
+  engine?: string;
+  document_type?: DocumentType;
+  subtotal?: number;
+  tax_amount?: number;
+  reference_no?: string;
+  payment_method?: string;
+  needs_review?: boolean;
+  review_reasons?: string[];
+  confidence?: Record<string, Confidence>;
+  evidence?: Record<string, string>;
+  suggested_category?: string;
+  suggested_expense_category?: string;
+  duplicate_of?: string;
 }
 
 interface ArchiveResponse {
@@ -44,7 +62,34 @@ function toReceipt(row: ExtractionResponse, category?: ExpenseCategory): Receipt
     category,
     expenseId: row.expense_id,
     expenseNumber: row.expense_number,
+    // A server without the engine field predates it: everything was typed.
+    processStatus: row.process_status ?? "ready",
+    processError: row.process_error,
+    engine: row.engine,
+    documentType: row.document_type,
+    subtotal: row.subtotal,
+    taxAmount: row.tax_amount,
+    referenceNo: row.reference_no,
+    paymentMethod: row.payment_method,
+    needsReview: row.needs_review,
+    reviewReasons: row.review_reasons ?? [],
+    confidence: row.confidence ?? {},
+    evidence: row.evidence ?? {},
+    suggestedCategory: row.suggested_category,
+    suggestedExpenseCategory: row.suggested_expense_category,
+    duplicateOf: row.duplicate_of,
   };
+}
+
+function toCorrections(c?: ReceiptCorrections) {
+  if (!c) return undefined;
+  const body = {
+    merchant_name: c.merchantName,
+    txn_date: c.txnDate,
+    total_amount: c.totalAmount,
+    reference_no: c.referenceNo,
+  };
+  return Object.values(body).some((v) => v !== undefined) ? body : undefined;
 }
 
 async function getReceipts(search?: string): Promise<ReceiptExtraction[]> {
@@ -61,11 +106,10 @@ async function getReceipts(search?: string): Promise<ReceiptExtraction[]> {
   return extractions.items.map((row) => toReceipt(row, categoryOf.get(row.id)));
 }
 
+/** Values are read by the engine, or typed while reviewing; never at upload. */
 async function uploadReceipt(input: UploadReceiptInput): Promise<ReceiptExtraction> {
   const fields: Record<string, string> = {};
-  if (input.merchantName?.trim()) fields.merchant_name = input.merchantName.trim();
-  if (input.txnDate) fields.txn_date = input.txnDate;
-  if (input.totalAmount) fields.total_amount = String(input.totalAmount);
+  if (input.documentType && input.documentType !== "auto") fields.document_type = input.documentType;
   const row = await upload<ExtractionResponse>("/ocr/inbox/upload", input.file, "file", undefined, fields);
   return toReceipt(row);
 }
@@ -75,6 +119,7 @@ async function reviewReceipt(input: ReviewReceiptInput): Promise<ReviewReceiptRe
   const result = await send<VerificationResponse>("post", `/ocr/extractions/${input.id}/verify`, {
     verification_status: input.outcome,
     note: input.note?.trim() || undefined,
+    corrections: toCorrections(input.corrections),
     category: approving ? input.category : undefined,
     create_expense: approving && input.expense ? {
       payment_mode: input.expense.paymentMode,

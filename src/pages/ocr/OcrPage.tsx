@@ -1,7 +1,8 @@
 /**
- * Bukti pengeluaran: receipts uploaded with their file, reviewed (approve
- * under a category and optionally file an expense, send back, or reject,
- * each with a note), and linked to the expense they became (parity P3).
+ * Bukti pengeluaran: receipts uploaded with their file, read by the OCR
+ * engine, reviewed (approve under a category and optionally file an expense,
+ * send back, or reject, each with a note), and linked to the expense they
+ * became (parity P3).
  */
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,7 +14,10 @@ import { getExpenseCategories } from "@/features/expensecategories/api/expenseCa
 import { UploadReceiptDialog } from "@/features/ocr/components/UploadReceiptDialog";
 import { ReviewReceiptDialog } from "@/features/ocr/components/ReviewReceiptDialog";
 import { useOpenReceipt } from "@/features/ocr/hooks/useOpenReceipt";
-import { isReviewable, RECEIPT_STATUS_LABEL, RECEIPT_STATUS_VARIANT } from "@/features/ocr/lib/status";
+import {
+  IN_FLIGHT_POLL_MS, isInFlight, isReviewable, PROCESS_STATUS_LABEL, PROCESS_STATUS_VARIANT,
+  RECEIPT_STATUS_LABEL, RECEIPT_STATUS_VARIANT,
+} from "@/features/ocr/lib/status";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
@@ -33,7 +37,13 @@ export function OcrPage() {
   const [reviewing, setReviewing] = useState<ReceiptExtraction | null>(null);
   const { open: openFile, opening } = useOpenReceipt();
 
-  const list = useQuery({ queryKey: [...scopeKey(), "expense-receipts", search], queryFn: () => getReceipts(search) });
+  // Polls only while the engine has a receipt: a reading takes seconds, and
+  // the uploader is watching the row for it. Idle, the queue does not poll.
+  const list = useQuery({
+    queryKey: [...scopeKey(), "expense-receipts", search],
+    queryFn: () => getReceipts(search),
+    refetchInterval: (query) => (query.state.data?.some(isInFlight) ? IN_FLIGHT_POLL_MS : false),
+  });
   const categories = useQuery({ queryKey: [...scopeKey(), "expense-categories"], queryFn: getExpenseCategories });
   const categoryLabel = (code: string) => categories.data?.find((c) => c.code === code)?.name ?? code;
   const refresh = () => {
@@ -43,7 +53,7 @@ export function OcrPage() {
 
   const all = list.data ?? [];
   const rows = status === "Semua" ? all : all.filter((r) => r.status === status);
-  const waiting = all.filter((r) => isReviewable(r.status)).length;
+  const waiting = all.filter(isReviewable).length;
 
   const columns: Column<ReceiptExtraction>[] = [
     {
@@ -57,7 +67,9 @@ export function OcrPage() {
             </Button>
           ) : <span className="w-6" />}
           <span>
-            <span className="block text-xs font-medium">{row.merchantName || "Merchant belum diisi"}</span>
+            <span className="block text-xs font-medium">
+              {row.merchantName || (isInFlight(row) ? "Sedang dibaca…" : "Merchant belum diisi")}
+            </span>
             <span className="data text-2xs text-ink-muted">{row.fileName ?? "—"}{row.hasFile ? "" : " · tanpa berkas"}</span>
           </span>
         </span>
@@ -69,9 +81,14 @@ export function OcrPage() {
       key: "status", header: "Status",
       render: (row) => (
         <span>
-          <StatusBadge
-            label={row.status === "approved" && row.category ? `${RECEIPT_STATUS_LABEL.approved} · ${categoryLabel(row.category)}` : RECEIPT_STATUS_LABEL[row.status]}
-            variant={RECEIPT_STATUS_VARIANT[row.status]} />
+          {row.processStatus !== "ready" && row.status === "pending" ? (
+            <StatusBadge label={PROCESS_STATUS_LABEL[row.processStatus]} variant={PROCESS_STATUS_VARIANT[row.processStatus]} />
+          ) : (
+            <StatusBadge
+              label={row.status === "approved" && row.category ? `${RECEIPT_STATUS_LABEL.approved} · ${categoryLabel(row.category)}` : RECEIPT_STATUS_LABEL[row.status]}
+              variant={RECEIPT_STATUS_VARIANT[row.status]} />
+          )}
+          {row.duplicateOf && <span className="mt-0.5 block text-2xs text-rust-ink">Bukti transfer ganda</span>}
           {row.note && <span className="mt-0.5 block max-w-xs truncate text-2xs text-ink-muted" title={row.note}>{row.note}</span>}
         </span>
       ),
@@ -84,7 +101,7 @@ export function OcrPage() {
     },
     {
       key: "action", header: "",
-      render: (row) => isReviewable(row.status) ? (
+      render: (row) => isReviewable(row) ? (
         <CanAccess permission={PERMISSIONS.OCR_VERIFY}>
           <Button size="sm" variant="outline" onClick={() => setReviewing(row)}><ScanLine className="h-3.5 w-3.5" />Periksa</Button>
         </CanAccess>
@@ -103,8 +120,8 @@ export function OcrPage() {
           // Someone who cannot verify -- a sopir -- uploads and waits; telling
           // them to check and archive describes the office's half of the job.
           canVerify
-            ? "Unggah foto struk atau PDF nota, periksa isinya, lalu arsipkan di kategori biaya dan catat sebagai pengeluaran."
-            : "Unggah foto struk atau PDF nota dari perjalanan. Kantor memeriksa dan mencatatnya sebagai pengeluaran."
+            ? "Unggah foto struk atau PDF nota. Foto dibaca otomatis; periksa isinya, lalu arsipkan di kategori biaya dan catat sebagai pengeluaran."
+            : "Unggah foto struk atau PDF nota dari perjalanan. Foto dibaca otomatis; kantor memeriksa dan mencatatnya sebagai pengeluaran."
         }
         actions={
           <CanAccess permission={PERMISSIONS.OCR_CREATE}>
