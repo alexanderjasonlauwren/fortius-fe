@@ -370,6 +370,8 @@ interface PaymentResponse {
   allocated: number;
   refunded?: number;
   allocations?: { invoice_id: string; invoice_number: string; amount: number }[];
+  /** The bukti transfer this receipt was recorded from. */
+  transfer_proof_id?: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -418,6 +420,7 @@ function toPaymentView(row: PaymentResponse, outlets: Map<string, OutletView>): 
       nomor: a.invoice_number,
       jumlah: a.amount,
     })),
+    buktiTransfer: row.transfer_proof_id,
     keterangan: row.notes,
     diverifikasiOleh: row.verified_at ? "Terverifikasi" : undefined,
     version: row.version,
@@ -495,10 +498,14 @@ async function submitPayment(input: RecordPaymentInput): Promise<PaymentView> {
     payment_method_id: paymentMethodId,
     bank_name: input.bank,
     bank_account_number: input.noRekening,
-    bank_reference: input.referensi?.trim() || input.noRekening,
+    // The transfer's own reference, never the sender's account number in its
+    // place: one transfer is one payment (uq_payments_tenant_bank_reference),
+    // and an account number is the same on every transfer a pangkalan sends.
+    bank_reference: input.referensi?.trim() || undefined,
     payment_date: toApiTimestamp(input.tanggal),
     notes: input.keterangan,
     destination_bank_account_id: input.rekeningTujuanId || undefined,
+    ocr_extraction_id: input.buktiTransfer || undefined,
   });
   const lines = (input.alokasi ?? []).filter((a) => a.jumlah > 0);
   if (lines.length === 0) return toPaymentView(created, outlets);

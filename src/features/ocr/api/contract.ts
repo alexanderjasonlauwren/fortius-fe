@@ -59,6 +59,26 @@ export interface ReceiptExtraction {
   suggestedExpenseCategory?: string;
   /** The earlier upload of the same bank transfer. */
   duplicateOf?: string;
+  /** Closed out: under an expense category, or under a payment. */
+  archived: boolean;
+  /** The payment recorded from this transfer proof. */
+  paymentId?: string;
+  paymentNumber?: string;
+  /** A bank transfer's payer and payee side, as the engine read it. */
+  transfer?: TransferDetails;
+}
+
+export interface TransferDetails {
+  bank?: string;
+  senderName?: string;
+  senderAccount?: string;
+  recipientName?: string;
+  /** The ID Pangkalan for an LPG transfer. */
+  customerId?: string;
+  billerName?: string;
+  /** The agency's pangkalan whose code is customerId; absent when none is,
+   *  which is also what a transfer paid to another agent looks like. */
+  outlet?: { id: string; name: string };
 }
 
 export interface UploadReceiptInput {
@@ -103,4 +123,11 @@ export interface OcrApi {
   reviewReceipt(input: ReviewReceiptInput): Promise<ReviewReceiptResult>;
   /** A short-lived link to the receipt's file. */
   receiptFileUrl(id: string): Promise<string>;
+  /** Bukti transfer, for recording a payment: the cashier's side of the
+   *  inbox, under the payment-proof grants. */
+  uploadTransferProof(file: File): Promise<ReceiptExtraction>;
+  getTransferProof(id: string): Promise<ReceiptExtraction>;
+  /** Proofs no payment has been recorded from yet, newest first. */
+  getTransferProofs(): Promise<ReceiptExtraction[]>;
+  transferProofFileUrl(id: string): Promise<string>;
 }

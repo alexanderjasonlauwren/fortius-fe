@@ -151,6 +151,7 @@ export interface PaymentView {
   noRekening: string;
   status: string;
   alokasi: { invoiceId: string; nomor: string; jumlah: number }[];
+  /** The bukti transfer (OCR extraction id) this receipt was recorded from. */
   buktiTransfer?: string;
   keterangan?: string;
   diverifikasiOleh?: string;
@@ -164,6 +165,8 @@ export interface RecordPaymentInput {
   bank: BankNameEntity;
   noRekening: string;
   rekeningTujuanId?: string;
+  /** The bukti transfer (OCR extraction id) to record this receipt from; its
+   *  photo becomes the payment's proof. */
   buktiTransfer?: string;
   keterangan?: string;
   /** Payment method; omitted means bank transfer. */

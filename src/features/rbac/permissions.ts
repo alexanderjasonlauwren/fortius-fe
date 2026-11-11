@@ -73,6 +73,11 @@ export const PERMISSIONS = {
   /** Rejecting a pending receipt, and voiding a verified one -- the same
    *  backend action (POST /payments/:id/reject) reverses its journal. */
   PAYMENTS_REJECT: "finance.reject.payments",
+  /** A pangkalan's bukti transfer: uploading one for the OCR engine to read
+   *  and recording a payment from it, and opening it afterwards. The
+   *  cashier's own grants, separate from the expense inbox's ocr.* ones. */
+  PAYMENT_PROOFS_VIEW: "finance.read.payment_proofs",
+  PAYMENT_PROOFS_CREATE: "finance.create.payment_proofs",
 
   // Invoices and the general ledger. Reports composes /deliveries,
   // /payments and /invoices with no dedicated permission of its own (the

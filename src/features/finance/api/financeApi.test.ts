@@ -399,7 +399,22 @@ describe("payments", () => {
       const [, , body] = send.mock.calls[0];
       expect(body.payment_method_id).toBe("m-transfer");
       expect(body.bank_account_number).toBe("1234567890");
-      expect(body.bank_reference).toBe("1234567890");
+      // The account number is the sender, not the transfer: standing in for
+      // the reference, a pangkalan's second payment would read as the first.
+      expect(body.bank_reference).toBeUndefined();
+      expect(body.ocr_extraction_id).toBeUndefined();
+    });
+
+    it("records a receipt from its bukti transfer, and reads the proof back", async () => {
+      send.mockResolvedValue({ ...paymentWire(), transfer_proof_id: "x-1" });
+      getList.mockResolvedValue({ items: [], pagination: {} });
+      const p = await financeApiHttp.submitPayment({
+        outletId: OUTLET_ID, jumlah: 640_000, tanggal: "2026-11-08", bank: "BNI", noRekening: "",
+        metodeId: "m-transfer", referensi: "202611080930112233445566778", buktiTransfer: "x-1",
+      });
+      const [, , body] = send.mock.calls[0];
+      expect(body).toMatchObject({ ocr_extraction_id: "x-1", bank_reference: "202611080930112233445566778" });
+      expect(p.buktiTransfer).toBe("x-1");
     });
 
     it("sends the chosen method, the slip's reference and the deposit account", async () => {

@@ -2,8 +2,12 @@ import { useState } from "react";
 import { receiptFileUrl } from "@/features/ocr/api/ocrApi";
 import { useToast } from "@/hooks/useToast";
 
-/** Opens a receipt's stored file in a new tab, the way attachments open. */
-export function useOpenReceipt() {
+/**
+ * Opens a receipt's stored file in a new tab, the way attachments open.
+ * `resolve` is the route that issues the link: the expense inbox's by
+ * default, the cashier's transferProofFileUrl for a bukti transfer.
+ */
+export function useOpenReceipt(resolve: (id: string) => Promise<string> = receiptFileUrl) {
   const { toast } = useToast();
   const [opening, setOpening] = useState<string | null>(null);
 
@@ -13,7 +17,7 @@ export function useOpenReceipt() {
     const tab = window.open("", "_blank");
     setOpening(id);
     try {
-      const url = await receiptFileUrl(id);
+      const url = await resolve(id);
       if (tab) tab.location.href = url;
       else window.location.assign(url);
     } catch (error) {
