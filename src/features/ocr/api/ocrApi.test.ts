@@ -33,12 +33,49 @@ describe("ocrApiHttp", () => {
     expect(fresh.status).toBe("pending");
   });
 
-  it("uploads the file with only the fields that were filled", async () => {
-    upload.mockResolvedValue({ id: "ext-9", created_at: "2026-10-14T00:00:00Z", has_file: true, file_name: "nota.png" });
+  it("uploads only the file, with its document type when one was chosen", async () => {
+    upload.mockResolvedValue({ id: "ext-9", created_at: "2026-10-14T00:00:00Z", has_file: true, file_name: "nota.png", process_status: "queued" });
     const file = new File(["x"], "nota.png", { type: "image/png" });
-    const row = await ocrApiHttp.uploadReceipt({ file, merchantName: " Toko ", txnDate: "", totalAmount: 15000 });
-    expect(upload).toHaveBeenCalledWith("/ocr/inbox/upload", file, "file", undefined, { merchant_name: "Toko", total_amount: "15000" });
-    expect(row).toMatchObject({ id: "ext-9", hasFile: true, status: "pending" });
+    const row = await ocrApiHttp.uploadReceipt({ file, documentType: "bank_transfer" });
+    expect(upload).toHaveBeenCalledWith("/ocr/inbox/upload", file, "file", undefined, { document_type: "bank_transfer" });
+    expect(row).toMatchObject({ id: "ext-9", hasFile: true, status: "pending", processStatus: "queued" });
+
+    await ocrApiHttp.uploadReceipt({ file, documentType: "auto" });
+    expect(upload).toHaveBeenLastCalledWith("/ocr/inbox/upload", file, "file", undefined, {});
+  });
+
+  it("maps the engine's reading, keeping the reference number as text", async () => {
+    getList
+      .mockResolvedValueOnce({ items: [{
+        id: "ext-5", created_at: "2026-11-08T02:00:00Z", process_status: "ready", engine: "receipt-engine",
+        document_type: "bank_transfer", total_amount: 776000, reference_no: "202605040622459260062192128",
+        needs_review: true, review_reasons: ["Bukti transfer yang sama sudah pernah diunggah."],
+        confidence: { total: "high" }, evidence: { total: "Total Bayar Rp776.000,-" },
+        suggested_category: "penebusan_pangkalan", duplicate_of: "ext-1",
+      }] })
+      .mockResolvedValueOnce({ items: [] });
+    const [row] = await ocrApiHttp.getReceipts();
+    expect(row).toMatchObject({
+      processStatus: "ready", documentType: "bank_transfer", referenceNo: "202605040622459260062192128",
+      confidence: { total: "high" }, evidence: { total: "Total Bayar Rp776.000,-" },
+      suggestedCategory: "penebusan_pangkalan", duplicateOf: "ext-1", needsReview: true,
+    });
+  });
+
+  it("treats a row from a server without the engine as ready and typed", async () => {
+    getList.mockResolvedValueOnce({ items: [{ id: "ext-6", created_at: "2026-11-08T02:00:00Z" }] }).mockResolvedValueOnce({ items: [] });
+    const [row] = await ocrApiHttp.getReceipts();
+    expect(row).toMatchObject({ processStatus: "ready", reviewReasons: [], confidence: {}, evidence: {} });
+  });
+
+  it("sends corrections with the decision, and none when nothing changed", async () => {
+    send.mockResolvedValue({ extraction_id: "ext-1" });
+    await ocrApiHttp.reviewReceipt({ id: "ext-1", outcome: "approved", category: "toll", corrections: { totalAmount: 7500 } });
+    expect(send).toHaveBeenLastCalledWith("post", "/ocr/extractions/ext-1/verify", expect.objectContaining({
+      corrections: { total_amount: 7500, merchant_name: undefined, txn_date: undefined, reference_no: undefined },
+    }));
+    await ocrApiHttp.reviewReceipt({ id: "ext-1", outcome: "approved", category: "toll", corrections: {} });
+    expect(send.mock.calls[send.mock.calls.length - 1][2].corrections).toBeUndefined();
   });
 
   it("approves with a category and files the expense from the chosen account", async () => {
