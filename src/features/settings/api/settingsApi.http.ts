@@ -9,6 +9,7 @@
  * can tell "this tenant chose 07:00" from "this tenant inherited 07:00".
  */
 import { getOne, send } from "@/lib/api";
+import { shareInFlight } from "@/lib/inFlight";
 import type {
   ResolvedSettingsEntity,
   SettingsEntity,
@@ -250,7 +251,13 @@ function toTenant(src: { id: string; code: string; name: string }): TenantEntity
   };
 }
 
-export async function getSettings(): Promise<SettingsEntity> {
+export function getSettings(): Promise<SettingsEntity> {
+  // The layout (for the tenant's vocabulary) and Beranda's tiles (for the
+  // daily target) read the settings at the same moment.
+  return shareInFlight("settings", readSettings);
+}
+
+async function readSettings(): Promise<SettingsEntity> {
   const [row, profile] = await Promise.all([getOne<SettingsResponse>(tenantPath()), getProfile()]);
   // Merged over neutral defaults: settings and the profile each own a subset
   // of SettingsEntity, and the fields neither owns must keep a renderable

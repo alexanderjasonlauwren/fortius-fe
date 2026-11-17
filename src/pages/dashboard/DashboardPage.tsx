@@ -90,6 +90,7 @@ export function DashboardPage() {
   } = useDashboard();
   // The panel reads the audit trail; a role that may not is not offered it.
   const canSeeActivity = holds(PERMISSIONS.AUDIT_VIEW);
+  const canSeePayments = holds(PERMISSIONS.PAYMENTS_VIEW);
 
   const delta = kpi ? formatDelta(kpi.dailyDistributed, kpi.previousDayDistributed) : null;
   const quotaUsed = kpi ? kpi.monthlyQuotaTotal - kpi.monthlyQuotaRemaining : 0;
@@ -203,23 +204,27 @@ export function DashboardPage() {
           tone={kpi && kpi.openOrders > 0 ? "signal" : undefined}
         /> : null}
 
-        <StatTile
-          label="Pembayaran belum diverifikasi"
-          value={kpi ? formatNumber(kpi.pendingPayments) : undefined}
-          unit="faktur"
-          isLoading={isLoading}
-          hint={
-            kpi ? (
-              <>
-                Senilai{" "}
-                <span className="data">{formatRupiahShort(kpi.pendingPaymentValue)}</span>
-              </>
-            ) : undefined
-          }
-          href="/payments"
-          icon={Wallet}
-          tone={kpi && kpi.pendingPayments > 0 ? "signal" : undefined}
-        />
+        {/* Only for a role that may read payments; it links to a page the
+            others cannot open. */}
+        {canSeePayments && (
+          <StatTile
+            label="Pembayaran belum diverifikasi"
+            value={kpi?.pendingPayments != null ? formatNumber(kpi.pendingPayments) : undefined}
+            unit="faktur"
+            isLoading={isLoading}
+            hint={
+              kpi?.pendingPaymentValue != null ? (
+                <>
+                  Senilai{" "}
+                  <span className="data">{formatRupiahShort(kpi.pendingPaymentValue)}</span>
+                </>
+              ) : undefined
+            }
+            href="/payments"
+            icon={Wallet}
+            tone={kpi?.pendingPayments ? "signal" : undefined}
+          />
+        )}
       </div>
 
       <FinanceSummary summary={finance} />

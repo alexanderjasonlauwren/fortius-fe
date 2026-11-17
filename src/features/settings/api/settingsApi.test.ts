@@ -6,7 +6,7 @@ vi.mock("@/lib/api", () => ({
   getOne: (...args: unknown[]) => getOne(...args),
   send: (...args: unknown[]) => send(...args),
 }));
-vi.mock("@/lib/scope", () => ({ getActingTenant: () => "tenant-1" }));
+vi.mock("@/lib/scope", () => ({ getActingTenant: () => "tenant-1", scopeKey: () => ["tenant-1", "semua"] }));
 
 const { clearSettingOverride, getSettings, getSettlementTarget, saveSettlementTarget, updateSettings } = await import("./settingsApi.http");
 

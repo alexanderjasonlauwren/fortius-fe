@@ -38,6 +38,16 @@ import {
 } from "lucide-react";
 import { outletLabel, outletLabelTitle, supplierLabel, unitLabel } from "@/lib/lexicon";
 
+/**
+ * What the planning page reads: the plans, and the drivers and trucks a plan
+ * is built from. The menu and the route both use this list.
+ */
+export const PLANNING_PERMISSIONS = [
+  PERMISSIONS.DISTRIBUTION_VIEW,
+  PERMISSIONS.DRIVERS_VIEW,
+  PERMISSIONS.VEHICLES_VIEW,
+] as const;
+
 export interface NavItem {
   name: string;
   href: string;
@@ -110,7 +120,12 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Operasi harian",
     items: [
       {
-        name: `Pesanan ${outletLabelTitle()}`,
+        // Getters, not values: the tenant's own words ("Pangkalan") arrive
+        // with its settings after this module loads, and a value read here
+        // kept "Outlet" over a "Pangkalan" page (Round 1 G27).
+        get name() {
+          return `Pesanan ${outletLabelTitle()}`;
+        },
         href: "/orders",
         icon: ClipboardList,
         hint: "Permintaan masuk yang menunggu persetujuan",
@@ -120,7 +135,9 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Schedule Agreement",
         href: "/sa",
         icon: FileText,
-        hint: `Kuota dari ${supplierLabel()}, sisa yang bisa ditarik, dan penerbit SA`,
+        get hint() {
+          return `Kuota dari ${supplierLabel()}, sisa yang bisa ditarik, dan penerbit SA`;
+        },
         permission: PERMISSIONS.SA_VIEW,
       },
       {
@@ -128,7 +145,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/distribution",
         icon: Truck,
         hint: "Susun rute, tetapkan armada, konfirmasi rencana",
-        permission: PERMISSIONS.DISTRIBUTION_VIEW,
+        permission: PLANNING_PERMISSIONS,
       },
       {
         name: "Monitoring Distribusi",
@@ -294,10 +311,14 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Data induk",
     items: [
       {
-        name: outletLabelTitle(),
+        get name() {
+          return outletLabelTitle();
+        },
         href: "/outlet",
         icon: Store,
-        hint: `Daftar ${outletLabel()}, kuota, dan penanggung jawab`,
+        get hint() {
+          return `Daftar ${outletLabel()}, kuota, dan penanggung jawab`;
+        },
         permission: PERMISSIONS.OUTLETS_VIEW,
       },
       {
@@ -328,7 +349,9 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Produk",
         href: "/products",
         icon: Fuel,
-        hint: `Katalog ${unitLabel()}, harga, dan stok gudang`,
+        get hint() {
+          return `Katalog ${unitLabel()}, harga, dan stok gudang`;
+        },
         permission: PERMISSIONS.PRODUCTS_VIEW,
       },
       {
@@ -345,7 +368,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/users",
         icon: Users,
         hint: "Akun tim dan jejak aktivitas sistem",
-        permission: PERMISSIONS.USER_ROLES_VIEW,
+        permission: [PERMISSIONS.USERS_VIEW, PERMISSIONS.USER_ROLES_VIEW],
       },
     ],
   },

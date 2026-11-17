@@ -16,9 +16,10 @@ export function useDashboard() {
   const intakePolicy = useIntakePolicy();
   const canReadOrders = useAuthStore((state) => state.hasPermission(PERMISSIONS.ORDERS_VIEW));
   const showManualOrders = intakePolicy.allowsManualIntake && canReadOrders;
+  const canReadPayments = useAuthStore((state) => state.hasPermission(PERMISSIONS.PAYMENTS_VIEW));
   const kpi = useQuery({
-    queryKey: [...scopeKey(), "kpi", showManualOrders],
-    queryFn: () => getKpiSummary(showManualOrders),
+    queryKey: [...scopeKey(), "kpi", showManualOrders, canReadPayments],
+    queryFn: () => getKpiSummary({ manualOrders: showManualOrders, payments: canReadPayments }),
   });
   const rail = useQuery({ queryKey: [...scopeKey(), "dispatch-rail"], queryFn: getDispatchRail });
   const monthlyChart = useQuery({

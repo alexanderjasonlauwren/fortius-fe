@@ -24,7 +24,18 @@ import type { ToastOptions } from "@/components/ui/toast-context";
  * draws a Leaflet map whose rounds are road-snapped through a router, so one
  * "Berangkat" press re-runs every one of those requests. Pass the keys that
  * actually changed there, and leave the default everywhere else.
+ *
+ * # Shell queries are left out of the sweep
+ *
+ * The tenant and branch registries, the switchable tenants, the tenant's
+ * settings and its intake policy sit under every page and almost never
+ * change; refetching all five after every save was most of the "eight shell
+ * requests per write" in Round 1 G15. They carry `meta: SHELL`, and only a
+ * write that changes them -- Pengaturan, a tenant created, renamed or
+ * deactivated -- passes `refreshesShell` to include them.
  */
+export const SHELL = { shell: true } as const;
+
 export function useDeskMutation<TArgs, TResult>({
   mutationFn,
   success,
@@ -32,6 +43,7 @@ export function useDeskMutation<TArgs, TResult>({
   onDone,
   onFail,
   invalidate,
+  refreshesShell = false,
 }: {
   mutationFn: (args: TArgs) => Promise<TResult>;
   /** Confirmation copy. Use the past tense of the button that triggered it. */
@@ -44,6 +56,8 @@ export function useDeskMutation<TArgs, TResult>({
    * invalidated -- see the note above before narrowing anything.
    */
   invalidate?: readonly unknown[][];
+  /** This write changes shell data (settings, tenants): refresh it too. */
+  refreshesShell?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -56,7 +70,9 @@ export function useDeskMutation<TArgs, TResult>({
           void queryClient.invalidateQueries({ queryKey });
         }
       } else {
-        void queryClient.invalidateQueries();
+        void queryClient.invalidateQueries({
+          predicate: (query) => refreshesShell || query.meta?.shell !== true,
+        });
       }
       if (typeof success === "string") {
         toast({ title: success, tone: "success" });
