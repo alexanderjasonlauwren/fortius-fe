@@ -27,6 +27,7 @@ export const INHERITABLE_FIELDS = [
   "jamOperasionalMulai",
   "jamOperasionalSelesai",
   "targetHarian",
+  "persetujuanTerpisah",
   "istilah",
   "operasi",
 ] as const satisfies readonly (keyof SettingsEntity)[];

@@ -1,6 +1,7 @@
 import { type Paged, getAllPages, getOne, getPage, send } from "@/lib/api";
 import type {
   CreateExpenseInput,
+  ExpenseApprover,
   ExpenseApi,
   ExpenseDecisionInput,
   ExpenseFilters,
@@ -132,6 +133,11 @@ async function approveExpense(input: ExpenseDecisionInput): Promise<ExpenseView>
   }));
 }
 
+async function getApprovers(): Promise<ExpenseApprover[]> {
+  const rows = await getOne<{ id: string; full_name: string; username: string }[]>("/expenses/approvers");
+  return rows.map((row) => ({ id: row.id, nama: row.full_name || row.username }));
+}
+
 async function rejectExpense(input: ExpenseDecisionInput): Promise<ExpenseView> {
   return toView(await send<ExpenseResponse>("post", `/expenses/${input.id}/reject`, {
     version: input.version,
@@ -141,4 +147,5 @@ async function rejectExpense(input: ExpenseDecisionInput): Promise<ExpenseView> 
 
 export const expenseApiHttp: ExpenseApi = {
   getExpenses, getPendingExpenses, getExpense, createExpense, updateExpense, cancelExpense, approveExpense, rejectExpense,
+  getApprovers,
 };
