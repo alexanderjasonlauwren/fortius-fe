@@ -649,3 +649,17 @@ describe("the planning cutover and SIM3LON variances", () => {
     expect((await saApiHttp.getImportSummary("sa-1"))?.outlets[0].saldoAwal).toBe(0);
   });
 });
+
+// Round 1 G18: the form asked for a total quota and the request dropped it,
+// so every manual SA read 0 / 0.
+it("sends a manual SA's quota with the product it is for", async () => {
+  getList.mockResolvedValue({ items: [{ id: "branch-1", is_default: true }] });
+  send.mockResolvedValue(wire());
+  await saApiHttp.uploadSA({
+    nomorSA: "SA-UJI-1", supplier: "Pertamina", periodeMulai: "2026-12-01", periodeBerakhir: "2026-12-31",
+    produkId: "product-1", totalKuota: 12000,
+  });
+  const [, path, body] = send.mock.calls[0];
+  expect(path).toBe("/schedule-agreements");
+  expect(body.products).toEqual([{ product_id: "product-1", total_quota_qty: 12000 }]);
+});

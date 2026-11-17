@@ -9,6 +9,9 @@ export const uploadSASchema = z.object({
   supplier: z.string().min(1, { error: () => `${supplierLabel()} wajib dipilih` }),
   periodeMulai: z.string().min(1, "Periode mulai wajib diisi"),
   periodeBerakhir: z.string().min(1, "Periode berakhir wajib diisi"),
+  // The product the quota is for (Round 1 G18: a manual SA carried no
+  // product, so its quota was never recorded).
+  produkId: z.string().min(1, "Produk wajib dipilih"),
   totalKuota: z
     .number({
       // An empty number field reaches here as undefined or NaN: that is a

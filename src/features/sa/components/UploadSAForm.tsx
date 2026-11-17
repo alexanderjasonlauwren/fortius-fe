@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { scopeKey } from "@/lib/scope";
+import { getProducts } from "@/features/products/api/productApi";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Upload } from "lucide-react";
 import {
   Field,
   FileDrop,
+  SelectInput,
   TextInput,
   TextareaInput,
 } from "@/components/common/Field";
@@ -26,13 +30,21 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
     control,
     handleSubmit,
     reset,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<UploadSAFormValues>({
     resolver: zodResolver(uploadSASchema),
-    defaultValues: { nomorSA: "", supplier: "", periodeMulai: "", periodeBerakhir: "" },
+    defaultValues: { nomorSA: "", supplier: "", periodeMulai: "", periodeBerakhir: "", produkId: "" },
   });
 
   const options = supplierOptions ?? [];
+  const products = useQuery({ queryKey: [...scopeKey(), "sa-form-products"], queryFn: () => getProducts() });
+  // Most agencies sell one product: start with it chosen.
+  const firstProduct = products.data?.[0]?.id;
+  useEffect(() => {
+    if (firstProduct && !getValues("produkId")) setValue("produkId", firstProduct);
+  }, [firstProduct, getValues, setValue]);
 
   const submit = handleSubmit((values) => {
     onSubmit({ ...values, namaDokumen: file?.name });
@@ -101,6 +113,15 @@ export function UploadSAForm({ onSubmit, isPending, supplierOptions }: UploadSAF
           />
         </Field>
       </div>
+
+      <Field label="Produk" htmlFor="produkId" error={errors.produkId?.message} required>
+        <SelectInput id="produkId" invalid={!!errors.produkId} {...register("produkId")}>
+          <option value="">Pilih produk…</option>
+          {(products.data ?? []).map((product) => (
+            <option key={product.id} value={product.id}>{product.nama}</option>
+          ))}
+        </SelectInput>
+      </Field>
 
       <Field
         label="Total kuota"

@@ -47,6 +47,9 @@ export function SAManagementPage() {
   } = useScheduleAgreement();
 
   const [pendingDelete, setPendingDelete] = useState<ScheduleAgreement | null>(null);
+  // Activation puts the quota in force for planning; it is asked about, not
+  // done on one click (Round 1 G21).
+  const [pendingActivate, setPendingActivate] = useState<ScheduleAgreement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState<ScheduleAgreement | null>(null);
   const [importingSIM3LON, setImportingSIM3LON] = useState(false);
@@ -176,7 +179,11 @@ export function SAManagementPage() {
         <SATable
           data={saList}
           isLoading={isLoading}
-          onActivate={canActivate ? (id) => activateMutation.mutate(id) : undefined}
+          onActivate={
+            canActivate
+              ? (id) => setPendingActivate(saList.find((sa) => sa.id === id) ?? null)
+              : undefined
+          }
           onPrint={(id) => printMutation.mutate(id)}
           onDelete={canDelete ? setPendingDelete : undefined}
           onImport={canImport ? setImporting : undefined}
@@ -233,6 +240,36 @@ export function SAManagementPage() {
           if (!pendingDelete) return;
           deleteMutation.mutate(pendingDelete.id, {
             onSettled: () => setPendingDelete(null),
+          });
+        }}
+      />
+
+      <ConfirmDialog
+        isOpen={!!pendingActivate}
+        title={`Aktifkan ${pendingActivate?.nomorSA}?`}
+        message="Kuota SA ini mulai bisa ditarik rencana distribusi. Periksa angkanya terhadap dokumen SA."
+        details={
+          pendingActivate && (
+            <dl className="space-y-1">
+              <div className="flex justify-between gap-4">
+                <dt>{supplierLabel()}</dt>
+                <dd className="text-ink">{pendingActivate.supplier}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt>Total kuota</dt>
+                <dd className="data text-ink">{formatNumber(pendingActivate.totalKuota)} {unitLabel()}</dd>
+              </div>
+            </dl>
+          )
+        }
+        confirmLabel="Aktifkan SA"
+        variant="default"
+        isPending={activateMutation.isPending}
+        onCancel={() => setPendingActivate(null)}
+        onConfirm={() => {
+          if (!pendingActivate) return;
+          activateMutation.mutate(pendingActivate.id, {
+            onSettled: () => setPendingActivate(null),
           });
         }}
       />
