@@ -46,7 +46,7 @@ function documentLink(r: VoidRequest): string {
     case "purchase_payment": return `/purchases/${r.parentId}`;
     case "expense": return "/expenses";
     case "cash_voucher": return "/cash-bank";
-    case "depreciation_run": return "/assets?tab=penyusutan";
+    case "depreciation_run": return "/fixed-assets?tab=penyusutan";
     case "payment": return "/payments";
     case "credit_note": return "/receivables?tab=nota-kredit";
   }

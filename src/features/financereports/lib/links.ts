@@ -31,7 +31,7 @@ export function reportLinkHref(link?: ReportLink, period?: Report["period"]): st
       return `/financial-statements?${params}`;
     }
     case "asset":
-      return "/assets";
+      return "/fixed-assets";
     case "product":
       return `/laporan/stock_card?product_id=${link.id}`;
     default:

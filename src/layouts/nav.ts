@@ -236,7 +236,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         name: "Aset Tetap",
-        href: "/assets",
+        href: "/fixed-assets",
         icon: Building2,
         hint: "Daftar aset, penyusutan bulanan, dan rekonsiliasi",
         permission: PERMISSIONS.ASSETS_VIEW,

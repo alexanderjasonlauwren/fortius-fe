@@ -61,6 +61,11 @@ const RETRIED = Symbol("retried");
 const RATE_RETRIED = Symbol("rateRetried");
 type RetriableConfig = AxiosRequestConfig & { [RETRIED]?: boolean; [RATE_RETRIED]?: boolean };
 
+/** The request that creates a session rather than using one. */
+function isSignIn(config: AxiosRequestConfig): boolean {
+  return (config.url ?? "").replace(/\?.*$/, "") === "/auth/login";
+}
+
 /** The longest a read waits on Retry-After before giving up on it. */
 const MAX_RATE_WAIT_MS = 10_000;
 
@@ -185,6 +190,14 @@ apiClient.interceptors.response.use(
       return apiClient.request(original);
     }
 
+    // Signing in has no session to lose. Its 401 is "wrong email or
+    // password", and treating it as an expired session reloaded /login
+    // before the form could say so: the fields emptied and nothing appeared
+    // (bug #3, Round 1 G19).
+    if (original !== undefined && isSignIn(original)) {
+      return Promise.reject(error);
+    }
+
     const recoverable =
       error.response?.status === 401 &&
       original !== undefined &&
@@ -290,6 +303,8 @@ export class ApiError extends Error {
   readonly requestId?: string;
   readonly violations: Violation[];
   readonly details: unknown;
+  /** Seconds the server asked the caller to wait, on a 429. */
+  readonly retryAfterSeconds?: number;
 
   constructor(init: {
     message: string;
@@ -297,6 +312,7 @@ export class ApiError extends Error {
     status?: number;
     requestId?: string;
     details?: unknown;
+    retryAfterSeconds?: number;
   }) {
     super(init.message);
     this.name = "ApiError";
@@ -304,6 +320,7 @@ export class ApiError extends Error {
     this.status = init.status;
     this.requestId = init.requestId;
     this.details = init.details;
+    this.retryAfterSeconds = init.retryAfterSeconds;
     this.violations = Array.isArray(init.details) ? (init.details as Violation[]) : [];
   }
 }
@@ -311,6 +328,8 @@ export class ApiError extends Error {
 function toApiError(error: unknown): ApiError {
   const axiosError = error as AxiosError<Envelope<unknown>>;
   const envelope = axiosError.response?.data;
+  const retryAfter = Number(axiosError.response?.headers?.["retry-after"]);
+  const retryAfterSeconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined;
 
   if (envelope && typeof envelope === "object" && "success" in envelope) {
     return new ApiError({
@@ -319,6 +338,7 @@ function toApiError(error: unknown): ApiError {
       status: axiosError.response?.status,
       requestId: envelope.request_id,
       details: envelope.error?.details,
+      retryAfterSeconds,
     });
   }
 
@@ -327,6 +347,7 @@ function toApiError(error: unknown): ApiError {
     message: axiosError.message || "Network error",
     code: "NETWORK",
     status: axiosError.response?.status,
+    retryAfterSeconds,
   });
 }
 

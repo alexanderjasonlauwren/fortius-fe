@@ -78,6 +78,40 @@ describe("a rate limit never ends the session (regression 2026-10-24 F16)", () =
   });
 });
 
+describe("a refused sign-in is not an expired session (bug #3, Round 1 G19)", () => {
+  const expired = vi.fn();
+
+  beforeEach(() => {
+    store.clear();
+    expired.mockReset();
+    setSessionExpiredHandler(expired);
+  });
+
+  it("leaves the login form to say what went wrong", async () => {
+    const calls = serve(401);
+    await expect(apiClient.post("/auth/login", { username: "x", password: "y" })).rejects.toBeInstanceOf(AxiosError);
+    expect(expired).not.toHaveBeenCalled();
+    expect(calls).toEqual(["POST /auth/login"]);
+  });
+
+  it("does not try to refresh a leftover session first", async () => {
+    store.set("auth_token", "old");
+    store.set("refresh_token", "refresh");
+    const refresh = vi.spyOn(axios, "post");
+    serve(401);
+    await expect(apiClient.post("/auth/login", {})).rejects.toBeInstanceOf(AxiosError);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(expired).not.toHaveBeenCalled();
+    refresh.mockRestore();
+  });
+
+  it("still ends a session whose other requests are refused", async () => {
+    serve(401);
+    await expect(apiClient.get("/profile")).rejects.toBeInstanceOf(AxiosError);
+    expect(expired).toHaveBeenCalledOnce();
+  });
+});
+
 describe("getAllPages walks a collection instead of reading its first page", () => {
   /** Serves `pages` pages of two rows each, numbered by the requested page. */
   function servePages(pages: number) {

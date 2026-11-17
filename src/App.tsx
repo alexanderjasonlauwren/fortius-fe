@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./features/auth/store/authStore";
 import { setSessionExpiredHandler } from "./lib/api";
 import { landingPathFor } from "./layouts/nav";
@@ -192,11 +192,15 @@ const router = createBrowserRouter([
           <CashBankPage />
         </RequirePermission>
       ) },
-      { path: "assets", element: (
+      { path: "fixed-assets", element: (
         <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
           <AssetsPage />
         </RequirePermission>
       ) },
+      // The old address, kept for bookmarks. It could never be opened directly:
+      // /assets is also the build's static folder, and nginx answered a reload
+      // of it with 403 before the app loaded (bug #2, Round 1 G16).
+      { path: "assets", element: <RedirectKeepingQuery to="/fixed-assets" /> },
       { path: "purchases", element: (
         <RequirePermission permission={PERMISSIONS.PURCHASES_VIEW}>
           <PurchasesPage />
@@ -355,6 +359,12 @@ const router = createBrowserRouter([
   },
   { path: "*", element: <NotFoundPage /> },
 ]);
+
+/** A moved page's old address, keeping its tab and filters. */
+function RedirectKeepingQuery({ to }: { to: string }) {
+  const { search, hash } = useLocation();
+  return <Navigate to={`${to}${search}${hash}`} replace />;
+}
 
 /** Sends each role to the console it works from. */
 function HomeRedirect() {
