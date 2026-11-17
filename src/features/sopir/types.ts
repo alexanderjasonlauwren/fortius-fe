@@ -37,6 +37,11 @@ export interface RunStop {
   kode: string;
   /** Position in today's run, 1-based. */
   urutan: number;
+  /**
+   * Which of the driver's loads today ("Rit") this stop rides on. Positions
+   * restart on every run, so two stops can both be number 1.
+   */
+  rit?: number;
   outletId: string;
   outlet: string;
   alamat: string;
@@ -49,7 +54,10 @@ export interface RunStop {
   lines: StopLine[];
   target: number;
   realisasi: number;
+  /** Empties the outlet handed back (empties_collected). */
   unitKembali?: number;
+  /** Full cylinders still on the truck: refused, or a stop not made. */
+  isiKembali?: number;
   diterimaOleh?: string;
   status: StopStage;
   catatan?: string;
@@ -74,7 +82,10 @@ export interface RunTotals {
   sisa: number;
   muatan: number;
   terkirim: number;
-  kembali: number;
+  /** Empties collected across the day. */
+  kosong: number;
+  /** Full cylinders going back to the warehouse undelivered. */
+  isiKembali: number;
   kapasitas: number;
 }
 
@@ -98,6 +109,8 @@ export interface DriverRun {
   /** The kernet riding this run, if any. */
   kernet?: string;
   tanggal: string;
+  /** How close to a pangkalan counts as there, in metres. */
+  radiusMeter: number;
   stops: RunStop[];
   totals: RunTotals;
   /** The stop the driver is on, or heading to. Null once the run is closed. */
