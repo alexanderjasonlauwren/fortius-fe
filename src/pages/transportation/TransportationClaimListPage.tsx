@@ -2,7 +2,7 @@ import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Calculator, CloudDownload, Eye, FileText, Pencil, Plus, ReceiptText, ShieldCheck, Trash2 } from "lucide-react";
+import { Loader2, BarChart3, Calculator, CloudDownload, Eye, FileText, Pencil, Plus, ReceiptText, ShieldCheck, Trash2 } from "lucide-react";
 import {
   createClaim,
   deleteClaim,
@@ -408,6 +408,15 @@ export function TransportationClaimListPage() {
           </span>
         }
       />
+
+      {/* The pull logs in to SIM3LON and reads its LO pages: say so while it
+          runs, instead of a button that seems to do nothing (Round 1 G29). */}
+      {loMutation.isPending && (
+        <p role="status" className="flex items-center gap-2 rounded-md border border-line bg-panel-sunk px-3 py-2 text-xs text-ink-muted">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Mengambil LO dari SIM3LON. Masuk ke SIM3LON dan membaca halaman LO bisa memakan waktu hingga dua menit; jangan tutup halaman ini.
+        </p>
+      )}
 
       <Panel>
         <PanelHeader

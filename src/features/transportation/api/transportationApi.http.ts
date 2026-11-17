@@ -134,8 +134,11 @@ async function generateLines(id: ID): Promise<ClaimView> {
   return toView(await send<ClaimResponse>("post", `/transportation-claims/${id}/lines/generate`));
 }
 
+// The pull drives SIM3LON through a headless login and its LO pages: about
+// eight seconds warm, longer on a cold login. The default 10 s cut it off
+// (Round 1 G29); the SA sync's 120 s applies.
 async function generateFromSim3lon(id: ID): Promise<ClaimView> {
-  return toView(await send<ClaimResponse>("post", `/transportation-claims/${id}/lines/from-sim3lon`));
+  return toView(await send<ClaimResponse>("post", `/transportation-claims/${id}/lines/from-sim3lon`, undefined, { timeout: 120_000 }));
 }
 
 /** Mirrors the backend's transportationclaim.BeritaAcaraResponse. */
