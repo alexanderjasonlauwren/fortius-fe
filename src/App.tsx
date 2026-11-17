@@ -151,10 +151,14 @@ const router = createBrowserRouter([
           <TransportationClaimDocumentPage />
         </RequirePermission>
       ) },
+      // The crew file their costs from the driver console; this is the
+      // office's register (Round 1 sweep: a sopir could type the address).
       { path: "expenses", element: (
-        <RequirePermission permission={PERMISSIONS.EXPENSES_VIEW}>
-          <ExpensePage />
-        </RequirePermission>
+        <RequireOfficeConsole>
+          <RequirePermission permission={PERMISSIONS.EXPENSES_VIEW}>
+            <ExpensePage />
+          </RequirePermission>
+        </RequireOfficeConsole>
       ) },
 
       // Lapangan — the driver's own console.
@@ -346,15 +350,21 @@ const router = createBrowserRouter([
       ) },
       { path: "system", element: <Navigate to="/settings" replace /> },
 
+      // The driver role reads the tenant for its labels, which alone opened
+      // the agency's tenant tree to a sopir; it is an office page.
       { path: "tenants", element: (
-        <RequirePermission permission={PERMISSIONS.SETTINGS_VIEW}>
-          <TenantListPage />
-        </RequirePermission>
+        <RequireOfficeConsole>
+          <RequirePermission permission={PERMISSIONS.SETTINGS_VIEW}>
+            <TenantListPage />
+          </RequirePermission>
+        </RequireOfficeConsole>
       ) },
       { path: "tenants/:id", element: (
-        <RequirePermission permission={PERMISSIONS.SETTINGS_VIEW}>
-          <TenantDetailPage />
-        </RequirePermission>
+        <RequireOfficeConsole>
+          <RequirePermission permission={PERMISSIONS.SETTINGS_VIEW}>
+            <TenantDetailPage />
+          </RequirePermission>
+        </RequireOfficeConsole>
       ) },
 
       { path: "notifications", element: <NotificationPage /> },
