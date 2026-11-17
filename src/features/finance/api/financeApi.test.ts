@@ -445,6 +445,20 @@ describe("payments", () => {
       }]);
     });
 
+    // Round 1 N14: "SIM3LON (Lunas Otomatis)" was offered for a receipt
+    // recorded by hand; dispatch alone writes it.
+    it("does not offer the SIM3LON settlement as a method to record a receipt under", async () => {
+      getList.mockResolvedValue({
+        items: [
+          { id: "m-transfer", code: "bank_transfer", name: "Transfer Bank", sort_order: 1, status: "atv" },
+          { id: "m-sim3lon", code: "sim3lon", name: "SIM3LON (Lunas Otomatis)", sort_order: 2, status: "atv" },
+        ],
+        pagination: {},
+      });
+      const methods = await financeApiHttp.getPaymentMethods();
+      expect(methods.map((m) => m.kode)).toEqual(["bank_transfer"]);
+    });
+
     // RecordPaymentRequest.PaymentDate is a Go time.Time: a bare date was
     // refused live as "Request body is not valid JSON", so no receipt could
     // be recorded at all.

@@ -49,6 +49,8 @@ import type {
   CloseRunResult,
   DateRange,
   MonitoringApi,
+  RedeliverInput,
+  RedeliveryResult,
   ReturnBookingResult,
   SetDeliveryStatusInput,
   StatusReceipt,
@@ -78,6 +80,7 @@ interface BoardDeliveryWire {
   reconciled?: boolean;
   return_pending?: boolean;
   return_credit_note_number?: string;
+  redelivery_plan?: string;
 }
 
 /** Mirrors the backend's BoardStop. */
@@ -392,6 +395,7 @@ export function toRuns(board: Pick<BoardResponseWire, "drivers" | "stops">): Run
                 dikonfirmasi: !!doc.reconciled,
                 koreksiTertunda: !!doc.return_pending,
                 notaKredit: doc.return_credit_note_number,
+                kirimUlang: doc.redelivery_plan,
               }),
             ),
         );
@@ -646,6 +650,26 @@ async function closeRun(input: CloseRunInput): Promise<CloseRunResult> {
   };
 }
 
+/** Plans a closed surat jalan's returned tabung onto a later day. */
+async function redeliver(input: RedeliverInput): Promise<RedeliveryResult> {
+  const res = await send<{
+    plan_id: string;
+    plan_number: string;
+    planned_delivery_date: string;
+    quantity: number;
+    plan_opened: boolean;
+  }>("post", `/distribution/redeliveries/${input.deliveryId}`, {
+    planned_delivery_date: input.tanggal,
+  });
+  return {
+    rencanaId: res.plan_id,
+    rencana: res.plan_number,
+    tanggal: res.planned_delivery_date,
+    jumlah: res.quantity,
+    rencanaBaru: res.plan_opened,
+  };
+}
+
 async function bookReturn(deliveryId: string): Promise<ReturnBookingResult> {
   const res = await send<{
     credit_note_number?: string;
@@ -669,4 +693,5 @@ export const monitoringApiHttp: MonitoringApi = {
   printSuratJalan,
   closeRun,
   bookReturn,
+  redeliver,
 };

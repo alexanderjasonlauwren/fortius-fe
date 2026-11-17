@@ -465,10 +465,15 @@ async function getPendingPayments(): Promise<PaymentView[]> {
   return items.map((r) => toPaymentView(r, outlets));
 }
 
+/**
+ * The methods a receipt can be recorded under. "SIM3LON (Lunas Otomatis)" is
+ * not one: dispatch writes it from SIM3LON's own confirmation, and the
+ * service refuses it on a receipt recorded by hand (Round 1 N14).
+ */
 async function getPaymentMethods(): Promise<PaymentMethodView[]> {
   const page = await getAllPages<PaymentMethodResponse>("/payment-methods", { pageSize: PAGE_SIZE });
   return page.items
-    .filter((m) => m.status !== "ina")
+    .filter((m) => m.status !== "ina" && m.code !== "sim3lon")
     .sort((x, y) => x.sort_order - y.sort_order)
     .map((m) => ({ id: m.id, kode: m.code, nama: m.name, butuhReferensi: m.requires_reference }));
 }

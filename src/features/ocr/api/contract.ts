@@ -76,9 +76,20 @@ export interface TransferDetails {
   /** The ID Pangkalan for an LPG transfer. */
   customerId?: string;
   billerName?: string;
-  /** The agency's pangkalan whose code is customerId; absent when none is,
-   *  which is also what a transfer paid to another agent looks like. */
-  outlet?: { id: string; name: string };
+  /** The agency's pangkalan the transfer is from: by its ID Pangkalan
+   *  ("id", certain), or the one pangkalan whose name or owner is the
+   *  sender ("name", a suggestion to confirm). Absent when neither. */
+  outlet?: { id: string; name: string; matchedBy: "id" | "name" };
+  /** What a BNI Agen46 "Pembelian LPG 3KG" receipt adds. */
+  channel?: string;
+  reference?: string;
+  journalNumber?: string;
+  quantity?: number;
+  /** The delivery day the tabung are bought for. */
+  deliveryDate?: string;
+  remainingQuota?: number;
+  /** The pangkalan's planned stop that delivery day. */
+  plannedStop?: { planNumber: string; quantity: number; amount?: number };
 }
 
 export interface UploadReceiptInput {

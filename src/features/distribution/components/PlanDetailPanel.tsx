@@ -1266,6 +1266,11 @@ function StopRow({
                 {row.outlet}
               </span>
               <span className="block text-xs text-ink-muted">{row.alamat}</span>
+              {row.kirimUlangDari && (
+                <span className="mt-0.5 block text-xs text-signal-ink">
+                  Kirim ulang dari <span className="data">{row.kirimUlangDari.join(", ")}</span>
+                </span>
+              )}
             </div>
           </div>
         </td>

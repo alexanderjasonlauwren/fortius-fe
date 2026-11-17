@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link2, Loader2 } from "lucide-react";
 import { getChartOfAccounts } from "@/features/finance/api/financeApi";
+import { getOutletOptions } from "@/features/distribution/api/distributionApi";
 import { leafAccounts } from "@/features/finance/lib/accounts";
 import {
   autoMatch,
@@ -44,18 +45,43 @@ interface BankStatementDetailDialogProps {
   onClose: () => void;
 }
 
-function ClassifyRow({ line, importId }: { line: BankStatementLine; importId: string }) {
+function ClassifyRow({ line }: { line: BankStatementLine }) {
   const [accountId, setAccountId] = useState("");
   const accounts = useQuery({ queryKey: [...scopeKey(), "cash-bank", "chart-of-accounts"], queryFn: getChartOfAccounts });
 
+  const [outletId, setOutletId] = useState("");
+  const moneyIn = line.credit > 0;
+  const outlets = useQuery({ queryKey: [...scopeKey(), "outlet-options"], queryFn: getOutletOptions, enabled: moneyIn });
+
   const classify = useDeskMutation({
-    mutationFn: (input: { accountId?: string; ignore?: boolean }) => classifyLine({ lineId: line.id, ...input }),
-    success: "Baris diklasifikasikan",
+    mutationFn: (input: { accountId?: string; outletId?: string; ignore?: boolean }) =>
+      classifyLine({ lineId: line.id, ...input }),
+    success: (_line, input) =>
+      input.outletId
+        ? { title: "Dicatat sebagai uang masuk pangkalan", description: "Penerimaan terverifikasi; dananya menjadi titipan pangkalan." }
+        : { title: "Baris diklasifikasikan" },
     errorTitle: "Klasifikasi gagal",
-    invalidate: [[...scopeKey(), "cash-bank", "bank-statement-import", importId]],
+    // The default sweep, not just this import: a receipt moves the
+    // pangkalan's deposit, which the payment and report screens show too.
   });
 
   return (
+    <div className="space-y-1.5">
+      {/* "Uang masuk dari pangkalan": money in, from the pangkalan picked,
+          becomes its verified receipt and its deposit. */}
+      {moneyIn && (
+        <div className="flex items-center gap-2">
+          <SelectInput aria-label="Uang masuk dari pangkalan" value={outletId} onChange={(e) => setOutletId(e.target.value)} className="h-8 text-xs">
+            <option value="">Uang masuk dari pangkalan…</option>
+            {(outlets.data ?? []).map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </SelectInput>
+          <Button size="sm" variant="outline" disabled={!outletId || classify.isPending} onClick={() => classify.mutate({ outletId })}>
+            Catat
+          </Button>
+        </div>
+      )}
     <div className="flex items-center gap-2">
       <SelectInput value={accountId} onChange={(e) => setAccountId(e.target.value)} className="h-8 text-xs">
         <option value="">Posting ke akun…</option>
@@ -80,6 +106,7 @@ function ClassifyRow({ line, importId }: { line: BankStatementLine; importId: st
         Abaikan
       </Button>
     </div>
+    </div>
   );
 }
 
@@ -94,7 +121,16 @@ export function BankStatementDetailDialog({ importId, onClose }: BankStatementDe
     mutationFn: () => autoMatch(importId!),
     success: (result) => ({
       title: "Pencocokan otomatis selesai",
-      description: `${result.matched} cocok, ${result.posted} diposting, ${result.stillUnmatched} masih perlu klasifikasi manual.`,
+      description:
+        [
+          `${result.matched} cocok`,
+          result.deposits > 0 ? `${result.deposits} dicatat sebagai uang masuk pangkalan` : "",
+          `${result.posted} diposting`,
+          `${result.stillUnmatched} masih perlu klasifikasi manual`,
+          result.ambiguous > 0 ? `${result.ambiguous} nominalnya cocok dengan lebih dari satu dokumen, pilih sendiri` : "",
+        ]
+          .filter(Boolean)
+          .join(", ") + ".",
     }),
     errorTitle: "Pencocokan otomatis gagal",
     invalidate: [[...scopeKey(), "cash-bank", "bank-statement-import", importId]],
@@ -152,7 +188,7 @@ export function BankStatementDetailDialog({ importId, onClose }: BankStatementDe
                           label={line.matchedSourceType ? SOURCE_TYPE_LABEL[line.matchedSourceType] ?? LINE_STATUS_LABEL[line.status] : LINE_STATUS_LABEL[line.status]}
                           variant={getStatusVariant(LINE_STATUS_LABEL[line.status])}
                         />
-                        {line.status === "unmatched" && importId && <ClassifyRow line={line} importId={importId} />}
+                        {line.status === "unmatched" && <ClassifyRow line={line} />}
                       </div>
                     </td>
                   </tr>

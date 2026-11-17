@@ -42,7 +42,14 @@ interface ExtractionResponse {
     recipient_name?: string;
     customer_id?: string;
     biller_name?: string;
-    outlet?: { id: string; name: string };
+    outlet?: { id: string; name: string; matched_by?: "id" | "name" };
+    channel?: string;
+    reference?: string;
+    journal_number?: string;
+    quantity?: number;
+    delivery_date?: string;
+    remaining_quota?: number;
+    planned_stop?: { plan_number: string; quantity: number; amount?: number };
   };
 }
 
@@ -101,7 +108,22 @@ function toReceipt(row: ExtractionResponse, category?: ExpenseCategory): Receipt
       recipientName: row.transfer.recipient_name,
       customerId: row.transfer.customer_id,
       billerName: row.transfer.biller_name,
-      outlet: row.transfer.outlet,
+      outlet: row.transfer.outlet && {
+        id: row.transfer.outlet.id,
+        name: row.transfer.outlet.name,
+        matchedBy: row.transfer.outlet.matched_by ?? "id",
+      },
+      channel: row.transfer.channel,
+      reference: row.transfer.reference,
+      journalNumber: row.transfer.journal_number,
+      quantity: row.transfer.quantity,
+      deliveryDate: row.transfer.delivery_date,
+      remainingQuota: row.transfer.remaining_quota,
+      plannedStop: row.transfer.planned_stop && {
+        planNumber: row.transfer.planned_stop.plan_number,
+        quantity: row.transfer.planned_stop.quantity,
+        amount: row.transfer.planned_stop.amount,
+      },
     },
   };
 }

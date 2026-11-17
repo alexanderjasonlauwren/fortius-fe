@@ -115,6 +115,8 @@ export interface RunDocument {
    */
   koreksiTertunda: boolean;
   notaKredit?: string;
+  /** The plan these returned tabung were rescheduled onto ("RD-… · 18/11/2026"). */
+  kirimUlang?: string;
 }
 
 /**

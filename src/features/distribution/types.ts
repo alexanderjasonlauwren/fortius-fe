@@ -44,6 +44,12 @@ export interface PlanRow {
   lines: { productId: string; jumlah: number }[];
   /** Derived from `lines`. */
   jumlahUnit: number;
+  /**
+   * Surat jalan whose returned tabung this stop carries ("Kirim ulang").
+   * Such a line draws no quota, cannot change quantity, and is paid from the
+   * pangkalan's deposit at dispatch.
+   */
+  kirimUlangDari?: string[];
   driverId: string | null;
   driver: string;
   /**

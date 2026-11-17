@@ -53,6 +53,7 @@ export function MonitoringPage() {
     runs,
     closeRunMutation,
     bookReturnMutation,
+    redeliverMutation,
   } = useMonitoring();
 
   // Completing a stop records what was actually unloaded, so it asks.
@@ -133,7 +134,12 @@ export function MonitoringPage() {
         />
       </section>
 
-      <RunClosePanel runs={runs} closeRun={closeRunMutation} bookReturn={bookReturnMutation} />
+      <RunClosePanel
+        runs={runs}
+        closeRun={closeRunMutation}
+        bookReturn={bookReturnMutation}
+        redeliver={redeliverMutation}
+      />
 
       <Panel>
         <PanelHeader

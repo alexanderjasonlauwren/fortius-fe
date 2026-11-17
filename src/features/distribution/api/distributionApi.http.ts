@@ -87,6 +87,7 @@ interface OrderItemResponse {
   invoice_payment_status?: string;
   item_status: string;
   notes?: string;
+  carried_from_delivery_number?: string;
   outlet_address?: string;
   outlet_district?: string;
   outlet_receivable?: number;
@@ -468,6 +469,9 @@ function toPlanRows(items: OrderItemResponse[], board?: BoardResponse): PlanRow[
 
     row.lines.push({ productId: item.product_id ?? "", jumlah: item.planned_qty });
     row.jumlahUnit += item.planned_qty;
+    if (item.carried_from_delivery_number) {
+      row.kirimUlangDari = [...(row.kirimUlangDari ?? []), item.carried_from_delivery_number];
+    }
     // Fold rule for a multi-line stop: any unpaid line makes the whole stop
     // unpaid -- the truck loads per stop, and the funded half cannot go
     // without the rest. Otherwise "Kredit" only holds when every line agrees;
