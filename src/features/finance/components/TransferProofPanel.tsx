@@ -117,6 +117,21 @@ export function TransferProofPanel({ proofId, proof: row, onProofChange, onApply
           </Button>
         </span>
       </div>
+      {row?.transfer?.quantity != null && (
+        <p className="text-xs text-ink-muted">
+          {[
+            row.transfer.channel,
+            `${row.transfer.quantity} tabung`,
+            row.transfer.deliveryDate && `dikirim ${formatDateId(row.transfer.deliveryDate)}`,
+            row.transfer.reference && `ref ${row.transfer.reference}`,
+            row.transfer.plannedStop &&
+              row.transfer.plannedStop.quantity === row.transfer.quantity &&
+              `sesuai rencana ${row.transfer.plannedStop.planNumber}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      )}
       {notices.map((notice) => (
         <p key={notice.text} className={cn("flex items-start gap-2 rounded-md px-3 py-1.5 text-xs",
           notice.tone === "danger" ? "bg-rust-soft text-rust-ink" : "bg-signal-soft text-signal-ink")}>

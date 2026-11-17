@@ -6,6 +6,7 @@
  */
 import type { ReceiptExtraction } from "@/features/ocr/api/ocrApi";
 import type { BankNameEntity } from "@/types/domain";
+import { formatRupiah } from "@/lib/format";
 
 export interface ProofPrefill {
   outletId?: string;
@@ -68,12 +69,35 @@ export function proofNotices(proof: ReceiptExtraction): ProofNotice[] {
       text: `${proof.processError ?? "Mesin OCR tidak bisa membaca bukti ini."} Isi formulir dari fotonya.`,
     });
   }
-  const customerId = proof.transfer?.customerId;
-  if (customerId && !proof.transfer?.outlet) {
+  const transfer = proof.transfer;
+  const customerId = transfer?.customerId;
+  if (customerId && !transfer?.outlet) {
     notices.push({
       tone: "warn",
       text: `ID Pangkalan ${customerId} tidak cocok dengan pangkalan agen ini. Pastikan transfernya memang untuk agen ini.`,
     });
+  }
+  if (transfer?.outlet?.matchedBy === "name") {
+    notices.push({
+      tone: "warn",
+      text: `Pangkalan ${transfer.outlet.name} ditebak dari nama pengirim${transfer.senderName ? ` (${transfer.senderName})` : ""}. Pastikan benar sebelum mencatat.`,
+    });
+  }
+  // A BNI Agen46 receipt says how many tabung, for which day: hold it
+  // against what is planned for that pangkalan that day (Round 1 N16).
+  const stop = transfer?.plannedStop;
+  if (transfer?.quantity != null && transfer.deliveryDate && transfer.outlet) {
+    if (!stop) {
+      notices.push({
+        tone: "warn",
+        text: `Bukti untuk ${transfer.quantity} tabung, dikirim ${transfer.deliveryDate}, tetapi ${transfer.outlet.name} tidak punya rencana pada tanggal itu.`,
+      });
+    } else if (stop.quantity !== transfer.quantity || (stop.amount != null && proof.totalAmount != null && stop.amount !== proof.totalAmount)) {
+      notices.push({
+        tone: "warn",
+        text: `Bukti untuk ${transfer.quantity} tabung (${proof.totalAmount != null ? formatRupiah(proof.totalAmount) : "nominal tak terbaca"}), rencana ${stop.planNumber} ${stop.quantity} tabung${stop.amount != null ? ` (${formatRupiah(stop.amount)})` : ""}.`,
+      });
+    }
   }
   return notices;
 }

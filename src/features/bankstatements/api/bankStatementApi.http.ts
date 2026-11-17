@@ -126,6 +126,7 @@ async function importStatement(input: ImportBankStatementInput): Promise<BankSta
   if (mapping?.debitCol != null) fields.debit_col = String(mapping.debitCol);
   if (mapping?.creditCol != null) fields.credit_col = String(mapping.creditCol);
   if (mapping?.balanceCol != null) fields.balance_col = String(mapping.balanceCol);
+  if (mapping?.referenceCol != null) fields.reference_col = String(mapping.referenceCol);
 
   const row = await upload<ImportResponse>("/bank-statements/import", input.file, "file", 60_000, fields);
   return toImport(row);
@@ -145,11 +146,20 @@ async function getImport(id: string): Promise<BankStatementImport> {
 }
 
 async function autoMatch(id: string): Promise<AutoMatchResult> {
-  const row = await send<{ matched: number; posted: number; still_unmatched: number }>(
-    "post",
-    `/bank-statements/${id}/auto-match`,
-  );
-  return { matched: row.matched, posted: row.posted, stillUnmatched: row.still_unmatched };
+  const row = await send<{
+    matched: number;
+    posted: number;
+    still_unmatched: number;
+    deposits?: number;
+    ambiguous?: number;
+  }>("post", `/bank-statements/${id}/auto-match`);
+  return {
+    matched: row.matched,
+    posted: row.posted,
+    stillUnmatched: row.still_unmatched,
+    deposits: row.deposits ?? 0,
+    ambiguous: row.ambiguous ?? 0,
+  };
 }
 
 async function classifyLine(input: ClassifyLineInput): Promise<BankStatementLine> {
@@ -158,6 +168,7 @@ async function classifyLine(input: ClassifyLineInput): Promise<BankStatementLine
     match_source_type: input.matchSourceType,
     match_source_id: input.matchSourceId,
     ignore: input.ignore,
+    outlet_id: input.outletId,
   });
   return toLine(row);
 }
