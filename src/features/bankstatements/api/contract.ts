@@ -49,6 +49,9 @@ export interface ColumnMapping {
   /** Optional: a file with no running-balance column skips the row-by-row
    *  balance check and relies on the aggregate opening/closing check alone. */
   balanceCol?: number;
+  /** Optional: the bank's own reference per line, matched against the
+   *  reference a recorded payment carries. */
+  referenceCol?: number;
 }
 
 export interface ImportBankStatementInput {
@@ -65,6 +68,12 @@ export interface AutoMatchResult {
   matched: number;
   posted: number;
   stillUnmatched: number;
+  /** Lines naming a pangkalan by its ID Pangkalan, booked as its deposit
+   *  (deposit mode only). */
+  deposits: number;
+  /** Lines whose amount fits more than one document: left for a person
+   *  instead of paired with the earliest. */
+  ambiguous: number;
 }
 
 /** Resolves one unmatched line by hand, exactly one of three ways:
@@ -78,6 +87,9 @@ export interface ClassifyLineInput {
   matchSourceType?: string;
   matchSourceId?: string;
   ignore?: boolean;
+  /** "Uang masuk dari pangkalan": money in from this pangkalan, recorded
+   *  as a verified receipt held as its deposit. Money-in lines only. */
+  outletId?: string;
 }
 
 export interface Reconciliation {

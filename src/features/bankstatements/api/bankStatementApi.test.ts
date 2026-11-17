@@ -93,9 +93,9 @@ it("omits unset column mapping fields", async () => {
 });
 
 it("maps auto-match's snake_case counts", async () => {
-  send.mockResolvedValue({ matched: 2, posted: 1, still_unmatched: 3 });
+  send.mockResolvedValue({ matched: 2, posted: 1, still_unmatched: 3, deposits: 1, ambiguous: 2 });
   const result = await bankStatementApiHttp.autoMatch(IMPORT_ID);
-  expect(result).toEqual({ matched: 2, posted: 1, stillUnmatched: 3 });
+  expect(result).toEqual({ matched: 2, posted: 1, stillUnmatched: 3, deposits: 1, ambiguous: 2 });
   expect(send.mock.calls[0]).toEqual(["post", `/bank-statements/${IMPORT_ID}/auto-match`]);
 });
 

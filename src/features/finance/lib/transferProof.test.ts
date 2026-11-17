@@ -11,7 +11,7 @@ function proof(over: Partial<ReceiptExtraction> = {}): ReceiptExtraction {
     id: "x-1", hasFile: true, createdAt: "2026-11-10T07:00:00Z", status: "pending",
     processStatus: "ready", documentType: "bank_transfer", reviewReasons: [], confidence: {}, evidence: {},
     archived: false, totalAmount: 640_000, txnDate: "2026-11-08", referenceNo: "202611080930112233445566778",
-    transfer: { bank: "BNI", customerId: "4507009999999001", outlet: { id: OUTLET, name: "Pangkalan Contoh" } },
+    transfer: { bank: "BNI", customerId: "4507009999999001", outlet: { id: OUTLET, name: "Pangkalan Contoh", matchedBy: "id" } },
     ...over,
   };
 }
@@ -32,7 +32,7 @@ describe("prefilling a payment from a bukti transfer", () => {
   // The form can only pick an outlet it lists; a bank it does not list is
   // left for the cashier rather than guessed.
   it("leaves out a pangkalan or bank the form cannot pick", () => {
-    const p = proof({ transfer: { bank: "Bank Jateng", outlet: { id: "elsewhere", name: "?" } } });
+    const p = proof({ transfer: { bank: "Bank Jateng", outlet: { id: "elsewhere", name: "?", matchedBy: "id" } } });
     const filled = prefillFromProof(p, BANKS, new Set([OUTLET]));
     expect(filled.outletId).toBeUndefined();
     expect(filled.bank).toBeUndefined();
@@ -80,5 +80,42 @@ describe("which proofs a payment can be recorded from", () => {
     expect(isRecordable(proof({ processStatus: "processing" }))).toBe(false);
     expect(isRecordable(proof({ archived: true }))).toBe(false);
     expect(isRecordable(proof({ documentType: "expense_receipt" }))).toBe(false);
+  });
+});
+
+// Round 1 N16: the pangkalan was picked by hand and nothing held the money
+// against what was planned. A BNI Agen46 receipt says how many tabung, for
+// which day; the plan says what that pangkalan was to get that day.
+describe("a BNI Agen46 receipt against the plan", () => {
+  const texts = (p: ReceiptExtraction) => proofNotices(p).map((n) => n.text);
+  const agen46 = (over: Partial<NonNullable<ReceiptExtraction["transfer"]>> = {}) =>
+    proof({
+      totalAmount: 776_000,
+      transfer: {
+        bank: "BNI", channel: "BNI Agen46", customerId: "4507311079858004",
+        outlet: { id: OUTLET, name: "Suparno", matchedBy: "id" },
+        quantity: 50, deliveryDate: "2026-05-06",
+        plannedStop: { planNumber: "RD-SLT-20260506-0001", quantity: 50, amount: 776_000 },
+        ...over,
+      },
+    });
+
+  it("says nothing when the tabung and the amount are what was planned", () => {
+    expect(proofNotices(agen46())).toEqual([]);
+  });
+
+  it("warns when the receipt and the plan disagree", () => {
+    const [notice] = texts(agen46({ plannedStop: { planNumber: "RD-1", quantity: 60, amount: 931_200 } }));
+    expect(notice).toContain("Bukti untuk 50 tabung");
+    expect(notice).toContain("rencana RD-1 60 tabung");
+  });
+
+  it("warns when the pangkalan has no plan that day", () => {
+    expect(texts(agen46({ plannedStop: undefined }))[0]).toContain("tidak punya rencana pada tanggal itu");
+  });
+
+  it("asks the cashier to confirm a pangkalan guessed from the sender's name", () => {
+    const p = proof({ transfer: { bank: "BCA", senderName: "BUDI SANTOSO", outlet: { id: OUTLET, name: "Warung Budi", matchedBy: "name" } } });
+    expect(texts(p)[0]).toContain("ditebak dari nama pengirim (BUDI SANTOSO)");
   });
 });
