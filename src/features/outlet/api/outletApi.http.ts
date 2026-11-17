@@ -21,6 +21,7 @@
  * rather than an empty result that looks like "no such outlet".
  */
 import { getAllPages, getList, getOne, send } from "@/lib/api";
+import { shareInFlight } from "@/lib/inFlight";
 import { exportCsv, timestampSuffix } from "@/lib/export";
 import { outletLabel } from "@/lib/lexicon";
 import type { BankNameEntity, OutletEntity, OutletStatus } from "@/types/domain";
@@ -207,7 +208,13 @@ function toWire(input: Partial<OutletEntity>, forUpdate: boolean) {
   return body;
 }
 
-async function fetchAll(filters?: OutletFilters): Promise<OutletResponse[]> {
+// Several widgets ask for the same outlet list at once (Beranda's tiles, its
+// rail, the aging behind them); identical requests in flight share one answer.
+function fetchAll(filters?: OutletFilters): Promise<OutletResponse[]> {
+  return shareInFlight(`outlets:${JSON.stringify(filters ?? {})}`, () => fetchOutlets(filters));
+}
+
+async function fetchOutlets(filters?: OutletFilters): Promise<OutletResponse[]> {
   const wireStatus =
     filters?.status && filters.status !== "Semua" ? toWireStatus(filters.status) : undefined;
 

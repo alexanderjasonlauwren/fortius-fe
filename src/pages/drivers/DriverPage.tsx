@@ -1,3 +1,5 @@
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import { holds } from "@/features/rbac/holds";
 import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -71,6 +73,11 @@ const EMPTY: FormState = {
 };
 
 export function DriverPage() {
+  // Each button follows the route it calls (Round 1 G26): a role that may only
+  // read the list is not offered changes the server would refuse.
+  const canCreate = holds(PERMISSIONS.DRIVERS_CREATE);
+  const canEdit = holds(PERMISSIONS.DRIVERS_MANAGE);
+  const canDelete = holds(PERMISSIONS.DRIVERS_DELETE);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<DriverStatusEntity | "Semua">("Semua");
   const [editing, setEditing] = useState<FormState | null>(null);
@@ -92,7 +99,7 @@ export function DriverPage() {
   const deleteMutation = useDeskMutation({
     mutationFn: (id: string) => removeDriver(id),
     errorTitle: "Hapus sopir gagal",
-    success: "Armada dihapus",
+    success: "Sopir dihapus",
     onDone: () => setPendingDelete(null),
   });
 
@@ -229,7 +236,7 @@ export function DriverPage() {
       width: "1%",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
-          <Button
+          {canEdit && <Button
             variant="ghost"
             size="icon-xs"
             aria-label={`Ubah ${row.nama}`}
@@ -249,8 +256,8 @@ export function DriverPage() {
             }
           >
             <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
+          </Button>}
+          {canDelete && <Button
             variant="ghost"
             size="icon-xs"
             aria-label={`Hapus ${row.nama}`}
@@ -258,7 +265,7 @@ export function DriverPage() {
             className="hover:bg-rust-soft hover:text-rust-ink"
           >
             <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          </Button>}
         </div>
       ),
     },
@@ -280,10 +287,12 @@ export function DriverPage() {
               <Download className="h-3.5 w-3.5" />
               Unduh CSV
             </Button>
-            <Button onClick={() => openEditor(EMPTY)}>
-              <Plus className="h-3.5 w-3.5" />
-              Tambah sopir
-            </Button>
+            {canCreate && (
+              <Button onClick={() => openEditor(EMPTY)}>
+                <Plus className="h-3.5 w-3.5" />
+                Tambah sopir
+              </Button>
+            )}
           </>
         }
         meta={
@@ -326,9 +335,11 @@ export function DriverPage() {
           emptyMessage="Tidak ada sopir yang cocok"
           emptyDescription="Ubah filter, atau tambahkan sopir baru ke daftar."
           emptyAction={
-            <Button size="sm" onClick={() => openEditor(EMPTY)}>
-              Tambah sopir
-            </Button>
+            canCreate ? (
+              <Button size="sm" onClick={() => openEditor(EMPTY)}>
+                Tambah sopir
+              </Button>
+            ) : undefined
           }
           dense
         />

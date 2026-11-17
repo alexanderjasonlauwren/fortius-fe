@@ -16,6 +16,7 @@ import { getBankAccounts } from "@/features/bankaccounts/api/bankAccountApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
+import { useAuthStore } from "@/features/auth/store/authStore";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/common/Panel";
 import { DataTable, type Column } from "@/components/common/DataTable";
@@ -81,6 +82,16 @@ function formFrom(draft: TransportInvoice, defaultBankId?: string): FormState {
   };
 }
 
+/**
+ * Issuing the Tahap 2 invoice: the claim's update, plus the agent's bank
+ * accounts it names -- the backend's own pair (Round 1 G28: the invoice is
+ * finance's; the dispatcher reads it).
+ */
+const INVOICE_PERMISSIONS = [
+  PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT,
+  PERMISSIONS.BANK_ACCOUNTS_VIEW,
+] as const;
+
 export function TransportInvoicePage() {
   const [creatingFor, setCreatingFor] = useState<ClaimView | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
@@ -101,7 +112,14 @@ export function TransportInvoicePage() {
       return [...approved, ...paid];
     },
   });
-  const banks = useQuery({ queryKey: [...scopeKey(), "bank-accounts"], queryFn: getBankAccounts });
+  // Only a role that may issue the invoice picks the bank on it; for the
+  // dispatcher, who reads invoices here, this was a 403 on every visit.
+  const mayInvoice = useAuthStore((state) => INVOICE_PERMISSIONS.every((p) => state.hasPermission(p)));
+  const banks = useQuery({
+    queryKey: [...scopeKey(), "bank-accounts"],
+    queryFn: getBankAccounts,
+    enabled: mayInvoice,
+  });
 
   const invoiced = new Set((invoices.data ?? []).map((i) => i.claimId));
   const awaiting = (claims.data ?? []).filter((c) => !invoiced.has(c.id) && c.claimedAmount > 0);
@@ -194,7 +212,7 @@ export function TransportInvoicePage() {
               </Link>
             </Button>
           </ActionTooltip>
-          <CanAccess permission={PERMISSIONS.TRANSPORTATION_CLAIMS_EDIT}>
+          <CanAccess permissions={[...INVOICE_PERMISSIONS]} requireAll>
             <ActionTooltip label="Buat invoice senilai BA LO, terisi dari invoice sebelumnya">
               <Button size="xs" onClick={() => setCreatingFor(row)}>
                 <FilePlus2 className="h-3.5 w-3.5" />

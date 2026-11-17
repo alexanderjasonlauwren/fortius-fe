@@ -5,11 +5,9 @@ export interface KpiSummary {
   monthlyQuotaTotal: number;
   activeOutlet: number;
   totalOutlet: number;
-  pendingPayments: number;
-  pendingPaymentValue: number;
-  /** Money owed by outlet that has not been collected. */
-  piutangOutstanding: number;
-  piutangJatuhTempo: number;
+  /** Receipts awaiting verification; null for a role that may not read payments. */
+  pendingPayments: number | null;
+  pendingPaymentValue: number | null;
   /** Yesterday's realised tonnage, for the day-on-day comparison. */
   previousDayDistributed: number;
   openOrders: number;
