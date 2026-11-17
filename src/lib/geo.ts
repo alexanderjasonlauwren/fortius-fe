@@ -107,6 +107,13 @@ export function capturePosition(options?: {
 
 const EARTH_RADIUS_M = 6_371_000;
 
+/**
+ * The corroboration radius when no tenant in the chain has set one. Shared by
+ * the monitoring board and the driver's own screen, so a stop the board calls
+ * "jauh" is the same stop the driver was warned about.
+ */
+export const DEFAULT_GEOFENCE_RADIUS_M = 150;
+
 /** Great-circle distance in metres. */
 export function distanceMeters(
   a: { lat: number; lng: number },

@@ -22,7 +22,13 @@
  */
 import { downscaleImage } from "@/lib/image";
 import { getOne, send } from "@/lib/api";
-import { capturePosition } from "@/lib/geo";
+import {
+  DEFAULT_GEOFENCE_RADIUS_M,
+  capturePosition,
+  distanceMeters,
+  geoVerdict,
+  type GeoStamp,
+} from "@/lib/geo";
 import { unitLabel } from "@/lib/lexicon";
 import type { CompleteStopInput, GpsFixInput, SopirApi, StopReceipt } from "./contract";
 import {
@@ -47,6 +53,8 @@ interface DeliveryResponse {
   delivery_number: string;
   product_id?: string;
   product_name?: string;
+  /** commodity | accessory | container. A commodity drop is an exchange. */
+  product_kind?: string;
   dispatched_qty: number;
   delivered_qty: number;
   returned_qty: number;
@@ -74,6 +82,8 @@ interface StopResponse {
   district?: string;
   latitude?: number;
   longitude?: number;
+  /** Which of the driver's loads today; positions restart on every run. */
+  trip_no?: number;
   deliveries: DeliveryResponse[];
 }
 
@@ -84,6 +94,9 @@ interface RunResponse {
   driver_name?: string;
   vehicle_id?: string;
   plate?: string;
+  /** The truck's, carried on the run: the driver's role cannot read /vehicles. */
+  vehicle_type?: string;
+  capacity_qty?: number;
   kernet_name?: string;
   /** The session's seat: "driver" or "kernet". Absent on an empty run. */
   crew_role?: string;
@@ -91,12 +104,15 @@ interface RunResponse {
   // The agency's own switch, resolved server-side because this account has
   // no permission to read tenant settings directly.
   record_driver_location: boolean;
+  /** How close to a pangkalan counts as there. Absent when nobody set it. */
+  geofence_radius_m?: number;
 }
 
-interface VehicleResponse {
-  vehicle_type: string;
-  capacity_qty: number;
-}
+const VEHICLE_LABEL: Record<string, string> = {
+  truck: "Truk",
+  pickup: "Pikap",
+  van: "Van",
+};
 
 /**
  * What each stop was built from, keyed by the stop id the screen holds.
@@ -107,6 +123,10 @@ interface VehicleResponse {
  * guessing: filing against the wrong surat jalan is worse than not filing.
  */
 const stopIndex = new Map<string, DeliveryResponse[]>();
+
+/** Where each stop's pangkalan is, for the location check on arrival. */
+const stopPlace = new Map<string, { lat: number; lng: number } | null>();
+let runRadius = DEFAULT_GEOFENCE_RADIUS_M;
 
 /**
  * A document is still open if nothing has settled it.
@@ -149,12 +169,15 @@ function toLine(row: DeliveryResponse): StopLine {
   return {
     productId: row.product_id ?? "",
     nama: row.product_name ?? "Produk tidak dikenal",
-    // The service does not carry a per-product unit or a returnable flag on a
-    // delivery. The console's configured unit is the honest stand-in, and
-    // anything the outlet hands back is counted whether or not a flag says it
-    // may be — `empties_collected` is a fact, not a permission.
+    // The service does not carry a per-product unit. The console's configured
+    // unit is the honest stand-in.
     satuan: unitLabel(),
-    returnable: row.empties_collected > 0 || row.returned_qty > 0,
+    // A refill is handed over for an empty, so a commodity drop asks how many
+    // empties came back; an accessory (a scale, a sign) never does. Read off
+    // the product rather than off empties already filed: before, the field
+    // only appeared once something had been filed, so it could never be
+    // filled in.
+    returnable: row.product_kind === "commodity" || row.empties_collected > 0,
     target: row.dispatched_qty,
     realisasi: row.delivered_qty,
     kembali: row.returned_qty || undefined,
@@ -174,6 +197,15 @@ function toStop(stop: StopResponse, urutan: number): RunStop {
   const sum = (pick: (r: DeliveryResponse) => number) =>
     rows.reduce((total, r) => total + pick(r), 0);
   const empties = sum((r) => r.empties_collected);
+  // Full cylinders coming back on the truck: refused at a short drop, or the
+  // whole load of a stop that could not be made.
+  const fullBack = sum((r) => r.returned_qty);
+  stopPlace.set(
+    id,
+    stop.latitude != null && stop.longitude != null
+      ? { lat: stop.latitude, lng: stop.longitude }
+      : null,
+  );
   // The stop's documents are closed from one conversation at one gate, so the
   // first name filed is the stop's. `notes` is the driver's free text and is
   // not a fallback for it — a note is not a signature.
@@ -185,6 +217,7 @@ function toStop(stop: StopResponse, urutan: number): RunStop {
     // and the driver hands over all of them.
     kode: rows.map((r) => r.delivery_number).join(", "),
     urutan,
+    rit: stop.trip_no,
     outletId: stop.outlet_id ?? "",
     outlet: stop.outlet_name ?? "—",
     alamat: stop.address ?? "—",
@@ -199,6 +232,7 @@ function toStop(stop: StopResponse, urutan: number): RunStop {
     target: sum((r) => r.dispatched_qty),
     realisasi: sum((r) => r.delivered_qty),
     unitKembali: empties || undefined,
+    isiKembali: fullBack || undefined,
     diterimaOleh: recipient,
     status: toStage(rows),
     // The earliest arrival on the stop: the driver reached the gate once, and
@@ -222,20 +256,11 @@ async function getMyRun(_driverId: string, tanggal?: string): Promise<DriverRun>
   stopIndex.clear();
   const stops = run.stops.map((s, i) => toStop(s, i + 1));
 
-  // The truck's type and ceiling are the fleet's, not the run's, so they cost
-  // one more request — and only when the run actually has a vehicle on it.
-  let armada = "—";
-  let kapasitas = 0;
-  if (run.vehicle_id) {
-    try {
-      const vehicle = await getOne<VehicleResponse>(`/vehicles/${run.vehicle_id}`);
-      armada = vehicle.vehicle_type;
-      kapasitas = vehicle.capacity_qty;
-    } catch {
-      // A fleet read that fails must not cost the driver their route. The
-      // header loses a label; every stop still renders.
-    }
-  }
+  // On the run itself: the driver's role has no fleet permission, and asking
+  // /vehicles answered 403 on every load, leaving "—" in the header all day.
+  const armada = run.vehicle_type ? (VEHICLE_LABEL[run.vehicle_type] ?? run.vehicle_type) : "—";
+  const kapasitas = run.capacity_qty ?? 0;
+  runRadius = run.geofence_radius_m ?? DEFAULT_GEOFENCE_RADIUS_M;
 
   const open = stops.filter((s) => s.status !== "Selesai" && s.status !== "Tertunda");
 
@@ -256,6 +281,7 @@ async function getMyRun(_driverId: string, tanggal?: string): Promise<DriverRun>
         }
       : null,
     tanggal: run.date,
+    radiusMeter: runRadius,
     stops,
     totals: {
       singgah: stops.length,
@@ -264,7 +290,8 @@ async function getMyRun(_driverId: string, tanggal?: string): Promise<DriverRun>
       sisa: open.length,
       muatan: stops.reduce((t, s) => t + s.target, 0),
       terkirim: stops.reduce((t, s) => t + s.realisasi, 0),
-      kembali: stops.reduce((t, s) => t + (s.unitKembali ?? 0), 0),
+      kosong: stops.reduce((t, s) => t + (s.unitKembali ?? 0), 0),
+      isiKembali: stops.reduce((t, s) => t + (s.isiKembali ?? 0), 0),
       kapasitas,
     },
     // A drop already under way outranks the next queued one.
@@ -276,14 +303,48 @@ async function getMyRun(_driverId: string, tanggal?: string): Promise<DriverRun>
 }
 
 /** A filed position, or nothing at all — a phone with no fix must still file. */
-type Fix = { latitude: number; longitude: number } | Record<string, never>;
+type Fix =
+  | { latitude: number; longitude: number; accuracy_m?: number }
+  | Record<string, never>;
 
-/** The phone's fix, read before the write so a slow GPS delays rather than loses. */
-async function position(): Promise<Fix> {
-  const fix = await capturePosition({ aktif: true });
-  return fix.lat != null && fix.lng != null
-    ? { latitude: fix.lat, longitude: fix.lng }
-    : {};
+/**
+ * The phone's fix, read before the write so a slow GPS delays rather than loses.
+ *
+ * The accuracy goes with it: without it the office cannot tell "180 m from the
+ * gate" from "180 m from the gate on a fix good to two kilometres".
+ */
+async function position(): Promise<{ fields: Fix; stamp: GeoStamp }> {
+  const stamp = await capturePosition({ aktif: true });
+  const fields: Fix =
+    stamp.lat != null && stamp.lng != null
+      ? {
+          latitude: stamp.lat,
+          longitude: stamp.lng,
+          ...(stamp.akurasi != null ? { accuracy_m: Math.round(stamp.akurasi) } : {}),
+        }
+      : {};
+  return { fields, stamp };
+}
+
+/**
+ * How a fix compares with the stop's pangkalan.
+ *
+ * A warning for the driver, never a refusal: GPS is wrong often enough that a
+ * drop must always be recordable, and the office sees the same verdict.
+ */
+function lokasiFor(stopId: string, stamp: GeoStamp): StopReceipt["lokasi"] {
+  const place = stopPlace.get(stopId);
+  const jarakMeter =
+    place && stamp.lat != null && stamp.lng != null
+      ? distanceMeters(place, { lat: stamp.lat, lng: stamp.lng })
+      : undefined;
+  return { verdict: geoVerdict(stamp, jarakMeter, runRadius), jarakMeter };
+}
+
+/** Where the stop is checked against before the close dialog is filed. */
+async function checkLocation(stopId: string): Promise<StopReceipt["lokasi"]> {
+  const { stamp } = await position();
+  return lokasiFor(stopId, stamp);
 }
 
 /** What the screen shows back after a filing: the documents, and the count. */
@@ -373,7 +434,7 @@ async function file(
 
 async function departStop(deliveryId: string): Promise<StopReceipt> {
   const rows = documentsFor(deliveryId);
-  const at = await position();
+  const { fields: at } = await position();
   // Sequential, not concurrent: each call carries the version it read, and the
   // server's own error is more useful than whichever of five parallel
   // rejections happened to land first.
@@ -396,10 +457,10 @@ async function departStop(deliveryId: string): Promise<StopReceipt> {
  */
 async function arriveStop(deliveryId: string): Promise<StopReceipt> {
   const rows = documentsFor(deliveryId);
-  const at = await position();
+  const { fields: at, stamp } = await position();
   const { queued } = await file(deliveryId, "arrive",
     rows.filter((r) => isOpen(r) && !r.arrived_at), () => ({ fields: { ...at } }));
-  return { ...receipt(rows, 0), tertunda: queued };
+  return { ...receipt(rows, 0), tertunda: queued, lokasi: lokasiFor(deliveryId, stamp) };
 }
 
 /**
@@ -413,7 +474,7 @@ async function arriveStop(deliveryId: string): Promise<StopReceipt> {
  */
 async function completeStop(input: CompleteStopInput): Promise<StopReceipt> {
   const rows = documentsFor(input.deliveryId);
-  const at = await position();
+  const { fields: at } = await position();
   const filed = new Map(input.lines.map((l) => [l.productId, l]));
 
   let realisasi = 0;
@@ -464,7 +525,7 @@ async function completeStop(input: CompleteStopInput): Promise<StopReceipt> {
 
 async function holdStop(input: { deliveryId: string; catatan: string }): Promise<StopReceipt> {
   const rows = documentsFor(input.deliveryId);
-  const at = await position();
+  const { fields: at } = await position();
   const { queued } = await file(input.deliveryId, "fail", rows.filter(isOpen), () => ({
     fields: { failure_reason: input.catatan, ...at },
   }));
@@ -512,6 +573,7 @@ export const sopirApiHttp: SopirApi = {
   arriveStop,
   completeStop,
   holdStop,
+  checkLocation,
   pendingFilings,
   replayFilings,
   discardFiling,

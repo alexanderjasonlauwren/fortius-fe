@@ -41,7 +41,7 @@
  * corroboration this board renders for everybody else's filings.
  */
 import { getOne, send } from "@/lib/api";
-import { geoVerdict } from "@/lib/geo";
+import { DEFAULT_GEOFENCE_RADIUS_M, geoVerdict } from "@/lib/geo";
 import { getSettings } from "@/features/settings/api/settingsApi";
 import { printDocument } from "@/lib/export";
 import type {
@@ -149,7 +149,7 @@ interface BoardResponseWire {
  * parked pins around either. Not a claim about where anything actually is —
  * a drawing fallback so the map has somewhere to put a pin.
  */
-const FALLBACK_RADIUS_M = 150;
+const FALLBACK_RADIUS_M = DEFAULT_GEOFENCE_RADIUS_M;
 const FALLBACK_COORD = { lat: -7.3305, lng: 110.5084 };
 
 /**

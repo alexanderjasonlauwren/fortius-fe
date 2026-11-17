@@ -106,6 +106,12 @@ const FRIENDLY: Record<string, string> = {
     "Kanal ini belum terhubung pada instalasi ini (email: server SMTP; WhatsApp: penyedia). Hubungi operator.",
   CHANNEL_SEND_FAILED:
     "Server email menolak atau tidak dapat dihubungi. Rinciannya ada di log server; hubungi operator.",
+  // What a driver meets when the kernet's phone or the office got there first.
+  DROP_ALREADY_CLOSED:
+    "Surat jalan ini sudah ditutup, mungkin dari ponsel kernet atau oleh kantor. Muat ulang rute Anda.",
+  DROP_ALREADY_DEPARTED: "Keberangkatan ke lokasi ini sudah tercatat. Muat ulang rute Anda.",
+  DROP_ALREADY_ARRIVED: "Kedatangan di lokasi ini sudah tercatat. Muat ulang rute Anda.",
+  DROP_OVER_LOAD: "Jumlah yang diterima dan dikembalikan lebih banyak dari yang dimuat. Periksa lagi angkanya.",
 };
 
 /**

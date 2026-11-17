@@ -33,9 +33,13 @@ vi.mock("@/lib/api", async (importOriginal) => ({
 // jsdom has no canvas; the photo goes up as given.
 vi.mock("@/lib/image", () => ({ downscaleImage: async (file: File) => file }));
 
-vi.mock("@/lib/geo", () => ({
-  capturePosition: async () => ({ lat: -6.9932, lng: 110.3453, status: "ok" }),
-  geoVerdict: () => "sesuai",
+// The real distance and verdict helpers; only the phone's fix is faked, at the
+// pangkalan's own gate unless a test moves it.
+const AT_GATE = { lat: -6.9932, lng: 110.3453, status: "ok", akurasi: 12 };
+const capturePosition = vi.fn();
+vi.mock("@/lib/geo", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/geo")>()),
+  capturePosition: (...args: unknown[]) => capturePosition(...args),
 }));
 
 const { sopirApiHttp } = await import("./sopirApi.http");
@@ -101,6 +105,8 @@ function run(overrides: Record<string, unknown> = {}) {
 
 beforeEach(async () => {
   getOne.mockReset();
+  capturePosition.mockReset();
+  capturePosition.mockResolvedValue({ ...AT_GATE, at: "2026-09-04T01:00:00Z" });
   send.mockReset();
   sentOptions.length = 0;
   // The outbox is the module's; nothing a test left behind may queue the next.
@@ -116,9 +122,7 @@ beforeEach(async () => {
 /** Draws the run, which is what the screen does before it offers any button. */
 async function load(payload: Record<string, unknown> = run()) {
   getOne.mockImplementation(async (path: string) =>
-    path.startsWith("/deliveries/mine")
-      ? payload
-      : { vehicle_type: "truck", capacity_qty: 240 },
+    path.startsWith("/deliveries/mine") ? payload : Promise.reject(new Error(`unexpected read ${path}`)),
   );
   return sopirApiHttp.getMyRun("ignored", "2026-09-04");
 }
@@ -185,14 +189,122 @@ describe("reading the run", () => {
     expect((await load(departed)).stops[0].status).toBe("Proses");
   });
 
-  it("still renders the route when the fleet read fails", async () => {
-    getOne.mockImplementation(async (path: string) => {
-      if (path.startsWith("/deliveries/mine")) return run();
-      throw new Error("fleet is down");
-    });
-    const r = await sopirApiHttp.getMyRun("ignored", "2026-09-04");
+  // The driver's role has no fleet permission: asking /vehicles answered 403
+  // on every load and left "—" in the header all day (E2E 2026-11-14).
+  it("reads the truck off the run and never asks the fleet endpoint", async () => {
+    const r = await load(run({ vehicle_type: "truck", capacity_qty: 560 }));
+    expect(r.driver?.armada).toBe("Truk");
+    expect(r.driver?.kapasitas).toBe(560);
+    expect(getOne.mock.calls.map((c) => c[0] as string)).toEqual(["/deliveries/mine?date=2026-09-04"]);
+  });
+
+  it("still renders the route when the run carries no truck detail", async () => {
+    const r = await load(run());
     expect(r.stops).toHaveLength(1);
+    expect(r.driver?.armada).toBe("—");
     expect(r.driver?.kapasitas).toBe(0);
+  });
+
+  // Before, the empties box only appeared once empties had been filed, so it
+  // could never be filled in. A refill is an exchange; an accessory is not.
+  it("asks for empties on a commodity drop and not on an accessory or an unknown product", async () => {
+    const r = await load(run({
+      stops: [{
+        ...run().stops[0],
+        deliveries: [
+          delivery({ product_kind: "commodity" }),
+          delivery({ id: D12, product_id: P12, product_name: "Timbangan", product_kind: "accessory" }),
+        ],
+      }],
+    }));
+    expect(r.stops[0].lines.map((l) => l.returnable)).toEqual([true, false]);
+
+    const unknown = await load(run());
+    expect(unknown.stops[0].lines.every((l) => !l.returnable)).toBe(true);
+  });
+
+  // "Tabung kembali" used to show empties only; the full cylinders still on
+  // the truck -- refused at a short drop, or a whole failed stop -- were nowhere.
+  it("counts empties and undelivered full cylinders separately", async () => {
+    const r = await load(run({
+      stops: [{
+        ...run().stops[0],
+        deliveries: [
+          delivery({ delivered_qty: 45, returned_qty: 5, empties_collected: 45, completed_at: "2026-09-04T03:00:00Z", delivery_status: "partial" }),
+          delivery({ id: D12, product_id: P12, dispatched_qty: 20, returned_qty: 20, delivery_status: "failed", completed_at: "2026-09-04T03:00:00Z" }),
+        ],
+      }],
+    }));
+    expect(r.totals.kosong).toBe(45);
+    expect(r.totals.isiKembali).toBe(25);
+    expect(r.stops[0].isiKembali).toBe(25);
+  });
+
+  // Positions restart on every run, so the screen needs the run to tell
+  // "Rit 2, stop 1" from "Rit 1, stop 1".
+  it("carries which load of the day each stop rides on", async () => {
+    const r = await load(run({
+      stops: [
+        { ...run().stops[0], trip_no: 1 },
+        { ...run().stops[0], sequence_no: 1, trip_no: 2, deliveries: [delivery({ id: "99999999-9999-4999-8999-999999999999" })] },
+      ],
+    }));
+    expect(r.stops.map((s) => s.rit)).toEqual([1, 2]);
+  });
+
+  it("falls back to the board's radius when the agency set none", async () => {
+    expect((await load(run())).radiusMeter).toBe(150);
+    expect((await load(run({ geofence_radius_m: 300 }))).radiusMeter).toBe(300);
+  });
+});
+
+describe("where the phone is when it files", () => {
+  it("sends the fix's accuracy with its position", async () => {
+    const r = await load();
+    await sopirApiHttp.departStop(r.stops[0].id);
+    expect(send.mock.calls[0][2]).toMatchObject({
+      latitude: -6.9932,
+      longitude: 110.3453,
+      accuracy_m: 12,
+    });
+  });
+
+  it("warns, and still files, when the phone is far from the pangkalan", async () => {
+    const r = await load();
+    // About 5 km north of the gate, on a good fix.
+    capturePosition.mockResolvedValue({ status: "ok", lat: -6.9482, lng: 110.3453, akurasi: 10, at: "x" });
+
+    const receipt = await sopirApiHttp.arriveStop(r.stops[0].id);
+
+    expect(send).toHaveBeenCalled();
+    expect(receipt.lokasi?.verdict).toBe("jauh");
+    expect(receipt.lokasi?.jarakMeter).toBeGreaterThan(4_500);
+  });
+
+  it("does not call a rough fix far: a ±2 km reading cannot judge a 150 m radius", async () => {
+    const r = await load();
+    capturePosition.mockResolvedValue({ status: "ok", lat: -6.9482, lng: 110.3453, akurasi: 2_000, at: "x" });
+    expect((await sopirApiHttp.checkLocation(r.stops[0].id))?.verdict).toBe("kasar");
+  });
+
+  it("files with no position when GPS is refused or times out", async () => {
+    for (const status of ["ditolak", "waktu-habis"]) {
+      send.mockClear();
+      const r = await load();
+      capturePosition.mockResolvedValue({ status, at: "x" });
+
+      const receipt = await sopirApiHttp.arriveStop(r.stops[0].id);
+
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[0][2]).not.toHaveProperty("latitude");
+      expect(receipt.lokasi?.verdict).toBe("tanpa-lokasi");
+    }
+  });
+
+  it("checks the location before the close dialog files anything", async () => {
+    const r = await load();
+    expect((await sopirApiHttp.checkLocation(r.stops[0].id))?.verdict).toBe("sesuai");
+    expect(send).not.toHaveBeenCalled();
   });
 });
 
@@ -227,11 +339,13 @@ describe("arriving at a stop", () => {
       version: 1,
       latitude: -6.9932,
       longitude: 110.3453,
+      accuracy_m: 12,
     });
     expect(send).toHaveBeenNthCalledWith(2, "post", `/deliveries/${D12}/arrive`, {
       version: 4,
       latitude: -6.9932,
       longitude: 110.3453,
+      accuracy_m: 12,
     });
   });
 
@@ -267,6 +381,7 @@ describe("arriving at a stop", () => {
       version: 4,
       latitude: -6.9932,
       longitude: 110.3453,
+      accuracy_m: 12,
     });
   });
 

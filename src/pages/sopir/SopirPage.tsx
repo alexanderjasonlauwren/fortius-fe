@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -19,6 +19,7 @@ import { DELIVERY_PHOTO_ACCEPT } from "@/features/attachments/api/attachmentApi"
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import {
   arriveStop,
+  checkLocation,
   completeStop,
   departStop,
   getMyRun,
@@ -57,9 +58,13 @@ import { outletLabel, unitLabel, unitLabelTitle } from "@/lib/lexicon";
  * quota, margin, receivables — is deliberately absent, because a driver holding
  * a phone at a outlet gate cannot act on any of it.
  *
- * What is recorded here is not a status update. `realisasi` is the figure the
- * invoice is raised from, so this page is the point where the day becomes
- * money, and it is the only place that number is known first-hand.
+ * What is recorded here is not a status update. `realisasi` is the realised
+ * distribution -- what each pangkalan actually accepted -- and this page is the
+ * only place that number is known first-hand.
+ *
+ * Written for drivers who are not used to apps: every button says what it
+ * does, every filing answers with a sentence, and nothing a driver sees is an
+ * error code.
  */
 export function SopirPage() {
   const user = useAuthStore((s) => s.user);
@@ -69,13 +74,22 @@ export function SopirPage() {
   const [completing, setCompleting] = useState<RunStop | null>(null);
   const [holding, setHolding] = useState<RunStop | null>(null);
   const [form, setForm] = useState<{
-    lines: { productId: string; realisasi: number; kembali: number }[];
+    // NaN while a quantity box is empty: an empty box is not zero, and
+    // submitting it as zero would record a drop nobody counted.
+    lines: { productId: string; realisasi: number; kembali: number; kembaliDiubah: boolean }[];
     diterimaOleh: string;
     catatan: string;
     foto: File | null;
   }>({ lines: [], diterimaOleh: "", catatan: "", foto: null });
   const canAttachPhoto = useAuthStore((s) => s.hasPermission(PERMISSIONS.DELIVERY_PROOFS_CREATE));
+  // A driver tapping the pangkalan's name used to land on "di luar akses Anda".
+  const canOpenOutlet = useAuthStore((s) => s.hasPermission(PERMISSIONS.OUTLETS_VIEW));
   const [alasan, setAlasan] = useState("");
+  // Where the phone is compared with the pangkalan being closed. Undefined
+  // while the GPS is still answering; a warning, never a gate.
+  const [lokasiTutup, setLokasiTutup] = useState<
+    Awaited<ReturnType<typeof checkLocation>> | "mencari"
+  >(undefined);
 
   const run = useQuery({
     queryKey: [...scopeKey(), "sopir-run", driverId],
@@ -128,10 +142,16 @@ export function SopirPage() {
     success: (d) =>
       d.tertunda
         ? savedOffline(d.kode)
-        : {
-            title: `${d.kode} tiba di lokasi`,
-            description: "Waktu tunggu di lokasi mulai dihitung dari sekarang.",
-          },
+        : d.lokasi?.verdict === "jauh"
+          ? {
+              tone: "warning" as const,
+              title: `${d.kode} tiba di lokasi`,
+              description: `Posisi ponsel Anda ${formatDistance(d.lokasi.jarakMeter ?? 0)} dari ${outletLabel()}. Pastikan Anda sudah di lokasi yang benar.`,
+            }
+          : {
+              title: `${d.kode} tiba di lokasi`,
+              description: "Waktu tunggu di lokasi mulai dihitung dari sekarang.",
+            },
   });
 
   const completeMutation = useDeskMutation({
@@ -148,7 +168,7 @@ export function SopirPage() {
           }
         : {
             title: `${d.kode} selesai`,
-            description: `${formatNumber(d.realisasi)} ${unitLabel()} tercatat diterima. Tagihan terbit otomatis.`,
+            description: `${formatNumber(d.realisasi)} ${unitLabel()} tercatat diterima.`,
           },
     onDone: () => setCompleting(null),
   });
@@ -161,7 +181,7 @@ export function SopirPage() {
         ? savedOffline(d.kode)
         : {
             title: `${d.kode} ditandai tertunda`,
-            description: "Kantor akan menjadwalkan ulang pengiriman ini.",
+            description: `Kantor sudah diberi tahu. Bawa muatannya kembali ke gudang.`,
             tone: "warning" as const,
           },
     onDone: () => {
@@ -177,18 +197,63 @@ export function SopirPage() {
       lines: stop.lines.map((l) => ({
         productId: l.productId,
         realisasi: l.target,
-        // Returnables come back one-for-one by default; consumables never do.
+        // Empties come back one-for-one with what was accepted, until the
+        // driver says otherwise; consumables never come back.
         kembali: l.returnable ? l.target : 0,
+        kembaliDiubah: false,
       })),
       diterimaOleh: stop.penanggungJawab,
       catatan: "",
       foto: null,
     });
+    setLokasiTutup("mencari");
     setCompleting(stop);
   };
 
+  // Read the phone's position as the dialog opens, so a driver closing the
+  // wrong stop -- or from the wrong place -- sees it before filing. The
+  // filing reuses this fix (capturePosition accepts one up to 30 s old).
+  useEffect(() => {
+    if (!completing) return;
+    let current = true;
+    checkLocation(completing.id)
+      .then((l) => current && setLokasiTutup(l))
+      .catch(() => current && setLokasiTutup(undefined));
+    return () => {
+      current = false;
+    };
+  }, [completing]);
+
+  // One filing at a time, decided synchronously. `disabled` only lands on the
+  // next render, so three quick taps used to file three times -- and the
+  // second came back as "already closed" right after a successful close.
+  const filing = useRef(false);
+  const fileOnce = <T,>(
+    mutation: { mutate: (args: T, options?: { onSettled?: () => void }) => void },
+    args: T,
+  ) => {
+    if (filing.current) return;
+    filing.current = true;
+    mutation.mutate(args, {
+      onSettled: () => {
+        filing.current = false;
+        // Success or refusal, read the run again: a refusal usually means the
+        // kernet or the office filed first, and a card still offering
+        // "Berangkat" for a closed stop invites the same tap again.
+        void run.refetch();
+      },
+    });
+  };
+
+  const pending = [departMutation, arriveMutation].find((m) => m.isPending);
+  const busyStopId = pending ? (pending.variables as string | undefined) : undefined;
+
   const data = run.data;
   const t = data?.totals;
+  const isDone = (stop: RunStop) => stop.status === "Selesai" || stop.status === "Tertunda";
+  const openStops = (data?.stops ?? []).filter((stop) => !isDone(stop));
+  const doneStops = (data?.stops ?? []).filter(isDone);
+  const showRit = new Set((data?.stops ?? []).map((stop) => stop.rit)).size > 1;
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
@@ -279,9 +344,10 @@ export function SopirPage() {
                   />
                 </div>
 
-                <dl className="grid grid-cols-3 gap-3 border-t border-line pt-3 text-center">
+                <dl className="grid grid-cols-2 gap-3 border-t border-line pt-3 text-center sm:grid-cols-4">
                   <Figure label="Sisa singgah" value={formatNumber(t.sisa)} />
-                  <Figure label={`${unitLabelTitle()} kembali`} value={formatNumber(t.kembali)} />
+                  <Figure label={`${unitLabelTitle()} kosong diterima`} value={formatNumber(t.kosong)} />
+                  <Figure label="Isi dibawa kembali" value={formatNumber(t.isiKembali)} />
                   <Figure
                     label="Tertunda"
                     value={formatNumber(t.tertunda)}
@@ -350,30 +416,51 @@ export function SopirPage() {
               />
             </Panel>
           ) : (
-            <ol className="space-y-3">
-              {(data?.stops ?? []).map((stop) => (
-                <StopCard
-                  key={stop.id}
-                  stop={stop}
-                  isNext={stop.id === data?.stopBerikutId}
-                  rekamLokasi={data?.rekamLokasi ?? false}
-                  waiting={outbox.waitingStops.has(stop.id)}
-                  isPending={
-                    departMutation.isPending ||
-                    arriveMutation.isPending ||
-                    completeMutation.isPending ||
-                    holdMutation.isPending
-                  }
-                  onDepart={() => departMutation.mutate(stop.id)}
-                  onArrive={() => arriveMutation.mutate(stop.id)}
-                  onComplete={() => openComplete(stop)}
-                  onHold={() => {
-                    setAlasan("");
-                    setHolding(stop);
-                  }}
-                />
-              ))}
-            </ol>
+            <>
+              {/* Work still to do first, in driving order; what is finished
+                  below it. A driver on a second load used to scroll past
+                  every stop of the first one -- three screens on a phone --
+                  to find where to go next. */}
+              {[
+                { key: "open", title: null, stops: openStops },
+                { key: "done", title: `Sudah selesai (${doneStops.length})`, stops: doneStops },
+              ]
+                .filter((group) => group.stops.length > 0)
+                .map((group) => (
+                  <section key={group.key} className="space-y-2">
+                    {group.title && (
+                      <h2 className="label pt-2 text-2xs text-ink-muted">{group.title}</h2>
+                    )}
+                    <ol className="space-y-3">
+                      {group.stops.map((stop) => (
+                        <StopCard
+                          key={stop.id}
+                          stop={stop}
+                          isNext={stop.id === data?.stopBerikutId}
+                          rekamLokasi={data?.rekamLokasi ?? false}
+                          waiting={outbox.waitingStops.has(stop.id)}
+                          showRit={showRit}
+                          canOpenOutlet={canOpenOutlet}
+                          busy={busyStopId === stop.id}
+                          isPending={
+                            departMutation.isPending ||
+                            arriveMutation.isPending ||
+                            completeMutation.isPending ||
+                            holdMutation.isPending
+                          }
+                          onDepart={() => fileOnce(departMutation, stop.id)}
+                          onArrive={() => fileOnce(arriveMutation, stop.id)}
+                          onComplete={() => openComplete(stop)}
+                          onHold={() => {
+                            setAlasan("");
+                            setHolding(stop);
+                          }}
+                        />
+                      ))}
+                    </ol>
+                  </section>
+                ))}
+            </>
           )}
 
           {t && t.singgah > 0 && t.sisa === 0 && (
@@ -381,9 +468,11 @@ export function SopirPage() {
               <PanelBody className="text-center">
                 <p className="text-sm font-semibold text-ink">Rute hari ini selesai.</p>
                 <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                  {formatNumber(t.terkirim)} {unitLabel()} terkirim, {formatNumber(t.kembali)}{" "}
-                  {unitLabel()} kosong dibawa kembali. Serahkan {unitLabel()} kosong dan berkas
-                  surat jalan ke petugas gudang.
+                  {formatNumber(t.terkirim)} {unitLabel()} terkirim. Serahkan ke petugas gudang:{" "}
+                  {formatNumber(t.kosong)} {unitLabel()} kosong
+                  {t.isiKembali > 0 &&
+                    `, ${formatNumber(t.isiKembali)} ${unitLabel()} isi yang tidak terkirim`}
+                  , dan berkas surat jalan.
                 </p>
               </PanelBody>
             </Panel>
@@ -397,12 +486,25 @@ export function SopirPage() {
           <DialogHeader>
             <DialogTitle>Tutup {completing?.kode}</DialogTitle>
             <DialogDescription>
-              Catat jumlah yang benar-benar diterima {completing?.outlet}. Angka
-              ini menjadi dasar tagihan, jadi hitung sebelum meninggalkan lokasi.
+              Hitung jumlah yang benar-benar diterima {completing?.outlet} sebelum
+              meninggalkan lokasi. Angka ini yang dicatat kantor.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
+            {lokasiTutup !== "mencari" && lokasiTutup?.verdict === "jauh" && (
+              <p
+                role="alert"
+                className="flex items-start gap-2 rounded-md border border-signal bg-signal-soft/40 p-3 text-xs leading-relaxed text-ink"
+              >
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-signal-ink" aria-hidden />
+                <span>
+                  Posisi ponsel Anda {formatDistance(lokasiTutup.jarakMeter ?? 0)} dari{" "}
+                  {completing?.outlet}. Pastikan Anda sudah di lokasi yang benar. Anda tetap
+                  bisa menutup surat jalan ini.
+                </span>
+              </p>
+            )}
             {(completing?.lines ?? []).map((line, i) => (
               <ProductBlock
                 key={line.productId}
@@ -412,9 +514,25 @@ export function SopirPage() {
                 onChange={(patch) =>
                   setForm((f) => ({
                     ...f,
-                    lines: f.lines.map((l, li) =>
-                      li === i ? { ...l, ...patch } : l,
-                    ),
+                    lines: f.lines.map((l, li) => {
+                      if (li !== i) return l;
+                      if (patch.kembali !== undefined) {
+                        return { ...l, kembali: patch.kembali, kembaliDiubah: true };
+                      }
+                      // Empties follow what was accepted until the driver
+                      // types their own number; after that it is theirs.
+                      const realisasi = patch.realisasi ?? l.realisasi;
+                      return {
+                        ...l,
+                        realisasi,
+                        kembali:
+                          l.kembaliDiubah || !line.returnable
+                            ? l.kembali
+                            : Number.isNaN(realisasi)
+                              ? 0
+                              : realisasi,
+                      };
+                    }),
                   }))
                 }
               />
@@ -472,24 +590,28 @@ export function SopirPage() {
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCompleting(null)}>
+          <DialogFooter className="sticky bottom-0 -mx-1 border-t border-line bg-panel px-1 pt-3">
+            <Button variant="outline" className="min-h-12" onClick={() => setCompleting(null)}>
               Batal
             </Button>
             <Button
+              className="min-h-12"
               disabled={
                 !completing ||
                 !form.diterimaOleh.trim() ||
                 form.lines.some(
                   (l, i) =>
+                    !Number.isInteger(l.realisasi) ||
                     l.realisasi < 0 ||
-                    l.realisasi > (completing?.lines[i]?.target ?? 0),
+                    l.realisasi > (completing?.lines[i]?.target ?? 0) ||
+                    !Number.isInteger(l.kembali) ||
+                    l.kembali < 0,
                 ) ||
                 completeMutation.isPending
               }
               onClick={() =>
                 completing &&
-                completeMutation.mutate({
+                fileOnce(completeMutation, {
                   deliveryId: completing.id,
                   lines: form.lines,
                   diterimaOleh: form.diterimaOleh,
@@ -499,7 +621,7 @@ export function SopirPage() {
               }
             >
               <PackageCheck className="h-4 w-4" />
-              Tutup surat jalan
+              {completeMutation.isPending ? "Menyimpan…" : "Tutup surat jalan"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -511,8 +633,8 @@ export function SopirPage() {
           <DialogHeader>
             <DialogTitle>Laporkan kendala di {holding?.outlet}</DialogTitle>
             <DialogDescription>
-              Surat jalan tetap terbuka dan tidak menerbitkan tagihan. Kantor akan
-              menjadwalkan ulang pengiriman ini.
+              Surat jalan ditutup sebagai tertunda dan muatannya dibawa kembali ke
+              gudang. Kantor langsung diberi tahu.
             </DialogDescription>
           </DialogHeader>
 
@@ -526,19 +648,20 @@ export function SopirPage() {
             />
           </Field>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setHolding(null)}>
+          <DialogFooter className="sticky bottom-0 -mx-1 border-t border-line bg-panel px-1 pt-3">
+            <Button variant="outline" className="min-h-12" onClick={() => setHolding(null)}>
               Batal
             </Button>
             <Button
               variant="destructive"
+              className="min-h-12"
               disabled={!alasan.trim() || holdMutation.isPending}
               onClick={() =>
                 holding &&
-                holdMutation.mutate({ deliveryId: holding.id, catatan: alasan })
+                fileOnce(holdMutation, { deliveryId: holding.id, catatan: alasan })
               }
             >
-              Tandai tertunda
+              {holdMutation.isPending ? "Menyimpan…" : "Tandai tertunda"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -554,6 +677,9 @@ function StopCard({
   isNext,
   rekamLokasi,
   waiting,
+  showRit,
+  canOpenOutlet,
+  busy,
   isPending,
   onDepart,
   onArrive,
@@ -565,6 +691,12 @@ function StopCard({
   rekamLokasi: boolean;
   /** Something for this stop is saved on the phone and not yet sent. */
   waiting: boolean;
+  /** The driver has more than one load today, so say which this is. */
+  showRit: boolean;
+  /** Whether the outlet page is open to this user; drivers usually not. */
+  canOpenOutlet: boolean;
+  /** This stop's own depart/arrive is waiting on the phone's GPS. */
+  busy: boolean;
   isPending: boolean;
   onDepart: () => void;
   onArrive: () => void;
@@ -602,12 +734,16 @@ function StopCard({
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <Link
-                to={`/outlet/${stop.outletId}`}
-                className="text-base font-semibold leading-tight text-ink hover:underline hover:decoration-signal hover:decoration-2 hover:underline-offset-4"
-              >
-                {stop.outlet}
-              </Link>
+              {canOpenOutlet ? (
+                <Link
+                  to={`/outlet/${stop.outletId}`}
+                  className="text-base font-semibold leading-tight text-ink hover:underline hover:decoration-signal hover:decoration-2 hover:underline-offset-4"
+                >
+                  {stop.outlet}
+                </Link>
+              ) : (
+                <span className="text-base font-semibold leading-tight text-ink">{stop.outlet}</span>
+              )}
               <span className="data shrink-0 text-xs text-ink-muted">
                 {stop.jamRencana}
               </span>
@@ -633,6 +769,9 @@ function StopCard({
                 variant={getStatusVariant(stop.status)}
                 label={stop.status}
               />
+              {showRit && stop.rit != null && (
+                <StatusBadge variant="info" label={`Rit ${stop.rit}`} />
+              )}
               {waiting && <StatusBadge variant="warning" label="Menunggu dikirim" />}
               <span className="data text-2xs text-ink-muted">{stop.kode}</span>
             </p>
@@ -654,8 +793,14 @@ function StopCard({
                 />
                 {stop.unitKembali != null && (
                   <Row
-                    label="Kosong kembali"
+                    label="Kosong diterima"
                     value={`${formatNumber(stop.unitKembali)} ${unitLabel()}`}
+                  />
+                )}
+                {stop.isiKembali != null && (
+                  <Row
+                    label="Isi dibawa kembali"
+                    value={`${formatNumber(stop.isiKembali)} ${unitLabel()}`}
                   />
                 )}
                 {stop.diterimaOleh && (
@@ -669,7 +814,15 @@ function StopCard({
                 )}
               </>
             ) : (
-              <Row label="Kendala" value={stop.catatan ?? "—"} />
+              <>
+                <Row label="Kendala" value={stop.catatan ?? "—"} />
+                {stop.isiKembali != null && (
+                  <Row
+                    label="Isi dibawa kembali"
+                    value={`${formatNumber(stop.isiKembali)} ${unitLabel()}`}
+                  />
+                )}
+              </>
             )}
           </dl>
         )}
@@ -690,14 +843,14 @@ function StopCard({
       {!closed && (
         <div className="flex flex-wrap gap-2 border-t border-line bg-panel-sunk p-3">
           {stop.telepon && (
-            <Button asChild variant="outline" size="lg" className="flex-1">
+            <Button asChild variant="outline" size="lg" className="min-h-12 flex-1">
               <a href={`tel:${stop.telepon}`}>
                 <Phone className="h-4 w-4" />
                 Telepon
               </a>
             </Button>
           )}
-          <Button asChild variant="outline" size="lg" className="flex-1">
+          <Button asChild variant="outline" size="lg" className="min-h-12 flex-1">
             <a
               href={`https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}`}
               target="_blank"
@@ -716,20 +869,20 @@ function StopCard({
           {stop.status === "Antrian" ? (
             <Button
               size="lg"
-              className="w-full"
+              className="min-h-12 w-full"
               disabled={isPending}
               onClick={onDepart}
             >
               <Play className="h-4 w-4" />
-              Berangkat ke {outletLabel()} ini
+              {busy ? "Mencari lokasi…" : `Berangkat ke ${outletLabel()} ini`}
             </Button>
           ) : !stop.tibaPada ? (
-            <Button size="lg" className="w-full" disabled={isPending} onClick={onArrive}>
+            <Button size="lg" className="min-h-12 w-full" disabled={isPending} onClick={onArrive}>
               <MapPin className="h-4 w-4" />
-              Tiba di lokasi
+              {busy ? "Mencari lokasi…" : "Tiba di lokasi"}
             </Button>
           ) : (
-            <Button size="lg" className="w-full" disabled={isPending} onClick={onComplete}>
+            <Button size="lg" className="min-h-12 w-full" disabled={isPending} onClick={onComplete}>
               <PackageCheck className="h-4 w-4" />
               Selesai: catat penerimaan
             </Button>
@@ -747,7 +900,7 @@ function StopCard({
           <Button
             variant="ghost"
             size="lg"
-            className="w-full hover:bg-rust-soft hover:text-rust-ink"
+            className="min-h-12 w-full hover:bg-rust-soft hover:text-rust-ink"
             disabled={isPending}
             onClick={onHold}
           >
@@ -786,7 +939,9 @@ function ProductBlock({
   kembali: number;
   onChange: (patch: { realisasi?: number; kembali?: number }) => void;
 }) {
-  const kurang = line.target - realisasi;
+  const kurang = Number.isNaN(realisasi) ? 0 : line.target - realisasi;
+  // An emptied box is NaN, not 0: the dialog refuses to file it.
+  const parse = (raw: string) => (raw.trim() === "" ? NaN : Number(raw));
 
   return (
     <div className="rounded-md border border-line bg-panel-sunk p-3">
@@ -807,13 +962,17 @@ function ProductBlock({
             max={line.target}
             mono
             className="text-lg"
-            value={realisasi}
-            onChange={(e) => onChange({ realisasi: Number(e.target.value) })}
+            value={Number.isNaN(realisasi) ? "" : realisasi}
+            onChange={(e) => onChange({ realisasi: parse(e.target.value) })}
           />
         </Field>
 
         {line.returnable && (
-          <Field label="Kosong kembali" htmlFor={`k-${line.productId}`}>
+          <Field
+            label={`${capitalize(line.satuan)} kosong diterima`}
+            htmlFor={`k-${line.productId}`}
+            hint={`${capitalize(line.satuan)} kosong yang diberikan ${outletLabel()} kepada Anda.`}
+          >
             <TextInput
               id={`k-${line.productId}`}
               type="number"
@@ -821,13 +980,28 @@ function ProductBlock({
               min={0}
               mono
               className="text-lg"
-              value={kembali}
-              onChange={(e) => onChange({ kembali: Number(e.target.value) })}
+              value={Number.isNaN(kembali) ? "" : kembali}
+              onChange={(e) => onChange({ kembali: parse(e.target.value) })}
             />
           </Field>
         )}
       </div>
 
+      {Number.isNaN(realisasi) && (
+        <p className="mt-2 text-2xs leading-relaxed text-rust-ink">
+          Isi jumlah yang diterima. Tulis 0 jika {outletLabel()} tidak menerima apa pun.
+        </p>
+      )}
+      {realisasi > line.target && (
+        <p className="mt-2 text-2xs leading-relaxed text-rust-ink">
+          Tidak bisa lebih dari {formatNumber(line.target)} {line.satuan} yang dimuat.
+        </p>
+      )}
+      {kembali < 0 && (
+        <p className="mt-2 text-2xs leading-relaxed text-rust-ink">
+          Jumlah {line.satuan} kosong tidak boleh minus.
+        </p>
+      )}
       {kurang > 0 && (
         <p className="mt-2 text-2xs leading-relaxed text-signal-ink">
           Kurang {formatNumber(kurang)} {line.satuan} dari surat jalan. Tulis
@@ -877,6 +1051,10 @@ function FilingLine({ filing }: { filing: StopFiling }) {
       <span className={cn("truncate", tone)}>· {detail}</span>
     </li>
   );
+}
+
+function capitalize(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 function Row({ label, value }: { label: string; value: string }) {

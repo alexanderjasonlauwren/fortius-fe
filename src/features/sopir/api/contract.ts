@@ -4,6 +4,7 @@
  * The domain shape screens read; the HTTP adapter maps the wire onto it.
  */
 import type { Filing, ReplayResult } from "../lib/outbox";
+import type { GeoVerdict } from "@/lib/geo";
 import type { DriverRun } from "../types";
 
 /**
@@ -11,7 +12,7 @@ import type { DriverRun } from "../types";
  *
  * `kode` is every surat jalan the stop covers, because a stop with two
  * cylinder sizes has two documents and the driver hands over both. `realisasi`
- * is the count that ends up on the outlet's bill.
+ * is the count the outlet accepted -- the realised distribution.
  */
 export interface StopReceipt {
   kode: string;
@@ -27,11 +28,19 @@ export interface StopReceipt {
    * on its own when the phone is back online.
    */
   tertunda?: boolean;
+  /**
+   * How the filing's position compares with the pangkalan, when the phone had
+   * one. The screen warns on "jauh"; it never refuses.
+   */
+  lokasi?: { verdict: GeoVerdict; jarakMeter?: number };
 }
 
 export interface CompleteStopInput {
   deliveryId: string;
-  /** Per product — the sopir unloaded it, so they know the breakdown. */
+  /**
+   * Per product — the sopir unloaded it, so they know the breakdown.
+   * `kembali` is the empties the outlet handed back (empties_collected).
+   */
   lines: { productId: string; realisasi: number; kembali?: number }[];
   diterimaOleh: string;
   catatan?: string;
@@ -78,8 +87,16 @@ export interface SopirApi {
    */
   arriveStop(deliveryId: string): Promise<StopReceipt>;
   completeStop(input: CompleteStopInput): Promise<StopReceipt>;
-  /** Could not deliver. Leaves the stop open and raises no invoice. */
+  /**
+   * Could not deliver. Closes the stop as failed; the whole load is recorded
+   * as coming back and the office is notified.
+   */
   holdStop(input: { deliveryId: string; catatan: string }): Promise<StopReceipt>;
+  /**
+   * Reads the phone's position and compares it with the stop's pangkalan, so
+   * the close dialog can warn before anything is filed.
+   */
+  checkLocation(stopId: string): Promise<StopReceipt["lokasi"]>;
 
   /** Filings saved on this device and not yet with the server, oldest first. */
   pendingFilings(): Promise<Filing[]>;
