@@ -120,7 +120,12 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Operasi harian",
     items: [
       {
-        name: `Pesanan ${outletLabelTitle()}`,
+        // Getters, not values: the tenant's own words ("Pangkalan") arrive
+        // with its settings after this module loads, and a value read here
+        // kept "Outlet" over a "Pangkalan" page (Round 1 G27).
+        get name() {
+          return `Pesanan ${outletLabelTitle()}`;
+        },
         href: "/orders",
         icon: ClipboardList,
         hint: "Permintaan masuk yang menunggu persetujuan",
@@ -130,7 +135,9 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Schedule Agreement",
         href: "/sa",
         icon: FileText,
-        hint: `Kuota dari ${supplierLabel()}, sisa yang bisa ditarik, dan penerbit SA`,
+        get hint() {
+          return `Kuota dari ${supplierLabel()}, sisa yang bisa ditarik, dan penerbit SA`;
+        },
         permission: PERMISSIONS.SA_VIEW,
       },
       {
@@ -304,10 +311,14 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Data induk",
     items: [
       {
-        name: outletLabelTitle(),
+        get name() {
+          return outletLabelTitle();
+        },
         href: "/outlet",
         icon: Store,
-        hint: `Daftar ${outletLabel()}, kuota, dan penanggung jawab`,
+        get hint() {
+          return `Daftar ${outletLabel()}, kuota, dan penanggung jawab`;
+        },
         permission: PERMISSIONS.OUTLETS_VIEW,
       },
       {
@@ -338,7 +349,9 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Produk",
         href: "/products",
         icon: Fuel,
-        hint: `Katalog ${unitLabel()}, harga, dan stok gudang`,
+        get hint() {
+          return `Katalog ${unitLabel()}, harga, dan stok gudang`;
+        },
         permission: PERMISSIONS.PRODUCTS_VIEW,
       },
       {

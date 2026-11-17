@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { describeAccess, describeRoles } from "./access";
 import { PERMISSIONS } from "./permissions";
+import { setLexicon } from "@/lib/lexicon";
 import { NAV_GROUPS, bottomNavFor, navGroupsFor, landingPathFor, titleFor, usesDriverConsole } from "@/layouts/nav";
 
 describe("financial report navigation", () => {
@@ -328,4 +329,16 @@ describe("the nav a role is shown", () => {
     expect(hrefs(driver)).toContain("/sopir");
     expect(hrefs(driver)).not.toContain("/dashboard");
   });
+});
+
+// Round 1 G27: the menu read the tenant's word for an outlet when the module
+// loaded, before the tenant's settings arrived, and said "Outlet" over a page
+// titled "Pangkalan".
+it("names menu entries in the tenant's words once its settings arrive", () => {
+  setLexicon({ outlet: "pangkalan" }, "tenant-lexicon-test");
+  const entry = navGroupsFor([PERMISSIONS.OUTLETS_VIEW], "manual")
+    .flatMap((g) => g.items)
+    .find((i) => i.href === "/outlet");
+  expect(entry?.name).toBe("Pangkalan");
+  expect(titleFor("/outlet")).toBe("Pangkalan");
 });
