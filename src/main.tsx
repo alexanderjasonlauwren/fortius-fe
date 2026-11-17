@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "./components/ui/toast";
+import { OldDateConfirmHost } from "./components/common/OldDateConfirmHost";
 import { TooltipProvider } from "./components/ui/tooltip";
 import App from "./App.tsx";
 import "./index.css";
@@ -34,6 +35,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             next description at once instead of waiting out the delay again. */}
         <TooltipProvider delayDuration={250} skipDelayDuration={300}>
           <App />
+          <OldDateConfirmHost />
         </TooltipProvider>
       </ToastProvider>
     </QueryClientProvider>

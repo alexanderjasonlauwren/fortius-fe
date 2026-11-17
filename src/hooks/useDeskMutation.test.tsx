@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
+import { ApiError } from "@/lib/api";
 import { useDeskMutation } from "./useDeskMutation";
 
 /**
@@ -19,6 +20,9 @@ import { useDeskMutation } from "./useDeskMutation";
  */
 
 vi.mock("./useToast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+
+const askOldDate = vi.fn();
+vi.mock("@/lib/oldDateConfirmation", () => ({ askOldDate: (...args: unknown[]) => askOldDate(...args) }));
 
 function harness() {
   const client = new QueryClient({
@@ -102,5 +106,32 @@ describe("useDeskMutation", () => {
     await waitFor(() => {
       expect(client.getQueryState(queryKey)?.isInvalidated).toBe(true);
     });
+  });
+});
+
+// Round 1 G24: a date more than 31 days back is asked about, then the same
+// write is sent again carrying the confirmation.
+describe("an old document date", () => {
+  const tooOld = () => new ApiError({ message: "Tanggal 01-01-2020 lebih dari 31 hari yang lalu", code: "DATE_NEEDS_CONFIRMATION", status: 409 });
+
+  it("is sent again once the person confirms it", async () => {
+    askOldDate.mockReset().mockResolvedValue(true);
+    const write = vi.fn().mockRejectedValueOnce(tooOld()).mockResolvedValueOnce("saved");
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useDeskMutation({ mutationFn: write }), { wrapper });
+    result.current.mutate("form" as never);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(askOldDate).toHaveBeenCalledOnce();
+    expect(write).toHaveBeenCalledTimes(2);
+  });
+
+  it("is not sent again when the person goes back to fix it", async () => {
+    askOldDate.mockReset().mockResolvedValue(false);
+    const write = vi.fn().mockRejectedValue(tooOld());
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useDeskMutation({ mutationFn: write }), { wrapper });
+    result.current.mutate("form" as never);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(write).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ApiError } from "@/lib/api";
+import { ApiError, confirmOldDateOnNextWrite } from "@/lib/api";
+import { askOldDate } from "@/lib/oldDateConfirmation";
 import { useToast } from "@/hooks/useToast";
 import type { ToastOptions } from "@/components/ui/toast-context";
 
@@ -49,7 +50,19 @@ export function useDeskMutation<TArgs, TResult>({
   const { toast } = useToast();
 
   return useMutation<TResult, Error, TArgs>({
-    mutationFn,
+    // A date more than 31 days back is asked about, and the same write is
+    // sent again once confirmed (Round 1 G24). Every dated form goes through
+    // here, so none of them has to know.
+    mutationFn: async (args) => {
+      try {
+        return await mutationFn(args);
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== "DATE_NEEDS_CONFIRMATION") throw error;
+        if (!(await askOldDate(error.message))) throw error;
+        confirmOldDateOnNextWrite();
+        return mutationFn(args);
+      }
+    },
     onSuccess: (result, args) => {
       if (invalidate) {
         for (const queryKey of invalidate) {

@@ -495,6 +495,13 @@ export async function upload<T>(
 }
 
 /** POST / PUT / DELETE, unwrapped. */
+let oldDateConfirmed = false;
+
+/** The next write carries confirm_old_date: the person confirmed an old date. */
+export function confirmOldDateOnNextWrite(): void {
+  oldDateConfirmed = true;
+}
+
 export async function send<T>(
   method: "post" | "put" | "patch" | "delete",
   path: string,
@@ -513,6 +520,13 @@ export async function send<T>(
   const headers: Record<string, string> = {};
   if (options?.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
   if (options?.contentType) headers["Content-Type"] = options.contentType;
+  // A document dated more than 31 days back is resent once the person
+  // confirmed it (useDeskMutation, Round 1 G24): the flag rides on the next
+  // write only.
+  if (oldDateConfirmed && body && typeof body === "object" && !(body instanceof FormData) && !options?.contentType) {
+    body = { ...(body as Record<string, unknown>), confirm_old_date: true };
+    oldDateConfirmed = false;
+  }
   try {
     const response = await apiClient.request<Envelope<T>>({
       method,
