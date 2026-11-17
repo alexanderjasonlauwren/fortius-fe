@@ -353,12 +353,16 @@ describe("getRecap", () => {
 });
 
 describe("BA LO from SIM3LON", () => {
-  it("pulls a draft's LOs through its own sub-route", async () => {
+  // Round 1 G29: the pull takes longer than the default 10 s on a cold
+  // SIM3LON login, and was cut off; it gets the SA sync's two minutes.
+  it("pulls a draft's LOs through its own sub-route, with two minutes to do it", async () => {
     send.mockResolvedValue(claimWire({ claimed_amount: 12_937_267.2, total_qty: 12_160, total_weight_kg: 36_480 }));
     const out = await transportationApiHttp.generateFromSim3lon("11111111-1111-4111-8111-111111111111");
     expect(send).toHaveBeenCalledWith(
       "post",
       "/transportation-claims/11111111-1111-4111-8111-111111111111/lines/from-sim3lon",
+      undefined,
+      { timeout: 120_000 },
     );
     expect(out.totalWeightKg).toBe(36_480);
   });

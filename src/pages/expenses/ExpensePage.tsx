@@ -16,6 +16,7 @@ import {
   approveExpense,
   cancelExpense,
   EXPENSE_STATUS_LABEL,
+  getExpenseApprovers,
   getExpenses,
   getPendingExpenses,
   rejectExpense,
@@ -29,7 +30,6 @@ import { AttachmentsPanel } from "@/features/attachments/components/AttachmentsP
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { useAuthStore } from "@/features/auth/store/authStore";
-import { getUsers } from "@/features/users/api/userApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader } from "@/components/common/Panel";
@@ -73,12 +73,13 @@ export function ExpensePage() {
   });
   // The pending total is of every pending expense, not of the visible page.
   const pending = useQuery({ queryKey: [...scopeKey(), "expenses", "pending"], queryFn: getPendingExpenses });
+  // Only people who may approve, less the caller (Round 1 G22: the picker
+  // listed every user, drivers included).
   const users = useQuery({
     queryKey: [...scopeKey(), "expense-approvers"],
-    queryFn: () => getUsers(),
+    queryFn: getExpenseApprovers,
     enabled: !!approving,
   });
-  const currentUserId = useAuthStore((state) => state.user?.id);
 
   const approve = useDeskMutation({
     mutationFn: ({ row, secondApproverId }: { row: ExpenseView; secondApproverId?: string }) =>
@@ -231,7 +232,7 @@ export function ExpensePage() {
           <Field label="Penyetuju kedua" htmlFor="expense-second-approver" hint="Wajib bila nilainya melewati batas yang ditetapkan perusahaan.">
             <SelectInput id="expense-second-approver" value={secondApproverId} onChange={(event) => setSecondApproverId(event.target.value)}>
               <option value="">Tidak dipilih</option>
-              {(users.data ?? []).filter((user) => user.id !== currentUserId).map((user) => <option key={user.id} value={user.id}>{user.nama}</option>)}
+              {(users.data ?? []).map((user) => <option key={user.id} value={user.id}>{user.nama}</option>)}
             </SelectInput>
           </Field>
           <DialogFooter>

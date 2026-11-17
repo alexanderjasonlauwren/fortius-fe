@@ -871,6 +871,11 @@ export interface SettingsEntity {
   /** The tenant's own vocabulary. See `LexiconEntity`. */
   istilah: LexiconEntity;
   targetHarian: number;
+  /**
+   * Maker-checker: nobody approves an expense they filed or verifies a
+   * payment they recorded. On unless switched off (a one-person office).
+   */
+  persetujuanTerpisah: boolean;
   notifikasi: NotificationSettings;
   penomoran: NumberingEntity;
   operasi: OperationsEntity;

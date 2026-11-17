@@ -13,3 +13,4 @@ export const updateExpense = api.updateExpense.bind(api);
 export const cancelExpense = api.cancelExpense.bind(api);
 export const approveExpense = api.approveExpense.bind(api);
 export const rejectExpense = api.rejectExpense.bind(api);
+export const getExpenseApprovers = api.getApprovers.bind(api);

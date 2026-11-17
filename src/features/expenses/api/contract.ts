@@ -99,5 +99,12 @@ export interface ExpenseApi {
   /** Withdraws a pending expense; nothing was posted. */
   cancelExpense(id: string, version: number, reason?: string): Promise<ExpenseView>;
   approveExpense(input: ExpenseDecisionInput): Promise<ExpenseView>;
+  /** Who may approve an expense, less the caller: the second-approver picker. */
+  getApprovers(): Promise<ExpenseApprover[]>;
   rejectExpense(input: ExpenseDecisionInput): Promise<ExpenseView>;
+}
+
+export interface ExpenseApprover {
+  id: string;
+  nama: string;
 }

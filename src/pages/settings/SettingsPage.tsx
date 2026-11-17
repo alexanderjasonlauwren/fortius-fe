@@ -527,6 +527,22 @@ export function SettingsPage() {
                 }}
               />,
             )}
+            {/* iam.tenant_settings.separate_approver_required: maker-checker
+                on expenses and payments (Round 1 G22, N13). */}
+            {inheritable(
+              "persetujuanTerpisah",
+              "Persetujuan oleh orang lain",
+              "persetujuan-terpisah",
+              <Toggle
+                checked={form.persetujuanTerpisah}
+                onChange={(next) => {
+                  takeOver("persetujuanTerpisah");
+                  set("persetujuanTerpisah", next);
+                }}
+                label="Pengeluaran dan penerimaan disetujui orang lain"
+                description="Yang mengajukan pengeluaran atau mencatat penerimaan tidak bisa menyetujuinya sendiri. Matikan hanya bila kantor dijalankan satu orang."
+              />,
+            )}
 
           </PanelBody>
         </Panel>

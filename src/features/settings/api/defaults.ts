@@ -31,6 +31,7 @@ export const DEFAULT_SETTINGS: SettingsEntity = {
   jamOperasionalSelesai: "18:00",
   istilah: { satuan: "unit", outlet: "outlet", pemasok: "pemasok" },
   targetHarian: 0,
+  persetujuanTerpisah: true,
   notifikasi: { rules: {} } as SettingsEntity["notifikasi"],
   penomoran: {} as SettingsEntity["penomoran"],
   operasi: {

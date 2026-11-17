@@ -34,6 +34,7 @@ interface SettingsPayload {
   record_driver_location: boolean | null;
   sim3lon_settlement_target?: SettlementTarget | null;
   daily_target_qty?: number | null;
+  separate_approver_required?: boolean | null;
 }
 
 /** Mirrors the backend's tenant.ProfileResponse: the legal identity. */
@@ -152,6 +153,7 @@ function toDomain(p: SettingsPayload): Partial<SettingsEntity> {
     };
   }
   if (p.daily_target_qty) out.targetHarian = p.daily_target_qty;
+  if (p.separate_approver_required != null) out.persetujuanTerpisah = p.separate_approver_required;
   if (p.operating_hours_start) out.jamOperasionalMulai = toTime(p.operating_hours_start)!;
   if (p.operating_hours_end) out.jamOperasionalSelesai = toTime(p.operating_hours_end)!;
 
@@ -222,6 +224,8 @@ export async function getSettingsDetail(): Promise<ResolvedSettingsEntity> {
     inheritedFrom.jamOperasionalSelesai = toTenant(row.inherited_from.operating_hours_end);
   if (row.inherited_from.daily_target_qty)
     inheritedFrom.targetHarian = toTenant(row.inherited_from.daily_target_qty);
+  if (row.inherited_from.separate_approver_required)
+    inheritedFrom.persetujuanTerpisah = toTenant(row.inherited_from.separate_approver_required);
   // Same collapse as the lexicon: one domain field over five columns, and
   // partly inherited IS inherited — the tenant did not choose the whole set.
   const opsSource =
@@ -296,6 +300,7 @@ export async function updateSettings(
     ...(patch.operasi && opsToWire(patch.operasi)),
     // Blank or zero is "no target of my own": inherit, or none at all.
     ...(patch.targetHarian !== undefined && { daily_target_qty: patch.targetHarian > 0 ? patch.targetHarian : null }),
+    ...(patch.persetujuanTerpisah !== undefined && { separate_approver_required: patch.persetujuanTerpisah }),
   });
   return getSettings();
 }
@@ -311,6 +316,8 @@ export async function clearSettingOverride(field: InheritableFieldKey): Promise<
           ? { operating_hours_end: null }
           : field === "targetHarian"
             ? { daily_target_qty: null }
+          : field === "persetujuanTerpisah"
+            ? { separate_approver_required: null }
           : field === "operasi"
             ? {
                 working_days: null,

@@ -201,7 +201,7 @@ export function BankSection() {
                   ) : (
                     <SegmentedControl
                       value={editing.kind}
-                      onChange={(kind) => setEditing({ ...editing, kind })}
+                      onChange={(kind) => setEditing({ ...editing, kind, utama: kind === "cash" ? false : editing.utama })}
                       options={[
                         { value: "bank" as const, label: "Rekening bank" },
                         { value: "cash" as const, label: "Kas kecil" },
@@ -263,12 +263,16 @@ export function BankSection() {
                   />
                 </Field>
                 <div className="divide-y divide-line sm:col-span-2">
-                  <Toggle
-                    label="Jadikan rekening utama"
-                    description="Dicetak pada tagihan. Hanya satu rekening yang bisa menjadi utama."
-                    checked={editing.utama}
-                    onChange={(utama) => setEditing({ ...editing, utama })}
-                  />
+                  {/* The default is printed on invoices for pangkalan to pay
+                      into, so a drawer cannot be it (Round 1 G23). */}
+                  {editing.kind === "bank" && (
+                    <Toggle
+                      label="Jadikan rekening utama"
+                      description="Dicetak pada tagihan. Hanya satu rekening yang bisa menjadi utama."
+                      checked={editing.utama}
+                      onChange={(utama) => setEditing({ ...editing, utama })}
+                    />
+                  )}
                   <Toggle
                     label="Aktif"
                     description="Rekening nonaktif tetap tersimpan untuk riwayat."
