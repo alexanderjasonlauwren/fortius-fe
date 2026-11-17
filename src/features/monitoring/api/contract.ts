@@ -94,6 +94,22 @@ export interface ReturnBookingResult {
   sudahDibukukan: boolean;
 }
 
+/** Kirim ulang: the surat jalan and the day its returned tabung go out. */
+export interface RedeliverInput {
+  deliveryId: string;
+  /** yyyy-mm-dd */
+  tanggal: string;
+}
+
+export interface RedeliveryResult {
+  rencanaId: string;
+  rencana: string;
+  tanggal: string;
+  jumlah: number;
+  /** No suitable draft existed for the day, so one was opened. */
+  rencanaBaru: boolean;
+}
+
 export interface MonitoringApi {
   getMonitoringSnapshot(dateRange: DateRange): Promise<MonitoringSnapshot>;
   getDriverCards(dateRange: DateRange): Promise<DriverCard[]>;
@@ -105,6 +121,8 @@ export interface MonitoringApi {
   closeRun(input: CloseRunInput): Promise<CloseRunResult>;
   /** Retries a closed surat jalan's books correction. */
   bookReturn(deliveryId: string): Promise<ReturnBookingResult>;
+  /** Plans a closed surat jalan's returned tabung onto a later day. */
+  redeliver(input: RedeliverInput): Promise<RedeliveryResult>;
 }
 
 export type { DriverCard, MonitoringAssignment, MonitoringRow, MonitoringSnapshot, RunSummary };

@@ -557,3 +557,32 @@ describe("closing a run", () => {
     expect(result.dokumen[0]).toMatchObject({ tertunda: true, alasan: "Periode ini sudah ditutup", kembali: 30 });
   });
 });
+
+describe("kirim ulang", () => {
+  it("posts the surat jalan and the day, and reports the plan it landed on", async () => {
+    send.mockResolvedValue({
+      plan_id: "plan-9", plan_number: "RD-SLT-20261118-0003",
+      planned_delivery_date: "2026-11-18", quantity: 40, plan_opened: true,
+    });
+    const result = await monitoringApiHttp.redeliver({ deliveryId: D1, tanggal: "2026-11-18" });
+    expect(send).toHaveBeenLastCalledWith("post", `/distribution/redeliveries/${D1}`, {
+      planned_delivery_date: "2026-11-18",
+    });
+    expect(result).toEqual({
+      rencanaId: "plan-9", rencana: "RD-SLT-20261118-0003", tanggal: "2026-11-18", jumlah: 40, rencanaBaru: true,
+    });
+  });
+
+  it("marks a surat jalan already rescheduled", async () => {
+    const snap = await load(
+      board({
+        drivers: [driver({ trip_id: "trip-1", trip_no: 1, departed_at: "2026-09-06T00:10:00Z", returned_at: "2026-09-06T04:00:00Z" })],
+        stops: [stop({ deliveries: [delivery({
+          delivery_status: "failed", returned_qty: 50, reconciled: true,
+          return_credit_note_number: "CN-1", redelivery_plan: "RD-SLT-20260907-0001 · 07/09/2026",
+        })] })],
+      }),
+    );
+    expect(snap.runs[0].dokumen[0].kirimUlang).toBe("RD-SLT-20260907-0001 · 07/09/2026");
+  });
+});

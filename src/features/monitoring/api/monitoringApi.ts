@@ -6,6 +6,8 @@ export type {
   CloseRunResult,
   ClosedDocument,
   DateRange,
+  RedeliverInput,
+  RedeliveryResult,
   ReturnBookingResult,
   RunCount,
   SetDeliveryStatusInput,
@@ -21,3 +23,4 @@ export const setDeliveryStatus = api.setDeliveryStatus.bind(api);
 export const printSuratJalan = api.printSuratJalan.bind(api);
 export const closeRun = api.closeRun.bind(api);
 export const bookReturn = api.bookReturn.bind(api);
+export const redeliver = api.redeliver.bind(api);

@@ -31,3 +31,30 @@ export function countsToSend(
       catatan: draft[d.id].catatan.trim() || undefined,
     }));
 }
+
+/**
+ * A surat jalan whose returned tabung can be scheduled again: its run is
+ * closed, something came back, the credit is booked (the deposit that pays
+ * the redelivery exists) and it is not already carried. The server refuses
+ * every other case; the board does not offer them.
+ */
+export function redeliverable(d: RunDocument): boolean {
+  return d.dikonfirmasi && d.dimuat > d.diterima && !!d.notaKredit && !d.kirimUlang;
+}
+
+function isoDay(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** Today in the browser's calendar -- the earliest day the server accepts. */
+export function today(): string {
+  return isoDay(new Date());
+}
+
+/** Tomorrow, yyyy-mm-dd -- the usual day to send again. */
+export function tomorrow(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return isoDay(d);
+}

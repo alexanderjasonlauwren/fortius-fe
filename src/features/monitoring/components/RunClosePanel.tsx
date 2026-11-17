@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RotateCcw, Truck } from "lucide-react";
 import { Panel, PanelHeader } from "@/components/common/Panel";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { TextInput, TextareaInput } from "@/components/common/Field";
+import { Field, TextInput, TextareaInput } from "@/components/common/Field";
+import { DateInput } from "@/components/common/DateInput";
 import {
   Dialog,
   DialogContent,
@@ -21,9 +22,11 @@ import type { RunDocument, RunSummary } from "../types";
 import type {
   CloseRunInput,
   CloseRunResult,
+  RedeliverInput,
+  RedeliveryResult,
   RunCount,
 } from "../api/monitoringApi";
-import { countsToSend, openDocuments } from "../lib/runClose";
+import { countsToSend, openDocuments, redeliverable, today, tomorrow } from "../lib/runClose";
 
 type Mutation<TArgs, TResult> = {
   mutate: (args: TArgs, options?: { onSuccess?: (result: TResult) => void }) => void;
@@ -43,12 +46,15 @@ export function RunClosePanel({
   runs,
   closeRun,
   bookReturn,
+  redeliver,
 }: {
   runs: RunSummary[];
   closeRun: Mutation<CloseRunInput, CloseRunResult>;
   bookReturn: Mutation<string, unknown>;
+  redeliver: Mutation<RedeliverInput, RedeliveryResult>;
 }) {
   const [closing, setClosing] = useState<RunSummary | null>(null);
+  const [carrying, setCarrying] = useState<RunDocument | null>(null);
 
   if (runs.length === 0) return null;
 
@@ -64,10 +70,20 @@ export function RunClosePanel({
             key={run.id}
             run={run}
             onClose={() => setClosing(run)}
+            onRedeliver={setCarrying}
             bookReturn={bookReturn}
           />
         ))}
       </ul>
+
+      {carrying && (
+        <RedeliverDialog
+          doc={carrying}
+          pending={redeliver.isPending}
+          onCancel={() => setCarrying(null)}
+          onSubmit={(input) => redeliver.mutate(input, { onSuccess: () => setCarrying(null) })}
+        />
+      )}
 
       {closing && (
         <CloseRunDialog
@@ -88,14 +104,17 @@ function runTitle(run: RunSummary) {
 function RunLine({
   run,
   onClose,
+  onRedeliver,
   bookReturn,
 }: {
   run: RunSummary;
   onClose: () => void;
+  onRedeliver: (doc: RunDocument) => void;
   bookReturn: Mutation<string, unknown>;
 }) {
   const selesai = run.dokumen.filter((d) => d.status === "Selesai" || d.status === "Tertunda").length;
   const tertunda = run.dokumen.filter((d) => d.koreksiTertunda);
+  const kembali = run.dokumen.filter((d) => redeliverable(d) || d.kirimUlang);
 
   return (
     <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
@@ -126,6 +145,29 @@ function RunLine({
                     Coba lagi
                   </Button>
                 </CanAccess>
+              </div>
+            ))}
+          </div>
+        )}
+        {kembali.length > 0 && (
+          <div className="mt-2 space-y-1.5">
+            {kembali.map((doc) => (
+              <div key={doc.id} className="flex flex-wrap items-center gap-2 text-xs text-ink">
+                <Truck className="h-3.5 w-3.5 shrink-0 text-ink-muted" aria-hidden />
+                <span>
+                  {formatNumber(doc.dimuat - doc.diterima)} {unitLabel()} kembali dari {doc.outlet} (
+                  <span className="data">{doc.kode}</span>)
+                  {doc.kirimUlang ? (
+                    <span className="text-ink-muted"> · dijadwalkan ulang di {doc.kirimUlang}</span>
+                  ) : null}
+                </span>
+                {!doc.kirimUlang && (
+                  <CanAccess permission={PERMISSIONS.DISTRIBUTION_CREATE}>
+                    <Button size="xs" variant="outline" onClick={() => onRedeliver(doc)}>
+                      Kirim ulang
+                    </Button>
+                  </CanAccess>
+                )}
               </div>
             ))}
           </div>
@@ -367,5 +409,51 @@ function ClosedSummary({ result }: { result: CloseRunResult }) {
         <p className="text-xs text-ink-muted">Ini rit terakhir; rencana distribusi hari ini selesai.</p>
       )}
     </div>
+  );
+}
+
+function RedeliverDialog({
+  doc,
+  pending,
+  onCancel,
+  onSubmit,
+}: {
+  doc: RunDocument;
+  pending: boolean;
+  onCancel: () => void;
+  onSubmit: (input: RedeliverInput) => void;
+}) {
+  const [tanggal, setTanggal] = useState(tomorrow);
+  const jumlah = doc.dimuat - doc.diterima;
+  return (
+    <Dialog open onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Kirim ulang ke {doc.outlet}</DialogTitle>
+          <DialogDescription>
+            {formatNumber(jumlah)} {unitLabel()} dari <span className="data">{doc.kode}</span> sudah
+            dikreditkan dan uangnya menjadi titipan {outletLabel()}. Kirim ulang menambahkan baris ke
+            rencana pada tanggal ini tanpa memakai kuota lagi; tagihannya dibayar dari titipan saat
+            berangkat.
+          </DialogDescription>
+        </DialogHeader>
+        <Field label="Tanggal kirim" htmlFor="kirim-ulang-tanggal" required>
+          <DateInput
+            id="kirim-ulang-tanggal"
+            value={tanggal}
+            min={today()}
+            onChange={(e) => setTanggal(e.target.value)}
+          />
+        </Field>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>
+            Batal
+          </Button>
+          <Button disabled={pending || !tanggal} onClick={() => onSubmit({ deliveryId: doc.id, tanggal })}>
+            {pending ? "Menjadwalkan…" : "Jadwalkan kirim ulang"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

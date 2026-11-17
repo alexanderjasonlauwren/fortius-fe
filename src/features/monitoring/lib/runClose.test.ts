@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countsToSend, openDocuments } from "./runClose";
+import { countsToSend, openDocuments, redeliverable } from "./runClose";
 import type { RunDocument } from "../types";
 
 function doc(id: string, status: RunDocument["status"], dimuat: number, diterima: number, kembali = 0): RunDocument {
@@ -37,5 +37,22 @@ describe("countsToSend", () => {
   it("leaves out an empty reason rather than sending blank text", () => {
     const typo = doc("1", "Selesai", 50, 50);
     expect(countsToSend([typo], { "1": { diterima: 45, kembali: 5, catatan: "  " } })[0].catatan).toBeUndefined();
+  });
+});
+
+describe("redeliverable", () => {
+  const closed = { ...doc("1", "Tertunda", 40, 0, 40), dikonfirmasi: true, notaKredit: "CN-1" };
+
+  it("offers Kirim ulang for a closed, credited surat jalan with tabung back", () => {
+    expect(redeliverable(closed)).toBe(true);
+  });
+
+  it.each([
+    ["the run is not closed", { ...closed, dikonfirmasi: false }],
+    ["everything was delivered", { ...closed, diterima: 40, kembali: 0 }],
+    ["the credit is not booked yet", { ...closed, notaKredit: undefined, koreksiTertunda: true }],
+    ["it is already rescheduled", { ...closed, kirimUlang: "RD-SLT-20261118-0003 · 18/11/2026" }],
+  ])("does not offer it when %s", (_why, d) => {
+    expect(redeliverable(d)).toBe(false);
   });
 });

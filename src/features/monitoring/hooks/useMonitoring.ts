@@ -7,9 +7,11 @@ import {
   closeRun,
   getMonitoringSnapshot,
   printSuratJalan,
+  redeliver,
   setDeliveryStatus,
 } from "../api/monitoringApi";
 import { unitLabel } from "@/lib/lexicon";
+import { formatDateId } from "@/lib/format";
 
 function todayStr() {
   const d = new Date();
@@ -72,6 +74,16 @@ export function useMonitoring() {
     }),
   });
 
+  // A new plan line, so the planning screens refresh too: the default sweep.
+  const redeliverMutation = useDeskMutation({
+    mutationFn: redeliver,
+    errorTitle: "Kirim ulang gagal",
+    success: (result) => ({
+      title: `${result.jumlah.toLocaleString("id-ID")} ${unitLabel()} dijadwalkan ulang`,
+      description: `${result.rencanaBaru ? "Rencana baru" : "Masuk ke rencana"} ${result.rencana}, ${formatDateId(result.tanggal)}. Konfirmasi rencananya agar dapat dikirim.`,
+    }),
+  });
+
   const rows = (snapshot.data?.rows ?? []).filter((r) => {
     if (driverFilter && r.driverId !== driverFilter) return false;
     if (statusFilter !== "Semua" && r.status !== statusFilter) return false;
@@ -101,5 +113,6 @@ export function useMonitoring() {
     printMutation,
     closeRunMutation,
     bookReturnMutation,
+    redeliverMutation,
   };
 }
