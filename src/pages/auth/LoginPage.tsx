@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2, TriangleAlert } from "lucide-react";
 import { useAuthStore } from "@/features/auth/store/authStore";
+import { loginErrorMessage } from "@/features/auth/lib/loginError";
 import { landingPathFor } from "@/layouts/nav";
 import { Field, TextInput } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
@@ -76,7 +77,9 @@ export function LoginPage() {
         replace: true,
       });
     } catch (err) {
-      setError((err as Error).message);
+      // The email stays as typed; only a wrong password needs retyping.
+      setError(loginErrorMessage(err));
+      setPassword("");
     } finally {
       setIsLoading(false);
     }

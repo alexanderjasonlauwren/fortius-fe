@@ -50,7 +50,7 @@ export function journalSourceHref(type: JournalSourceType, sourceId?: string): s
     case "depreciation":
     case "assetAcquisition":
     case "assetDisposal":
-      return "/assets";
+      return "/fixed-assets";
     default:
       return undefined;
   }
