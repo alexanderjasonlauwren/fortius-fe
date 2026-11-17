@@ -8,6 +8,7 @@
  * component untouched — the direction technical-gaps 2.4 chose.
  */
 import { getAllPages, getOne, send, upload } from "@/lib/api";
+import { shareInFlight } from "@/lib/inFlight";
 import type { FilterSpec } from "@/lib/listQuery";
 import { getActiveScope, scopeKey } from "@/lib/scope";
 import type {
@@ -751,9 +752,9 @@ export const saApiHttp: ScheduleAgreementApi = {
     // The branch picked in the scope bar when there is one; consolidated
     // scope falls back to the pool agreements are recorded against.
     const branchId = getActiveScope().branchId ?? (await defaultBranchID());
-    const row = await getOne<QuotaSummaryResponse>(
-      `/branches/${branchId}/quota-summary?${new URLSearchParams({ month }).toString()}`,
-    );
+    // Beranda's tile and the Kuota cabang card read the same month at once.
+    const path = `/branches/${branchId}/quota-summary?${new URLSearchParams({ month }).toString()}`;
+    const row = await shareInFlight(path, () => getOne<QuotaSummaryResponse>(path));
     assertScope(originScope);
     return {
       periodMonth: row.period_month,

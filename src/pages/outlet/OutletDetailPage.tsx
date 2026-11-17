@@ -223,12 +223,14 @@ export function OutletDetailPage() {
         description={`${p.alamat}, ${p.kota}`}
         meta={<StatusBadge variant={getStatusVariant(p.status)} label={p.status} />}
         actions={
-          <Button asChild variant="outline">
-            <Link to={`/outlet/${p.id}/edit`}>
-              <Pencil className="h-3.5 w-3.5" />
-              Ubah data
-            </Link>
-          </Button>
+          <CanAccess permission={PERMISSIONS.OUTLETS_EDIT}>
+            <Button asChild variant="outline">
+              <Link to={`/outlet/${p.id}/edit`}>
+                <Pencil className="h-3.5 w-3.5" />
+                Ubah data
+              </Link>
+            </Button>
+          </CanAccess>
         }
       />
 

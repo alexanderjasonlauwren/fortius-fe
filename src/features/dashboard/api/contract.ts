@@ -15,8 +15,19 @@ import type {
   RecentActivity,
 } from "../types";
 
+export interface KpiIncludes {
+  manualOrders?: boolean;
+  payments?: boolean;
+}
+
 export interface DashboardApi {
-  getKpiSummary(includeManualOrders?: boolean): Promise<KpiSummary>;
+  /**
+   * `manualOrders`: the agent takes manual orders and the role may read them.
+   * `payments`: the role may read payments. Nothing the role may not read is
+   * requested -- a 403 per tile was Round 1 G17's "Beranda asks for data the
+   * role can't read".
+   */
+  getKpiSummary(include?: KpiIncludes): Promise<KpiSummary>;
   getMonthlyChart(): Promise<MonthlyChartPoint[]>;
   getOutletShares(): Promise<OutletShare[]>;
   getRecentActivities(): Promise<RecentActivity[]>;

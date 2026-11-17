@@ -28,10 +28,8 @@ vi.mock("@/features/vehicles/api/vehicleApi", () => ({
   getVehicles: (...args: unknown[]) => getVehicles(...args),
 }));
 
-const getAgingReport = vi.fn();
 const getPendingPayments = vi.fn();
 vi.mock("@/features/finance/api/financeApi", () => ({
-  getAgingReport: (...args: unknown[]) => getAgingReport(...args),
   getPendingPayments: (...args: unknown[]) => getPendingPayments(...args),
 }));
 
@@ -103,7 +101,6 @@ beforeEach(() => {
     { id: OUTLET_ID, nama: "Pangkalan Ahmad", kecamatan: "Sidorejo", status: "Aktif" },
   ]);
   getVehicles.mockReset().mockResolvedValue([{ id: VEHICLE_ID, armada: "Isuzu Elf NMR", kapasitas: 120 }]);
-  getAgingReport.mockReset().mockResolvedValue({ grandTotal: 500_000, jatuhTempoTotal: 200_000 });
   getPendingPayments.mockReset().mockResolvedValue([{ jumlah: 300_000 }, { jumlah: 100_000 }]);
   getOrderTotals.mockReset().mockResolvedValue({ baru: 3 });
   getQuotaSummary.mockReset().mockResolvedValue(quotaSummary());
@@ -124,7 +121,7 @@ describe("getKpiSummary", () => {
   });
   it.each([undefined, false])("never requests manual-order totals when intake is external or unknown (%s)", async (includeOrders) => {
     mockDeliveries({ [TODAY]: [], [YESTERDAY]: [] });
-    const kpi = await dashboardApiHttp.getKpiSummary(includeOrders);
+    const kpi = await dashboardApiHttp.getKpiSummary({ manualOrders: includeOrders });
     expect(kpi.openOrders).toBe(0);
     expect(getOrderTotals).not.toHaveBeenCalled();
   });
@@ -134,7 +131,7 @@ describe("getKpiSummary", () => {
       [YESTERDAY]: [delivery({ delivered_qty: 60 })],
     });
 
-    const kpi = await dashboardApiHttp.getKpiSummary(true);
+    const kpi = await dashboardApiHttp.getKpiSummary({ manualOrders: true, payments: true });
 
     expect(kpi.dailyDistributed).toBe(80);
     expect(kpi.dailyTarget).toBe(150);
@@ -144,12 +141,20 @@ describe("getKpiSummary", () => {
     expect(kpi.totalOutlet).toBe(1);
     expect(kpi.pendingPayments).toBe(2);
     expect(kpi.pendingPaymentValue).toBe(400_000);
-    expect(kpi.piutangOutstanding).toBe(500_000);
-    expect(kpi.piutangJatuhTempo).toBe(200_000);
     expect(kpi.openOrders).toBe(3);
     expect(kpi.monthlyQuotaTotal).toBe(10_000);
     expect(kpi.monthlyQuotaRemaining).toBe(4_000);
     expect(getPendingPayments).toHaveBeenCalled();
+  });
+
+  // Round 1 G17: the dispatcher's Beranda asked for payments and invoices it
+  // may not read, and drew a 403 per tile. Beranda never showed the aging.
+  it("asks for nothing the role may not read", async () => {
+    mockDeliveries({ [TODAY]: [], [YESTERDAY]: [] });
+    const kpi = await dashboardApiHttp.getKpiSummary({ manualOrders: false, payments: false });
+    expect(getPendingPayments).not.toHaveBeenCalled();
+    expect(getOrderTotals).not.toHaveBeenCalled();
+    expect(kpi.pendingPayments).toBeNull();
   });
 
   // The Beranda tile and the SA page's Kuota cabang card must not disagree:
@@ -160,7 +165,7 @@ describe("getKpiSummary", () => {
     mockDeliveries({ [TODAY]: [], [YESTERDAY]: [] });
     getQuotaSummary.mockResolvedValue(quotaSummary({ allocationQty: 20450, deliveredQty: 6800, remainingQty: 13650 }));
 
-    const kpi = await dashboardApiHttp.getKpiSummary(true);
+    const kpi = await dashboardApiHttp.getKpiSummary({ manualOrders: true });
 
     expect(getQuotaSummary).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}$/));
     expect(kpi.monthlyQuotaTotal).toBe(20450);

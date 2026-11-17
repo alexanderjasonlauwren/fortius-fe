@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { setActiveScope, subtreeOf } from "@/lib/scope";
+import { SHELL } from "@/hooks/useDeskMutation";
 import { branchRegistry, setBranchRegistry, tenantRegistry } from "./tenantRegistry";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { authApi, type SwitchableTenant } from "@/features/auth/api/authApi";
@@ -60,6 +61,7 @@ export function useScope() {
     queryFn: () => authApi.listSwitchableTenants(),
     enabled: Boolean(sessionTenantId),
     staleTime: 5 * 60_000,
+    meta: SHELL,
   });
   const tenantChoices = useMemo<TenantChoice[]>(
     () =>

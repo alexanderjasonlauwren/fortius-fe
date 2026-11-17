@@ -10,9 +10,13 @@ import "./index.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // The store is local, so refetching is cheap and keeps every page in
-      // step after a write elsewhere in the console.
-      staleTime: 5_000,
+      // Thirty seconds, not five: every request now crosses the network to a
+      // rate-limited API (300 a minute per person), and at five seconds a
+      // person moving between pages refetched the same lists over and over
+      // (Round 1 G15). Writes still refresh at once -- useDeskMutation
+      // invalidates what is mounted -- so this only spaces out re-reads of
+      // data nobody changed.
+      staleTime: 30_000,
       retry: 0,
       refetchOnWindowFocus: true,
     },

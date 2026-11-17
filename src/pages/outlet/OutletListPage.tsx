@@ -1,3 +1,5 @@
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import { holds } from "@/features/rbac/holds";
 import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -32,6 +34,10 @@ const STATUSES: (OutletStatus | "Semua")[] = [
 ];
 
 export function OutletListPage() {
+  // Each button follows the route it calls (Round 1 G26).
+  const canCreate = holds(PERMISSIONS.OUTLETS_CREATE);
+  const canEdit = holds(PERMISSIONS.OUTLETS_EDIT);
+  const canDelete = holds(PERMISSIONS.OUTLETS_DELETE);
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<OutletStatus | "Semua">("Semua");
@@ -184,15 +190,15 @@ export function OutletListPage() {
       width: "1%",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
-          <Button
+          {canEdit && <Button
             variant="ghost"
             size="icon-xs"
             aria-label={`Ubah ${row.nama}`}
             onClick={() => navigate(`/outlet/${row.id}/edit`)}
           >
             <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
+          </Button>}
+          {canDelete && <Button
             variant="ghost"
             size="icon-xs"
             aria-label={`Hapus ${row.nama}`}
@@ -200,7 +206,7 @@ export function OutletListPage() {
             className="hover:bg-rust-soft hover:text-rust-ink"
           >
             <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          </Button>}
         </div>
       ),
     },
@@ -222,12 +228,14 @@ export function OutletListPage() {
               <Download className="h-3.5 w-3.5" />
               Unduh CSV
             </Button>
-            <Button asChild>
-              <Link to="/outlet/new">
-                <Plus className="h-3.5 w-3.5" />
-                Daftarkan {outletLabel()}
-              </Link>
-            </Button>
+            {canCreate && (
+              <Button asChild>
+                <Link to="/outlet/new">
+                  <Plus className="h-3.5 w-3.5" />
+                  Daftarkan {outletLabel()}
+                </Link>
+              </Button>
+            )}
           </>
         }
         meta={
@@ -293,9 +301,11 @@ export function OutletListPage() {
           emptyMessage={`Tidak ada ${outletLabel()} yang cocok`}
           emptyDescription={`Ubah filter, atau daftarkan ${outletLabel()} baru untuk mulai melayaninya.`}
           emptyAction={
-            <Button asChild size="sm">
-              <Link to="/outlet/new">Daftarkan {outletLabel()}</Link>
-            </Button>
+            canCreate ? (
+              <Button asChild size="sm">
+                <Link to="/outlet/new">Daftarkan {outletLabel()}</Link>
+              </Button>
+            ) : undefined
           }
           dense
         />

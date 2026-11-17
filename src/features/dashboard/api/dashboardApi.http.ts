@@ -4,10 +4,9 @@
  * Sequenced last in D3's own Track B for exactly this reason: every figure
  * here already has a real feature behind it once orders (B2), reports/
  * deliveries (B5) and transactions (B6) are wired, so this composes those
- * rather than re-deriving a sixth copy of the same numbers. `piutangOutstanding`/
- * `piutangJatuhTempo` come straight from `financeApi.getAgingReport()`;
- * `openOrders` from `orderApi.getOrderTotals()`. Neither is fetched here a
- * second, independently-computed way.
+ * rather than re-deriving a sixth copy of the same numbers: pending receipts
+ * come from `financeApi.getPendingPayments()` and `openOrders` from
+ * `orderApi.getOrderTotals()`, never computed here a second way.
  *
  * `/payments`, `/deliveries` and schedule agreements have no "today" or
  * "this month" convenience on the wire, so this file fetches each with its
@@ -32,20 +31,21 @@
  * without `audit.read.audit_trails` are not asked and get an empty list.
  */
 import { getAllPages, getOne } from "@/lib/api";
+import { shareInFlight } from "@/lib/inFlight";
 import { holds } from "@/features/rbac/holds";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import type { AuditEntry } from "@/types/domain";
 import { activityLabel } from "../lib/activityLabel";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import { getVehicles } from "@/features/vehicles/api/vehicleApi";
-import { getAgingReport, getPendingPayments } from "@/features/finance/api/financeApi";
+import { getPendingPayments } from "@/features/finance/api/financeApi";
 import { getOrderTotals } from "@/features/orders/api/orderApi";
 import { getQuotaSummary } from "@/features/sa/api/saApi";
 import { getSettings } from "@/features/settings/api/settingsApi";
 import { currentJakartaMonth } from "@/features/sa/lib/period";
 import { addDays, isoDate, startOfToday } from "@/lib/date";
 import type { DispatchLane, DispatchRail, DispatchStop, KpiSummary, MonthlyChartPoint, OutletShare, RecentActivity } from "../types";
-import type { DashboardApi } from "./contract";
+import type { DashboardApi, KpiIncludes } from "./contract";
 
 /** Mirrors the fields of delivery's own DeliveryResponse this adapter needs. */
 interface DeliveryResponse {
@@ -95,31 +95,46 @@ function toDeliveryStatus(status: string): "Antrian" | "Proses" | "Selesai" | "T
  * (5,000 rows) is far above a month's volume; it exists so a bad range cannot
  * loop without end.
  */
-async function fetchDeliveries(from: string, to: string): Promise<DeliveryResponse[]> {
-  const exclusiveEnd = isoDate(addDays(new Date(`${to}T00:00:00Z`), 1));
-  const { items } = await getAllPages<DeliveryResponse>("/deliveries", {
-    sort: [{ field: "created_at", direction: "desc" }],
-    filters: [
-      { field: "date", operator: "gte" as const, value: from },
-      { field: "date", operator: "lt" as const, value: exclusiveEnd },
-    ],
-  }, { maxPages: 50 });
-  return items;
+function fetchDeliveries(from: string, to: string): Promise<DeliveryResponse[]> {
+  return shareInFlight(`deliveries:${from}:${to}`, async () => {
+    const exclusiveEnd = isoDate(addDays(new Date(`${to}T00:00:00Z`), 1));
+    const { items } = await getAllPages<DeliveryResponse>("/deliveries", {
+      sort: [{ field: "created_at", direction: "desc" }],
+      filters: [
+        { field: "date", operator: "gte" as const, value: from },
+        { field: "date", operator: "lt" as const, value: exclusiveEnd },
+      ],
+    }, { maxPages: 50 });
+    return items;
+  });
 }
 
-async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
+// The widgets below mount together; each source is fetched once and shared
+// (see shareInFlight).
+const outletList = () => shareInFlight("outlets", () => getOutletList());
+const vehicleList = () => shareInFlight("vehicles", () => getVehicles());
+
+/** This month, first to last day: the chart's range, and the shares' too. */
+function thisMonth(): [string, string] {
+  const today = startOfToday();
+  return [
+    toIso(new Date(today.getFullYear(), today.getMonth(), 1)),
+    toIso(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
+  ];
+}
+
+async function getKpiSummary(include: KpiIncludes = {}): Promise<KpiSummary> {
   const today = toIso(startOfToday());
   const yesterday = toIso(new Date(startOfToday().getTime() - 86_400_000));
 
-  const [todayRows, yesterdayRows, outlets, quota, pending, aging, orderTotals, settings] =
+  const [todayRows, yesterdayRows, outlets, quota, pending, orderTotals, settings] =
     await Promise.all([
       fetchDeliveries(today, today),
       fetchDeliveries(yesterday, yesterday),
-      getOutletList(),
+      outletList(),
       getQuotaSummary(currentJakartaMonth()),
-      getPendingPayments(),
-      getAgingReport(),
-      includeManualOrders ? getOrderTotals() : Promise.resolve({ baru: 0 }),
+      include.payments ? getPendingPayments() : Promise.resolve(null),
+      include.manualOrders ? getOrderTotals() : Promise.resolve({ baru: 0 }),
       getSettings(),
     ]);
   // What went out today is the target once a run has left; before that, the
@@ -137,10 +152,8 @@ async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
     monthlyQuotaRemaining: quota.remainingQty,
     activeOutlet: outlets.filter((o) => o.status === "Aktif").length,
     totalOutlet: outlets.length,
-    pendingPayments: pending.length,
-    pendingPaymentValue: pending.reduce((s, p) => s + p.jumlah, 0),
-    piutangOutstanding: aging.grandTotal,
-    piutangJatuhTempo: aging.jatuhTempoTotal,
+    pendingPayments: pending ? pending.length : null,
+    pendingPaymentValue: pending ? pending.reduce((s, p) => s + p.jumlah, 0) : null,
     previousDayDistributed: yesterdayRows.reduce((s, d) => s + d.delivered_qty, 0),
     openOrders: orderTotals.baru,
     lateDeliveries: todayRows.filter((d) => toDeliveryStatus(d.delivery_status) === "Tertunda")
@@ -149,10 +162,8 @@ async function getKpiSummary(includeManualOrders = false): Promise<KpiSummary> {
 }
 
 async function getMonthlyChart(): Promise<MonthlyChartPoint[]> {
-  const today = startOfToday();
-  const first = new Date(today.getFullYear(), today.getMonth(), 1);
-  const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  const rows = await fetchDeliveries(toIso(first), toIso(last));
+  const last = new Date(startOfToday().getFullYear(), startOfToday().getMonth() + 1, 0);
+  const rows = await fetchDeliveries(...thisMonth());
 
   const buckets = Array.from({ length: Math.ceil(last.getDate() / 7) }, (_, i) => ({
     week: `Minggu ${i + 1}`,
@@ -179,12 +190,10 @@ const OUTLET_SHARE_LIMIT = 4;
 
 async function getOutletShares(): Promise<OutletShare[]> {
   const limit = OUTLET_SHARE_LIMIT;
-  const today = startOfToday();
-  const first = new Date(today.getFullYear(), today.getMonth(), 1);
-  const [rows, outlets] = await Promise.all([
-    fetchDeliveries(toIso(first), toIso(today)),
-    getOutletList(),
-  ]);
+  // The whole month, the chart's own range, so the two share one fetch. A
+  // delivery later this month has delivered nothing yet, so the shares are
+  // what they were with the range ending today.
+  const [rows, outlets] = await Promise.all([fetchDeliveries(...thisMonth()), outletList()]);
   const outletById = new Map(outlets.map((o) => [o.id, o]));
 
   const totals = new Map<string, number>();
@@ -238,8 +247,10 @@ async function getDispatchRail(): Promise<DispatchRail> {
   const today = toIso(startOfToday());
   const [rows, vehicles, outlets] = await Promise.all([
     fetchDeliveries(today, today),
-    getVehicles(),
-    getOutletList(),
+    // The truck's type and capacity, for a role that may read the fleet;
+    // finance follows the day's runs without it (Round 1 G17).
+    holds(PERMISSIONS.VEHICLES_VIEW) ? vehicleList() : Promise.resolve([]),
+    outletList(),
   ]);
   const vehiclesById = new Map(vehicles.map((v) => [v.id, v]));
   const outletsById = new Map(outlets.map((o) => [o.id, o]));
