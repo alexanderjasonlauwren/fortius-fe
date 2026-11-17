@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { describeAccess, describeRoles } from "./access";
 import { PERMISSIONS } from "./permissions";
+import { setLexicon } from "@/lib/lexicon";
 import { NAV_GROUPS, bottomNavFor, navGroupsFor, landingPathFor, titleFor, usesDriverConsole } from "@/layouts/nav";
 
 describe("financial report navigation", () => {
@@ -256,6 +257,24 @@ describe("the nav a role is shown", () => {
     expect(shown).not.toContain("/users");
   });
 
+  // Round 1 G17: finance reads plans (it funds stops from the payment board)
+  // but not the drivers and trucks a plan is built from, and Perencanaan
+  // answered it with a page of 403s.
+  it("offers Perencanaan only with the drivers and trucks it is built from", () => {
+    expect(hrefs([PERMISSIONS.DISTRIBUTION_VIEW])).not.toContain("/distribution");
+    expect(
+      hrefs([PERMISSIONS.DISTRIBUTION_VIEW, PERMISSIONS.DRIVERS_VIEW, PERMISSIONS.VEHICLES_VIEW]),
+    ).toContain("/distribution");
+  });
+
+  // Round 1 G20: GET /users/access needs users AND user roles; a dispatcher
+  // holds the first (to name a second approver) and met an empty page.
+  it("offers Pengguna only with both permissions its list needs", () => {
+    expect(hrefs([PERMISSIONS.USERS_VIEW])).not.toContain("/users");
+    expect(hrefs([PERMISSIONS.USER_ROLES_VIEW])).not.toContain("/users");
+    expect(hrefs([PERMISSIONS.USERS_VIEW, PERMISSIONS.USER_ROLES_VIEW])).toContain("/users");
+  });
+
   // Otherwise a Keuangan heading renders with nothing under it.
   it("drops a group whose every item was filtered away", () => {
     const labels = navGroupsFor([PERMISSIONS.SA_VIEW]).map((g) => g.label);
@@ -310,4 +329,16 @@ describe("the nav a role is shown", () => {
     expect(hrefs(driver)).toContain("/sopir");
     expect(hrefs(driver)).not.toContain("/dashboard");
   });
+});
+
+// Round 1 G27: the menu read the tenant's word for an outlet when the module
+// loaded, before the tenant's settings arrived, and said "Outlet" over a page
+// titled "Pangkalan".
+it("names menu entries in the tenant's words once its settings arrive", () => {
+  setLexicon({ outlet: "pangkalan" }, "tenant-lexicon-test");
+  const entry = navGroupsFor([PERMISSIONS.OUTLETS_VIEW], "manual")
+    .flatMap((g) => g.items)
+    .find((i) => i.href === "/outlet");
+  expect(entry?.name).toBe("Pangkalan");
+  expect(titleFor("/outlet")).toBe("Pangkalan");
 });

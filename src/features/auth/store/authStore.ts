@@ -10,6 +10,8 @@ import { persist } from "zustand/middleware";
 import { authApi } from "@/features/auth/api/authApi";
 import type { SessionTenant } from "@/features/auth/api/contract";
 import type { User } from "@/types/auth";
+import { ApiError } from "@/lib/api";
+
 import { clearSessionTokens } from "@/lib/tokens";
 
 interface AuthState {
@@ -18,6 +20,12 @@ interface AuthState {
   isAuthenticated: boolean;
   /** The tenant this session acts as. Null until a session is read. */
   tenant: SessionTenant | null;
+  /**
+   * True when the last `restore()` could not reach the server for a reason
+   * that says nothing about the session -- rate limited, a 5xx, no network.
+   * The tokens are kept; the app offers to try again instead of signing out.
+   */
+  sessionUnavailable: boolean;
 
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -44,6 +52,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       tenant: null,
       isAuthenticated: false,
+      sessionUnavailable: false,
 
       login: async (email: string, password: string) => {
         const { user, tenant, token } = await authApi.login(email, password);
@@ -53,14 +62,22 @@ export const useAuthStore = create<AuthState>()(
       restore: async () => {
         try {
           const { user, tenant, token } = await authApi.session();
-          set({ user, tenant, token, isAuthenticated: true });
-        } catch {
-          // A session that cannot be re-read is not a session. Failing closed
-          // here is what stops a persisted `isAuthenticated: true` from
-          // outliving the token it was true for — which would render the whole
-          // console to someone the server will answer 401 to on every request.
+          set({ user, tenant, token, isAuthenticated: true, sessionUnavailable: false });
+        } catch (error) {
+          // A reload while the server is busy (429), failing (5xx) or out of
+          // reach is not a lost session: signing out then threw away a good
+          // one, mid-morning, for everyone behind the office's one address
+          // (Round 1 G15). Keep the tokens and let the person try again.
+          if (sessionMayStillBeValid(error)) {
+            set({ sessionUnavailable: true });
+            return;
+          }
+          // Anything else -- a 401/403, no token, a reply we do not
+          // understand -- fails closed, as before: that is what stops a
+          // persisted `isAuthenticated: true` from outliving the token it was
+          // true for.
           clearSessionTokens();
-          set({ user: null, tenant: null, token: null, isAuthenticated: false });
+          set({ user: null, tenant: null, token: null, isAuthenticated: false, sessionUnavailable: false });
         }
       },
 
@@ -105,3 +122,15 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+/**
+ * Whether a failed session read says nothing about the session itself: the
+ * server rate-limited the request, failed, or was never reached. Only these
+ * keep the tokens; every other failure signs out.
+ */
+export function sessionMayStillBeValid(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  if (error.status === 429) return true;
+  if (error.status !== undefined && error.status >= 500) return true;
+  return error.status === undefined && error.code === "NETWORK";
+}

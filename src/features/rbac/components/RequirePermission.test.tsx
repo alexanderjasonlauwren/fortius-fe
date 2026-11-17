@@ -12,7 +12,7 @@ vi.mock("@/features/auth/store/authStore", () => ({
       hasPermission: (code: string) => state.permissions.includes(code),
     }),
 }));
-import { RequireOfficeConsole } from "./RequirePermission";
+import { RequireDriverConsole, RequireOfficeConsole } from "./RequirePermission";
 
 afterEach(cleanup);
 
@@ -56,5 +56,31 @@ describe("an office-only page", () => {
   it("opens for office staff", () => {
     open([PERMISSIONS.SETTINGS_VIEW, PERMISSIONS.DISTRIBUTION_VIEW]);
     expect(screen.getByText("Profil agen")).toBeTruthy();
+  });
+});
+
+// Round 1 G28: a dispatcher holds execute.deliveries to file on a driver's
+// behalf, and opened /sopir onto an empty run. The console is the crew's.
+describe("the driver console", () => {
+  function openConsole(permissions: string[]) {
+    state.permissions = permissions;
+    render(
+      <MemoryRouter>
+        <RequireDriverConsole>
+          <p>Rit hari ini</p>
+        </RequireDriverConsole>
+      </MemoryRouter>,
+    );
+  }
+
+  it("opens for the crew", () => {
+    openConsole(driverRole);
+    expect(screen.getByText("Rit hari ini")).toBeTruthy();
+  });
+
+  it("is refused to office staff who may file a drop on a driver's behalf", () => {
+    openConsole([PERMISSIONS.DELIVERIES_EXECUTE, PERMISSIONS.DISTRIBUTION_VIEW, PERMISSIONS.DELIVERIES_VIEW]);
+    expect(screen.queryByText("Rit hari ini")).toBeNull();
+    expect(screen.getByText("Halaman ini di luar akses Anda")).toBeTruthy();
   });
 });

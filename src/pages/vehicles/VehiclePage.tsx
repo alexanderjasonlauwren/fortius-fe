@@ -1,3 +1,5 @@
+import { PERMISSIONS } from "@/features/rbac/permissions";
+import { holds } from "@/features/rbac/holds";
 import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -52,6 +54,10 @@ const EMPTY: FormState = { plat: "", armada: "", kapasitas: 240, status: "Aktif"
  * they took a different truck.
  */
 export function VehiclePage() {
+  // Each button follows the route it calls (Round 1 G26).
+  const canCreate = holds(PERMISSIONS.VEHICLES_CREATE);
+  const canEdit = holds(PERMISSIONS.VEHICLES_MANAGE);
+  const canDelete = holds(PERMISSIONS.VEHICLES_DELETE);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<VehicleStatusEntity | "Semua">("Semua");
   const [editing, setEditing] = useState<FormState | null>(null);
@@ -161,7 +167,7 @@ export function VehiclePage() {
       header: "",
       render: (row) => (
         <div className="flex justify-end gap-1">
-          <Button
+          {canEdit && <Button
             variant="ghost"
             size="icon-xs"
             aria-label={`Ubah ${row.plat}`}
@@ -176,8 +182,8 @@ export function VehiclePage() {
             }
           >
             <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
+          </Button>}
+          {canDelete && <Button
             variant="ghost"
             size="icon-xs"
             aria-label={`Hapus ${row.plat}`}
@@ -185,7 +191,7 @@ export function VehiclePage() {
             className="hover:bg-rust-soft hover:text-rust-ink"
           >
             <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          </Button>}
         </div>
       ),
     },
@@ -198,10 +204,12 @@ export function VehiclePage() {
         title="Armada"
         description="Kendaraan yang dapat dimuati, kapasitas angkutnya, dan masa berlaku dokumennya. Sopir ditetapkan per rit di papan berangkat."
         actions={
-          <Button onClick={() => openEditor(EMPTY)}>
-            <Plus className="h-3.5 w-3.5" />
-            Tambah armada
-          </Button>
+          canCreate ? (
+            <Button onClick={() => openEditor(EMPTY)}>
+              <Plus className="h-3.5 w-3.5" />
+              Tambah armada
+            </Button>
+          ) : undefined
         }
         meta={
           <span className="text-xs text-ink-muted">
@@ -251,9 +259,11 @@ export function VehiclePage() {
           emptyMessage="Tidak ada armada yang cocok"
           emptyDescription="Ubah filter, atau tambahkan kendaraan baru ke daftar."
           emptyAction={
-            <Button size="sm" onClick={() => openEditor(EMPTY)}>
-              Tambah armada
-            </Button>
+            canCreate ? (
+              <Button size="sm" onClick={() => openEditor(EMPTY)}>
+                Tambah armada
+              </Button>
+            ) : undefined
           }
           dense
         />
