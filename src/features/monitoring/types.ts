@@ -93,10 +93,52 @@ export interface MonitoringAssignment {
   selesai: boolean;
 }
 
+/**
+ * One surat jalan on a run, as closing the run sees it: the counts the driver
+ * filed, which the office confirms or corrects before the run is closed.
+ */
+export interface RunDocument {
+  id: string;
+  kode: string;
+  outlet: string;
+  produk: string;
+  /** What left the yard — the ceiling the other two add up to. */
+  dimuat: number;
+  diterima: number;
+  kembali: number;
+  status: "Antrian" | "Proses" | "Selesai" | "Tertunda";
+  /** The run close has confirmed these counts. */
+  dikonfirmasi: boolean;
+  /**
+   * Confirmed, with tabung that came back, but not yet credited and
+   * restocked — "koreksi tagihan tertunda".
+   */
+  koreksiTertunda: boolean;
+  notaKredit?: string;
+}
+
+/**
+ * One truck's run (rit). Billing happens at dispatch for everything loaded;
+ * closing the run is where the office confirms what each pangkalan kept, and
+ * what came back is credited and returned to stock.
+ */
+export interface RunSummary {
+  id: string;
+  ritKe?: number;
+  driver: string;
+  plat: string;
+  berangkat?: string;
+  kembali?: string;
+  /** Left and not yet closed: the only state that can be closed. */
+  bisaDitutup: boolean;
+  dokumen: RunDocument[];
+}
+
 export interface MonitoringSnapshot {
   drivers: DriverCard[];
   rows: MonitoringRow[];
   assignments: MonitoringAssignment[];
+  runs: RunSummary[];
   lastSyncAt: string;
   totals: {
     target: number;

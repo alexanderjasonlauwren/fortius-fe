@@ -11,6 +11,7 @@ import type {
   MonitoringAssignment,
   MonitoringRow,
   MonitoringSnapshot,
+  RunSummary,
 } from "../types";
 
 export interface DateRange {
@@ -51,6 +52,48 @@ export interface SetDeliveryStatusInput {
   catatan?: string;
 }
 
+/** One surat jalan whose counts the office corrects at close. */
+export interface RunCount {
+  deliveryId: string;
+  diterima: number;
+  kembali: number;
+  catatan?: string;
+}
+
+export interface CloseRunInput {
+  runId: string;
+  /** Only the corrected surat jalan; the rest keep the driver's filing. */
+  koreksi: RunCount[];
+}
+
+/** What closing a run did to one surat jalan's books. */
+export interface ClosedDocument {
+  id: string;
+  kode: string;
+  outlet?: string;
+  diterima: number;
+  kembali: number;
+  dikoreksi: boolean;
+  notaKredit?: string;
+  nilaiKredit: number;
+  keTitipan: number;
+  /** The books correction failed and waits for a retry; `alasan` says why. */
+  tertunda: boolean;
+  alasan?: string;
+}
+
+export interface CloseRunResult {
+  dokumen: ClosedDocument[];
+  rencanaSelesai: boolean;
+}
+
+export interface ReturnBookingResult {
+  notaKredit?: string;
+  nilaiKredit: number;
+  keTitipan: number;
+  sudahDibukukan: boolean;
+}
+
 export interface MonitoringApi {
   getMonitoringSnapshot(dateRange: DateRange): Promise<MonitoringSnapshot>;
   getDriverCards(dateRange: DateRange): Promise<DriverCard[]>;
@@ -58,6 +101,10 @@ export interface MonitoringApi {
   setDeliveryStatus(input: SetDeliveryStatusInput): Promise<StatusReceipt>;
   /** Prints the surat jalan a stop's row carries. */
   printSuratJalan(rowId: string): Promise<void>;
+  /** Closes a run, confirming (and where needed correcting) its counts. */
+  closeRun(input: CloseRunInput): Promise<CloseRunResult>;
+  /** Retries a closed surat jalan's books correction. */
+  bookReturn(deliveryId: string): Promise<ReturnBookingResult>;
 }
 
-export type { DriverCard, MonitoringAssignment, MonitoringRow, MonitoringSnapshot };
+export type { DriverCard, MonitoringAssignment, MonitoringRow, MonitoringSnapshot, RunSummary };

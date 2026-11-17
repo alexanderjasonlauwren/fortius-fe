@@ -6,6 +6,7 @@ import { DriverCardRow } from "@/features/monitoring/components/DriverCardRow";
 import { RoundStopList } from "@/features/monitoring/components/RoundStopList";
 import { DistribusiMap } from "@/features/monitoring/components/DistribusiMap";
 import { MonitoringTable } from "@/features/monitoring/components/MonitoringTable";
+import { RunClosePanel } from "@/features/monitoring/components/RunClosePanel";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Panel, PanelHeader } from "@/components/common/Panel";
 import { Field, SegmentedControl, TextInput, TextareaInput } from "@/components/common/Field";
@@ -49,6 +50,9 @@ export function MonitoringPage() {
     setStatusFilter,
     statusMutation,
     printMutation,
+    runs,
+    closeRunMutation,
+    bookReturnMutation,
   } = useMonitoring();
 
   // Completing a stop records what was actually unloaded, so it asks.
@@ -128,6 +132,8 @@ export function MonitoringPage() {
           onHover={setHoveredDriver}
         />
       </section>
+
+      <RunClosePanel runs={runs} closeRun={closeRunMutation} bookReturn={bookReturnMutation} />
 
       <Panel>
         <PanelHeader
@@ -245,8 +251,9 @@ export function MonitoringPage() {
           <DialogHeader>
             <DialogTitle>Tutup {completing?.kode}</DialogTitle>
             <DialogDescription>
-              Catat jumlah {unitLabel()} yang benar-benar diterima {completing?.outlet}.
-              Angka ini menjadi dasar tagihan.
+              Catat jumlah {unitLabel()} yang benar-benar diterima {completing?.outlet}. Tagihan
+              sudah terbit saat berangkat untuk seluruh muatan; yang tidak diterima dikreditkan
+              saat rit ditutup.
             </DialogDescription>
           </DialogHeader>
 
@@ -273,7 +280,8 @@ export function MonitoringPage() {
           {completing && realisasi < completing.target && (
             <p className="rounded-md border border-line bg-signal-soft px-3 py-2 text-xs text-ink">
               Kurang <span className="data">{formatNumber(completing.target - realisasi)}</span>{" "}
-              {unitLabel()} dari target. Selisih tercatat pada surat jalan dan laporan periode.
+              {unitLabel()} dari muatan. Selisihnya dicatat kembali ke truk dan dikreditkan saat
+              rit ditutup.
             </p>
           )}
 
@@ -309,8 +317,8 @@ export function MonitoringPage() {
           <DialogHeader>
             <DialogTitle>Tandai {holding?.kode} tertunda?</DialogTitle>
             <DialogDescription>
-              Pengiriman ke {holding?.outlet} dicatat gagal diselesaikan hari ini. Surat
-              jalan tetap terbuka dan tidak menerbitkan tagihan.
+              Pengiriman ke {holding?.outlet} dicatat gagal. Seluruh muatannya dicatat kembali
+              ke truk, dan tagihannya dikreditkan saat rit ditutup.
             </DialogDescription>
           </DialogHeader>
 

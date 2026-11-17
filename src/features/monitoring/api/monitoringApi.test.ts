@@ -481,3 +481,79 @@ describe("printing a surat jalan", () => {
     await expect(monitoringApiHttp.printSuratJalan("not-loaded")).rejects.toThrow();
   });
 });
+
+describe("closing a run", () => {
+  // A driver on two runs has one card but two runs, and each is closed on
+  // its own. A run cancelled with its plan is not offered at all (Round 1 N9).
+  it("lists each run with its own surat jalan, and leaves a cancelled run out", async () => {
+    const snap = await load(
+      board({
+        drivers: [
+          driver({ trip_id: "trip-1", trip_no: 1, departed_at: "2026-09-06T00:10:00Z", returned_at: "2026-09-06T04:00:00Z" }),
+          driver({ trip_id: "trip-2", trip_no: 2, departed_at: "2026-09-06T05:00:00Z" }),
+          driver({ trip_id: "trip-3", trip_no: 3, trip_status: "cancelled" }),
+        ],
+        stops: [
+          stop({
+            trip_id: "trip-1",
+            deliveries: [
+              delivery({
+                delivery_status: "partial", delivered_qty: 40, returned_qty: 10,
+                reconciled: true, return_pending: true,
+              }),
+            ],
+          }),
+          stop({
+            stop_id: "stop-2",
+            trip_id: "trip-2",
+            deliveries: [delivery({ id: D2, delivery_number: "SJ-2", delivery_status: "on_route" })],
+          }),
+        ],
+      }),
+    );
+    expect(snap.runs.map((r) => [r.ritKe, r.bisaDitutup])).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+    expect(snap.runs[0].dokumen[0]).toMatchObject({
+      diterima: 40, kembali: 10, status: "Selesai", dikonfirmasi: true, koreksiTertunda: true,
+    });
+    expect(snap.runs[1].dokumen.map((d) => [d.kode, d.status])).toEqual([["SJ-2", "Proses"]]);
+  });
+
+  it("sends only the corrected counts, and none at all for an unedited close", async () => {
+    send.mockResolvedValue({ trip_id: "trip-1", stops: [], plan_completed: false });
+
+    await monitoringApiHttp.closeRun({ runId: "trip-1", koreksi: [] });
+    expect(send).toHaveBeenLastCalledWith("post", "/distribution/trips/trip-1/close", {}, { timeout: 60_000 });
+
+    await monitoringApiHttp.closeRun({
+      runId: "trip-1",
+      koreksi: [{ deliveryId: D1, diterima: 45, kembali: 5, catatan: "salah ketik" }],
+    });
+    expect(send).toHaveBeenLastCalledWith(
+      "post",
+      "/distribution/trips/trip-1/close",
+      { counts: [{ delivery_id: D1, delivered_qty: 45, returned_qty: 5, note: "salah ketik" }] },
+      { timeout: 60_000 },
+    );
+  });
+
+  it("reports a stop whose books correction failed as pending, with the reason", async () => {
+    send.mockResolvedValue({
+      trip_id: "trip-1",
+      plan_completed: true,
+      stops: [
+        {
+          delivery_id: D1, delivery_number: "SJ-1", outlet_name: "Pangkalan Melati",
+          delivered_qty: 0, returned_qty: 30, corrected: false,
+          credit_amount: 0, released_to_deposit: 0,
+          books_pending: true, books_error: "Periode ini sudah ditutup",
+        },
+      ],
+    });
+    const result = await monitoringApiHttp.closeRun({ runId: "trip-1", koreksi: [] });
+    expect(result.rencanaSelesai).toBe(true);
+    expect(result.dokumen[0]).toMatchObject({ tertunda: true, alasan: "Periode ini sudah ditutup", kembali: 30 });
+  });
+});
