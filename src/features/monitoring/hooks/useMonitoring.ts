@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import {
+  bookReturn,
+  closeRun,
   getMonitoringSnapshot,
   printSuratJalan,
   setDeliveryStatus,
@@ -52,6 +54,24 @@ export function useMonitoring() {
     errorTitle: "Cetak surat jalan gagal",
   });
 
+  // Closing a run corrects invoices, credit notes, deposits and stock, so it
+  // keeps the default sweep: the finance screens must not show the
+  // pre-close figures.
+  const closeRunMutation = useDeskMutation({
+    mutationFn: closeRun,
+    errorTitle: "Rit gagal ditutup",
+  });
+
+  const bookReturnMutation = useDeskMutation({
+    mutationFn: bookReturn,
+    errorTitle: "Koreksi tagihan gagal",
+    success: (result) => ({
+      title: result.sudahDibukukan
+        ? "Koreksi tagihan sudah tercatat"
+        : `Nota kredit ${result.notaKredit ?? ""} terbit`,
+    }),
+  });
+
   const rows = (snapshot.data?.rows ?? []).filter((r) => {
     if (driverFilter && r.driverId !== driverFilter) return false;
     if (statusFilter !== "Semua" && r.status !== statusFilter) return false;
@@ -63,6 +83,7 @@ export function useMonitoring() {
     monitoringTable: rows,
     allRows: snapshot.data?.rows ?? [],
     assignments: snapshot.data?.assignments ?? [],
+    runs: snapshot.data?.runs ?? [],
     totals: snapshot.data?.totals,
     lastSyncAt: snapshot.data?.lastSyncAt,
     isLoading: snapshot.isLoading,
@@ -78,5 +99,7 @@ export function useMonitoring() {
     setStatusFilter,
     statusMutation,
     printMutation,
+    closeRunMutation,
+    bookReturnMutation,
   };
 }

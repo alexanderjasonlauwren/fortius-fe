@@ -45,8 +45,11 @@ import { DEFAULT_GEOFENCE_RADIUS_M, geoVerdict } from "@/lib/geo";
 import { getSettings } from "@/features/settings/api/settingsApi";
 import { printDocument } from "@/lib/export";
 import type {
+  CloseRunInput,
+  CloseRunResult,
   DateRange,
   MonitoringApi,
+  ReturnBookingResult,
   SetDeliveryStatusInput,
   StatusReceipt,
 } from "./contract";
@@ -56,6 +59,8 @@ import type {
   MonitoringAssignment,
   MonitoringRow,
   MonitoringSnapshot,
+  RunDocument,
+  RunSummary,
 } from "../types";
 
 /** Mirrors the backend's BoardDelivery. */
@@ -70,6 +75,9 @@ interface BoardDeliveryWire {
   empties_collected: number;
   delivery_status: string;
   version: number;
+  reconciled?: boolean;
+  return_pending?: boolean;
+  return_credit_note_number?: string;
 }
 
 /** Mirrors the backend's BoardStop. */
@@ -112,6 +120,7 @@ interface BoardDriverWire {
   capacity_qty?: number;
   trip_id?: string;
   trip_status?: string;
+  trip_no?: number;
   departed_at?: string;
   returned_at?: string;
   latitude?: number;
@@ -345,6 +354,60 @@ function toAssignment(
   };
 }
 
+const DOCUMENT_STATUS: Record<string, RunDocument["status"]> = {
+  pending: "Antrian",
+  on_route: "Proses",
+  delivered: "Selesai",
+  partial: "Selesai",
+  failed: "Tertunda",
+};
+
+/**
+ * Each run with its surat jalan, for closing it.
+ *
+ * Built from the board's runs (`drivers` is one row per crew per run) and the
+ * stops riding on each, not from the driver cards: a driver on two runs a day
+ * has one card but two runs, and each is closed on its own.
+ */
+export function toRuns(board: Pick<BoardResponseWire, "drivers" | "stops">): RunSummary[] {
+  return board.drivers
+    .filter((driver) => driver.trip_id && driver.trip_status !== "cancelled")
+    .map((driver) => {
+      const dokumen = board.stops
+        .filter((stop) => stop.trip_id === driver.trip_id)
+        .sort((a, b) => a.sequence_no - b.sequence_no)
+        .flatMap((stop) =>
+          stop.deliveries
+            .filter((doc) => doc.delivery_status !== "cancelled")
+            .map(
+              (doc): RunDocument => ({
+                id: doc.id,
+                kode: doc.delivery_number,
+                outlet: stop.outlet_name,
+                produk: doc.product_name,
+                dimuat: doc.dispatched_qty,
+                diterima: doc.delivered_qty,
+                kembali: doc.returned_qty,
+                status: DOCUMENT_STATUS[doc.delivery_status] ?? "Antrian",
+                dikonfirmasi: !!doc.reconciled,
+                koreksiTertunda: !!doc.return_pending,
+                notaKredit: doc.return_credit_note_number,
+              }),
+            ),
+        );
+      return {
+        id: driver.trip_id as string,
+        ritKe: driver.trip_no,
+        driver: driver.driver_name,
+        plat: driver.plate ?? "—",
+        berangkat: driver.departed_at,
+        kembali: driver.returned_at,
+        bisaDitutup: !!driver.departed_at && !driver.returned_at,
+        dokumen,
+      };
+    });
+}
+
 async function getMonitoringSnapshot(dateRange: DateRange): Promise<MonitoringSnapshot> {
   const query =
     `?date_from=${encodeURIComponent(dateRange.from)}` +
@@ -383,6 +446,7 @@ async function getMonitoringSnapshot(dateRange: DateRange): Promise<MonitoringSn
   return {
     drivers,
     rows,
+    runs: toRuns(board),
     // The server's clock, not the browser's — a "last sync" read off a
     // laptop with a wrong clock is worse than none.
     lastSyncAt: board.generated_at,
@@ -525,10 +589,84 @@ async function printSuratJalan(rowId: string): Promise<void> {
   );
 }
 
+/** Mirrors the backend's dispatch.ClosedStop. */
+interface ClosedStopWire {
+  delivery_id: string;
+  delivery_number: string;
+  outlet_name?: string;
+  delivered_qty: number;
+  returned_qty: number;
+  corrected: boolean;
+  credit_note_number?: string;
+  credit_amount: number;
+  released_to_deposit: number;
+  books_pending: boolean;
+  books_error?: string;
+}
+
+/**
+ * Closes a run. Only corrected surat jalan are sent; the server keeps the
+ * driver's filing for the rest and books whatever came back.
+ */
+async function closeRun(input: CloseRunInput): Promise<CloseRunResult> {
+  const body =
+    input.koreksi.length > 0
+      ? {
+          counts: input.koreksi.map((c) => ({
+            delivery_id: c.deliveryId,
+            delivered_qty: c.diterima,
+            returned_qty: c.kembali,
+            note: c.catatan?.trim() || undefined,
+          })),
+        }
+      : {};
+  const res = await send<{ trip_id: string; stops: ClosedStopWire[]; plan_completed: boolean }>(
+    "post",
+    `/distribution/trips/${input.runId}/close`,
+    body,
+    // Each surat jalan with tabung that came back has its invoice corrected
+    // in turn after the close commits; a long run can outlast the default.
+    { timeout: 60_000 },
+  );
+  return {
+    rencanaSelesai: res.plan_completed,
+    dokumen: (res.stops ?? []).map((stop) => ({
+      id: stop.delivery_id,
+      kode: stop.delivery_number,
+      outlet: stop.outlet_name,
+      diterima: stop.delivered_qty,
+      kembali: stop.returned_qty,
+      dikoreksi: stop.corrected,
+      notaKredit: stop.credit_note_number,
+      nilaiKredit: stop.credit_amount,
+      keTitipan: stop.released_to_deposit,
+      tertunda: stop.books_pending,
+      alasan: stop.books_error,
+    })),
+  };
+}
+
+async function bookReturn(deliveryId: string): Promise<ReturnBookingResult> {
+  const res = await send<{
+    credit_note_number?: string;
+    credit_amount: number;
+    released_to_deposit: number;
+    already_booked: boolean;
+  }>("post", `/deliveries/${deliveryId}/book-return`, {});
+  return {
+    notaKredit: res.credit_note_number,
+    nilaiKredit: res.credit_amount,
+    keTitipan: res.released_to_deposit,
+    sudahDibukukan: res.already_booked,
+  };
+}
+
 export const monitoringApiHttp: MonitoringApi = {
   getMonitoringSnapshot,
   getDriverCards,
   getMonitoringTable,
   setDeliveryStatus,
   printSuratJalan,
+  closeRun,
+  bookReturn,
 };
