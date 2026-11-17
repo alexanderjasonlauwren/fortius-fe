@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
-import { useDeskMutation } from "./useDeskMutation";
+import { SHELL, useDeskMutation } from "./useDeskMutation";
 
 /**
  * Every write in the console goes through this hook, and until now every one
@@ -32,18 +32,34 @@ function harness() {
 }
 
 describe("useDeskMutation", () => {
-  it("invalidates everything by default", async () => {
-    const { spy, wrapper } = harness();
+  // The sweep every other screen relies on -- except the shell queries under
+  // every page (tenants, branches, settings, intake policy), which almost
+  // never change and were most of the refetches after each write (Round 1
+  // G15).
+  it("invalidates everything but the shell by default", async () => {
+    const { client, wrapper } = harness();
+    await client.prefetchQuery({ queryKey: ["scope", "payments"], queryFn: async () => [] });
+    await client.prefetchQuery({ queryKey: ["tenants", "registry"], queryFn: async () => [], meta: SHELL });
     const { result } = renderHook(
       () => useDeskMutation({ mutationFn: async () => "ok" }),
       { wrapper },
     );
 
     result.current.mutate(undefined as never);
-    await waitFor(() => expect(spy).toHaveBeenCalled());
+    await waitFor(() => expect(client.getQueryState(["scope", "payments"])?.isInvalidated).toBe(true));
+    expect(client.getQueryState(["tenants", "registry"])?.isInvalidated).toBe(false);
+  });
 
-    // No argument at all: the sweep every other screen relies on.
-    expect(spy).toHaveBeenCalledWith();
+  it("refreshes the shell too when the write changes it", async () => {
+    const { client, wrapper } = harness();
+    await client.prefetchQuery({ queryKey: ["tenants", "registry"], queryFn: async () => [], meta: SHELL });
+    const { result } = renderHook(
+      () => useDeskMutation({ mutationFn: async () => "ok", refreshesShell: true }),
+      { wrapper },
+    );
+
+    result.current.mutate(undefined as never);
+    await waitFor(() => expect(client.getQueryState(["tenants", "registry"])?.isInvalidated).toBe(true));
   });
 
   it("invalidates only the keys it was given", async () => {

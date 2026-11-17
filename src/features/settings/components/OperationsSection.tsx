@@ -25,6 +25,7 @@ export function OperationsSection() {
     mutationFn: (values: OperationsEntity) => saveOperations(values),
     errorTitle: "Jadwal operasi tidak tersimpan",
     success: "Jadwal operasi disimpan",
+    refreshesShell: true,
   });
 
   const dirty =

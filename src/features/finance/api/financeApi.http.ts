@@ -12,6 +12,7 @@
  * accounting parity plan's P2.
  */
 import { getAllPages, getOne, getPage, send, type Paged } from "@/lib/api";
+import { shareInFlight } from "@/lib/inFlight";
 import { toApiTimestamp, todayIso } from "@/lib/date";
 import { getOutletList } from "@/features/outlet/api/outletApi";
 import type { OutletView } from "@/features/outlet/api/contract";
@@ -292,12 +293,15 @@ async function createManualInvoice(input: CreateManualInvoiceInput): Promise<Inv
  * invoices stay few -- pangkalan pay H-1 -- so the set is small even when the
  * ledger is not.
  */
-async function fetchOpenInvoices(): Promise<{ rows: InvoiceResponse[]; complete: boolean }> {
-  const { items, truncated } = await getAllPages<InvoiceResponse>("/invoices", {
-    sort: [{ field: "due_date", direction: "asc" }],
-    filters: [statusFilter(OPEN_STATUSES)],
+function fetchOpenInvoices(): Promise<{ rows: InvoiceResponse[]; complete: boolean }> {
+  // The aging report and the receivables tile read the same list at once.
+  return shareInFlight("invoices:open", async () => {
+    const { items, truncated } = await getAllPages<InvoiceResponse>("/invoices", {
+      sort: [{ field: "due_date", direction: "asc" }],
+      filters: [statusFilter(OPEN_STATUSES)],
+    });
+    return { rows: items, complete: !truncated };
   });
-  return { rows: items, complete: !truncated };
 }
 
 async function getAgingReport(): Promise<AgingReport> {
@@ -450,10 +454,12 @@ async function getPayments(status?: string, search?: string, page = 1): Promise<
 /** Every receipt waiting for verification: few by nature, read whole. */
 async function getPendingPayments(): Promise<PaymentView[]> {
   const [{ items }, outlets] = await Promise.all([
-    getAllPages<PaymentResponse>("/payments", {
-      sort: [{ field: "payment_date", direction: "desc" }],
-      filters: [{ field: "payment_status", operator: "eq" as const, value: "pending" }],
-    }),
+    shareInFlight("payments:pending", () =>
+      getAllPages<PaymentResponse>("/payments", {
+        sort: [{ field: "payment_date", direction: "desc" }],
+        filters: [{ field: "payment_status", operator: "eq" as const, value: "pending" }],
+      }),
+    ),
     outletsById(),
   ]);
   return items.map((r) => toPaymentView(r, outlets));

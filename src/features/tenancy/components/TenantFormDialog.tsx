@@ -53,6 +53,7 @@ export function TenantFormDialog({
   const create = useDeskMutation({
     mutationFn: () => createTenant(form),
     errorTitle: "Tenant tidak dibuat",
+    refreshesShell: true,
     // Says what provisioning actually built. A bare "saved" would hide that the
     // tenant arrived with a chart of accounts and a usable branch, which is the
     // part that makes it work at all.

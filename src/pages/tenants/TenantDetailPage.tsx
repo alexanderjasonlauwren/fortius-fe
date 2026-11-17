@@ -53,6 +53,7 @@ export function TenantDetailPage() {
     mutationFn: () => updateTenant(id, editing!),
     errorTitle: "Tenant tidak diubah",
     success: "Tenant diubah",
+    refreshesShell: true,
     onDone: () => setEditing(null),
   });
 
@@ -69,6 +70,7 @@ export function TenantDetailPage() {
     mutationFn: () => deactivateTenant(id),
     errorTitle: "Tenant tidak dinonaktifkan",
     success: "Tenant dinonaktifkan",
+    refreshesShell: true,
     onDone: () => {
       setConfirming(false);
       navigate("/tenants");

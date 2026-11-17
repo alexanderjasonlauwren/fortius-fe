@@ -73,6 +73,20 @@ export function RequireOfficeConsole({ children }: { children: React.ReactNode }
   return <AccessRefused permissions={permissions} />;
 }
 
+/**
+ * Gates the driver console to the crew.
+ *
+ * Office roles hold `execute.deliveries` to file a drop on a driver's behalf,
+ * which alone let a dispatcher or manager open /sopir and meet an empty run
+ * (Round 1 G28: the console is for crew only). The menu, the landing page and
+ * this guard read the same decision, `usesDriverConsole`.
+ */
+export function RequireDriverConsole({ children }: { children: React.ReactNode }) {
+  const permissions = useAuthStore((s) => s.user?.permissions);
+  if (usesDriverConsole(permissions)) return <>{children}</>;
+  return <AccessRefused permissions={permissions} />;
+}
+
 function AccessRefused({ permissions }: { permissions?: readonly string[] }) {
   return (
     <Panel spine="text-rust">

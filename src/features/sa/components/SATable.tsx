@@ -12,9 +12,11 @@ import type { ScheduleAgreement } from "../types";
 interface SATableProps {
   data: ScheduleAgreement[];
   isLoading: boolean;
-  onActivate: (id: string) => void;
+  /** Omitted for a role that may not activate (approve) an agreement. */
+  onActivate?: (id: string) => void;
   onPrint: (id: string) => void;
-  onDelete: (sa: ScheduleAgreement) => void;
+  /** Omitted for a role that may not delete one. */
+  onDelete?: (sa: ScheduleAgreement) => void;
   /**
    * Absent when the signed-in user may not import.
    *
@@ -156,7 +158,7 @@ export function SATable({
       width: "1%",
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
-          {row.status === "Draf" && (
+          {onActivate && row.status === "Draf" && (
             <Button
               size="xs"
               onClick={() => onActivate(row.id)}
@@ -189,7 +191,7 @@ export function SATable({
           >
             <Printer className="h-3.5 w-3.5" />
           </Button>
-          {row.sudahDidistribusikan === 0 && (
+          {onDelete && row.sudahDidistribusikan === 0 && (
             <Button
               variant="ghost"
               size="icon-xs"

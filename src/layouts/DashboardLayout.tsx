@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
+import { SHELL } from "@/hooks/useDeskMutation";
 import { useQuery } from "@tanstack/react-query";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useAuthStore } from "@/features/auth/store/authStore";
@@ -27,6 +28,7 @@ export function DashboardLayout() {
     queryKey: ["tenants", "registry"],
     queryFn: getTenants,
     staleTime: 5 * 60_000,
+    meta: SHELL,
   });
   if (tenantList.data) setTenantRegistry(tenantList.data);
 
@@ -41,11 +43,17 @@ export function DashboardLayout() {
     queryFn: () => getBranches(getActingTenant()),
     staleTime: 5 * 60_000,
     enabled: canReadBranches,
+    meta: SHELL,
   });
   if (branchList.data) setBranchRegistry(branchList.data);
 
   const scope = useScope();
   const { branchId } = scope;
+  // The page waits for the branch list. Before it arrives the scope has no
+  // branch, so every query key says "semua"; when it lands the scope moves to
+  // the main branch and every page query ran a second time under the new key
+  // -- Beranda's 108 requests on a cold load were 54 twice (Round 1 G15).
+  const scopeSettled = !canReadBranches || !branchList.isPending;
 
   // This tenant's vocabulary. Set during render rather than in an
   // effect, the same way useScope sets the active scope: print templates and
@@ -54,6 +62,8 @@ export function DashboardLayout() {
     queryKey: [...scopeKey(), "settings"],
     queryFn: getSettings,
     staleTime: 5 * 60_000,
+    enabled: scopeSettled,
+    meta: SHELL,
   });
   // Hydrate from this tenant's cache first, so the first paint after a switch
   // shows neutral words rather than the tenant we just left.
@@ -70,6 +80,11 @@ export function DashboardLayout() {
       document.body.style.overflow = "";
     };
   }, [sidebarOpen]);
+
+  // The header and sidebar query too (notifications, intake policy), so they
+  // wait with the page; this is one short request on a cold load and cached
+  // after it.
+  if (!scopeSettled) return <div className="min-h-screen bg-paper" aria-busy="true" />;
 
   return (
     <div

@@ -1,3 +1,4 @@
+import { holds } from "@/features/rbac/holds";
 import { useState } from "react";
 import { SupplierSection } from "@/features/settings/components/SupplierSection";
 import { Link } from "react-router-dom";
@@ -61,6 +62,11 @@ export function SAManagementPage() {
   const canSetCutover = useAuthStore((state) =>
     state.hasPermission(PERMISSIONS.SA_PLANNING_CUTOVER),
   );
+  // Recording, activating and deleting each follow their own route (Round 1
+  // G26): a dispatcher reads agreements and is offered none of the three.
+  const canCreate = holds(PERMISSIONS.SA_CREATE);
+  const canActivate = holds(PERMISSIONS.SA_APPROVE);
+  const canDelete = holds(PERMISSIONS.SA_DELETE);
 
   const live = saList.filter((s) => s.status === "Aktif" || s.status === "Limit");
   const drafts = saList.filter((s) => s.status === "Draf");
@@ -76,10 +82,12 @@ export function SAManagementPage() {
         title="Schedule Agreement"
         description={`Kuota yang diterbitkan ${supplierLabel()} mitra. Setiap rencana distribusi menarik dari SA yang aktif, jadi angka di sini adalah kuota maksimal bulan ini.`}
         actions={<div className="flex gap-2">
-          <Button variant="outline" onClick={() => setUploading(true)}>
-            <Upload className="h-3.5 w-3.5" />
-            Catat manual
-          </Button>
+          {canCreate && (
+            <Button variant="outline" onClick={() => setUploading(true)}>
+              <Upload className="h-3.5 w-3.5" />
+              Catat manual
+            </Button>
+          )}
           {canSetCutover && (
             <Button variant="outline" onClick={() => setSettingCutover(true)}>
               <CalendarClock className="h-3.5 w-3.5" />
@@ -168,9 +176,9 @@ export function SAManagementPage() {
         <SATable
           data={saList}
           isLoading={isLoading}
-          onActivate={(id) => activateMutation.mutate(id)}
+          onActivate={canActivate ? (id) => activateMutation.mutate(id) : undefined}
           onPrint={(id) => printMutation.mutate(id)}
-          onDelete={setPendingDelete}
+          onDelete={canDelete ? setPendingDelete : undefined}
           onImport={canImport ? setImporting : undefined}
           pendingId={activateMutation.variables}
         />

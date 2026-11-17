@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { CloudOff } from "lucide-react";
+import { EmptyState } from "./components/common/EmptyState";
+import { Button } from "./components/ui/button";
 import { createBrowserRouter, RouterProvider, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./features/auth/store/authStore";
 import { setSessionExpiredHandler } from "./lib/api";
-import { landingPathFor } from "./layouts/nav";
+import { landingPathFor, PLANNING_PERMISSIONS } from "./layouts/nav";
 import { DashboardLayout } from "./layouts/DashboardLayout";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
@@ -56,7 +59,7 @@ import { TenantDetailPage } from "./pages/tenants/TenantDetailPage";
 import { NotFoundPage } from "./pages/errors/NotFoundPage";
 import { ErrorBoundary } from "./pages/errors/ErrorBoundary";
 import { ProtectedRoute } from "./features/auth/components/ProtectedRoutes";
-import { RequireOfficeConsole, RequirePermission } from "./features/rbac/components/RequirePermission";
+import { RequireOfficeConsole, RequireDriverConsole, RequirePermission } from "./features/rbac/components/RequirePermission";
 import { PERMISSIONS } from "./features/rbac/permissions";
 import { outletLabel } from "@/lib/lexicon";
 
@@ -103,8 +106,11 @@ const router = createBrowserRouter([
           <SADetailPage />
         </RequirePermission>
       ) },
+      // Plans are built from the drivers and trucks lists; a role that may
+      // read plans but not those (finance funds stops from the payment
+      // board instead) got a page of 403s (Round 1 G17).
       { path: "distribution", element: (
-        <RequirePermission permission={PERMISSIONS.DISTRIBUTION_VIEW}>
+        <RequirePermission permissions={PLANNING_PERMISSIONS}>
           <DistributionPage />
         </RequirePermission>
       ) },
@@ -153,9 +159,9 @@ const router = createBrowserRouter([
 
       // Lapangan — the driver's own console.
       { path: "sopir", element: (
-        <RequirePermission permission={PERMISSIONS.DELIVERIES_EXECUTE}>
+        <RequireDriverConsole>
           <SopirPage />
-        </RequirePermission>
+        </RequireDriverConsole>
       ) },
 
       // Keuangan — what the day is worth.
@@ -279,8 +285,9 @@ const router = createBrowserRouter([
           <OutletListPage />
         </RequirePermission>
       ) },
+      // Registering one is POST /outlets, which asserts create, not update.
       { path: `${outletLabel()}/new`, element: (
-        <RequirePermission permission={PERMISSIONS.OUTLETS_EDIT}>
+        <RequirePermission permission={PERMISSIONS.OUTLETS_CREATE}>
           <OutletFormPage />
         </RequirePermission>
       ) },
@@ -329,8 +336,11 @@ const router = createBrowserRouter([
           <ProductFormPage />
         </RequirePermission>
       ) },
+      // GET /users/access needs both: a dispatcher holds iam.read.users only
+      // (to name a second approver) and reached an empty page with a "Tambah
+      // pengguna" button (Round 1 G20). The menu entry asks for the same pair.
       { path: "users", element: (
-        <RequirePermission permission={PERMISSIONS.USERS_VIEW}>
+        <RequirePermission permissions={[PERMISSIONS.USERS_VIEW, PERMISSIONS.USER_ROLES_VIEW]}>
           <UserListPage />
         </RequirePermission>
       ) },
@@ -387,6 +397,7 @@ function HomeRedirect() {
  */
 function App() {
   const restore = useAuthStore((state) => state.restore);
+  const sessionUnavailable = useAuthStore((state) => state.sessionUnavailable);
   // Seeded from the token rather than set to true by an effect: with no token
   // there is nothing to restore, and a signed-out visitor should reach the
   // login screen on the first render instead of after a blank one.
@@ -414,8 +425,40 @@ function App() {
   }, [restore]);
 
   if (!ready) return null;
+  if (sessionUnavailable) return <SessionUnavailable />;
 
   return <RouterProvider router={router} />;
+}
+
+/**
+ * The server could not be reached to re-read the session -- busy, failing or
+ * offline -- so the session is kept rather than thrown away, and the person
+ * tries again when it is back (see `sessionMayStillBeValid`).
+ */
+function SessionUnavailable() {
+  const restore = useAuthStore((state) => state.restore);
+  const [trying, setTrying] = useState(false);
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-paper px-4">
+      <EmptyState
+        icon={CloudOff}
+        title="Server belum bisa dihubungi"
+        description="Sesi Anda masih tersimpan. Server sedang sibuk atau koneksi terputus; tunggu sebentar, lalu coba lagi."
+        action={
+          <Button
+            size="sm"
+            disabled={trying}
+            onClick={() => {
+              setTrying(true);
+              void restore().finally(() => setTrying(false));
+            }}
+          >
+            {trying ? "Menghubungkan…" : "Coba lagi"}
+          </Button>
+        }
+      />
+    </div>
+  );
 }
 
 export default App;

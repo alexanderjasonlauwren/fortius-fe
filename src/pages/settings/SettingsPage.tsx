@@ -122,12 +122,14 @@ export function SettingsPage() {
     },
     errorTitle: "Pengaturan tidak tersimpan",
     success: "Pengaturan disimpan",
+    refreshesShell: true,
   });
 
   const inheritMutation = useDeskMutation({
     mutationFn: (field: InheritableFieldKey) => clearSettingOverride(field),
     errorTitle: "Gagal mengembalikan ke warisan",
     success: "Kembali mengikuti pengaturan induk",
+    refreshesShell: true,
   });
 
 

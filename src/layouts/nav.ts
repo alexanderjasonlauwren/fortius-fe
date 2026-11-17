@@ -38,6 +38,16 @@ import {
 } from "lucide-react";
 import { outletLabel, outletLabelTitle, supplierLabel, unitLabel } from "@/lib/lexicon";
 
+/**
+ * What the planning page reads: the plans, and the drivers and trucks a plan
+ * is built from. The menu and the route both use this list.
+ */
+export const PLANNING_PERMISSIONS = [
+  PERMISSIONS.DISTRIBUTION_VIEW,
+  PERMISSIONS.DRIVERS_VIEW,
+  PERMISSIONS.VEHICLES_VIEW,
+] as const;
+
 export interface NavItem {
   name: string;
   href: string;
@@ -128,7 +138,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/distribution",
         icon: Truck,
         hint: "Susun rute, tetapkan armada, konfirmasi rencana",
-        permission: PERMISSIONS.DISTRIBUTION_VIEW,
+        permission: PLANNING_PERMISSIONS,
       },
       {
         name: "Monitoring Distribusi",
@@ -345,7 +355,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/users",
         icon: Users,
         hint: "Akun tim dan jejak aktivitas sistem",
-        permission: PERMISSIONS.USER_ROLES_VIEW,
+        permission: [PERMISSIONS.USERS_VIEW, PERMISSIONS.USER_ROLES_VIEW],
       },
     ],
   },

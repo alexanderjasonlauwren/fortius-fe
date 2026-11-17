@@ -46,6 +46,9 @@ export const PERMISSIONS = {
   SA_VIEW: "distribution.read.schedule_agreements",
   SA_CREATE: "distribution.create.schedule_agreements",
   SA_EDIT: "distribution.update.schedule_agreements",
+  SA_DELETE: "distribution.delete.schedule_agreements",
+  // Activating an agreement puts its quota in force: POST /:id/activate.
+  SA_APPROVE: "distribution.approve.schedule_agreements",
   // Bulk-replacing a month of obligations from a spreadsheet. Deliberately not
   // create.schedule_agreements: whoever may sign an agreement is not
   // necessarily whoever may re-import one over the top of it.
@@ -332,11 +335,18 @@ export const PERMISSIONS = {
   BRANCHES_VIEW: "masterdata.read.branches",
   DRIVERS_ASSIGN: "distribution.assign.distribution_orders",
   DRIVERS_MANAGE: "masterdata.update.drivers",
+  // Each write its own: the buttons follow what the route asserts, so a role
+  // that may edit a sopir is not shown "Hapus" the server will refuse
+  // (Round 1 G26).
+  DRIVERS_CREATE: "masterdata.create.drivers",
+  DRIVERS_DELETE: "masterdata.delete.drivers",
 
   // The fleet is its own resource, with its own permissions, because the
   // service keeps drivers and vehicles apart -- the pairing belongs to a run.
   VEHICLES_VIEW: "masterdata.read.vehicles",
   VEHICLES_MANAGE: "masterdata.update.vehicles",
+  VEHICLES_CREATE: "masterdata.create.vehicles",
+  VEHICLES_DELETE: "masterdata.delete.vehicles",
 
   // Orders. Distinct from distribution_orders on the backend: an order is what
   // an outlet asks for, a distribution order is the day's plan.
@@ -353,6 +363,8 @@ export const PERMISSIONS = {
   // dead ends for the board's primary user.
   OUTLETS_VIEW: "masterdata.read.outlets",
   OUTLETS_EDIT: "masterdata.update.outlets",
+  OUTLETS_CREATE: "masterdata.create.outlets",
+  OUTLETS_DELETE: "masterdata.delete.outlets",
 
   // Surat Peringatan history (D3 A-Step 3) -- an append-only log, so there is
   // no EDIT/DELETE to pair with these: a warning is corrected by issuing a
