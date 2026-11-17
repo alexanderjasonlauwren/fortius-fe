@@ -77,6 +77,7 @@ export interface UploadSAPayload {
   supplier: string;
   periodeMulai: string;
   periodeBerakhir: string;
+  produkId: string;
   totalKuota: number;
   notes?: string;
   namaDokumen?: string;

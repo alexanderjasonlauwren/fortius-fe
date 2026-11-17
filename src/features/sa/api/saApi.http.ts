@@ -612,6 +612,9 @@ export const saApiHttp: ScheduleAgreementApi = {
       period_start: payload.periodeMulai,
       period_end: payload.periodeBerakhir,
       notes: payload.notes,
+      // The quota the form asks for was dropped until now, so every manual
+      // SA read 0 / 0 (Round 1 G18).
+      products: [{ product_id: payload.produkId, total_quota_qty: payload.totalKuota }],
     });
     return toDomain(created);
   },
