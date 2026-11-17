@@ -55,7 +55,8 @@ async function saveBankAccount(
   if (!input.id) {
     return toEntity(
       await send<BankAccountResponse>("post", "/bank-accounts", {
-        bank_name: input.bank,
+        // A drawer has no bank: the picker's untouched "BCA" named it (G23).
+        bank_name: input.kind === "cash" ? "Kas" : input.bank,
         account_number: input.nomorRekening,
         account_holder: input.atasNama,
         branch_name: input.cabang || undefined,
@@ -71,7 +72,8 @@ async function saveBankAccount(
   const current = await getOne<BankAccountResponse>(`/bank-accounts/${input.id}`);
   const updated = await send<BankAccountResponse>("put", `/bank-accounts/${input.id}`, {
     version: current.version,
-    bank_name: input.bank,
+    // A drawer has no bank: the picker's untouched "BCA" named it (G23).
+        bank_name: input.kind === "cash" ? "Kas" : input.bank,
     account_number: input.nomorRekening,
     account_holder: input.atasNama,
     branch_name: input.cabang || undefined,
