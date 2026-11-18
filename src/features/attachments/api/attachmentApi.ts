@@ -52,6 +52,8 @@ export interface Attachment {
   jenis: string;
   ukuran: number;
   diunggah: string;
+  /** pending until scanned; infected is never served (Round 1 N22). */
+  pemindaian: "pending" | "clean" | "infected" | "failed";
 }
 
 interface AttachmentResponse {
@@ -59,6 +61,7 @@ interface AttachmentResponse {
   file_name: string;
   mime_type: string;
   size_bytes: number;
+  scan_status?: string;
   created_at: string;
 }
 
@@ -69,6 +72,7 @@ function toAttachment(row: AttachmentResponse): Attachment {
     jenis: row.mime_type,
     ukuran: row.size_bytes,
     diunggah: row.created_at,
+    pemindaian: (["clean", "infected", "failed"].includes(row.scan_status ?? "") ? row.scan_status : "pending") as Attachment["pemindaian"],
   };
 }
 

@@ -141,12 +141,19 @@ export function AttachmentsPanel({ ownerType, ownerId, readOnly = false }: Attac
                 <p className="truncate text-sm text-ink" title={row.namaFile}>{row.namaFile}</p>
                 <p className="data text-2xs text-ink-muted">
                   {formatSize(row.ukuran)} · {formatDateTimeId(row.diunggah)}
+                  {/* The scan's verdict, so a file is flagged before anyone
+                      tries to open it (Round 1 N22). */}
+                  {row.pemindaian === "pending" && <span> · sedang dipindai</span>}
+                  {row.pemindaian === "failed" && <span> · gagal dipindai</span>}
+                  {row.pemindaian === "infected" && (
+                    <span className="font-semibold text-rust-ink"> · terdeteksi malware, tidak bisa dibuka</span>
+                  )}
                 </p>
               </div>
               <Button
                 type="button" variant="ghost" size="icon-xs"
                 aria-label={`Buka ${row.namaFile}`}
-                disabled={opening === row.id}
+                disabled={opening === row.id || row.pemindaian === "infected"}
                 onClick={() => void open(row)}
               >
                 <Download />

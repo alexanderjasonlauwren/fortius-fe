@@ -25,12 +25,13 @@ beforeEach(() => {
 describe("attachments", () => {
   it("addresses every call through the owning document", async () => {
     getOne.mockResolvedValue([
-      { id: FILE, file_name: "nota.png", mime_type: "image/png", size_bytes: 2048, created_at: "2026-10-13T08:00:00Z" },
+      { id: FILE, file_name: "nota.png", mime_type: "image/png", size_bytes: 2048, scan_status: "infected", created_at: "2026-10-13T08:00:00Z" },
     ]);
     const rows = await api.listAttachments("expense", OWNER);
     expect(getOne).toHaveBeenCalledWith(`/attachments/expense/${OWNER}`);
     expect(rows).toEqual([
-      { id: FILE, namaFile: "nota.png", jenis: "image/png", ukuran: 2048, diunggah: "2026-10-13T08:00:00Z" },
+      // Round 1 N22: the scan verdict reaches the list.
+      { id: FILE, namaFile: "nota.png", jenis: "image/png", ukuran: 2048, diunggah: "2026-10-13T08:00:00Z", pemindaian: "infected" },
     ]);
 
     await api.deleteAttachment("expense", OWNER, FILE);
