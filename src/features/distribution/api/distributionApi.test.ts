@@ -886,6 +886,19 @@ describe("dispatching a trip", () => {
       ],
     });
     expect(result.issued).toBe(2);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("passes the server's stock warnings through (G13)", async () => {
+    send.mockResolvedValue({
+      trip_id: "trip-1",
+      issued: [{}],
+      warnings: ["Stok LPG 3 Kg menjadi -25 setelah rit ini berangkat."],
+    });
+
+    const result = await distributionApiHttp.dispatchTrip("trip-1");
+
+    expect(result.warnings).toEqual(["Stok LPG 3 Kg menjadi -25 setelah rit ini berangkat."]);
   });
 
   it("sends an empty array rather than omitting the field when there is no override", async () => {

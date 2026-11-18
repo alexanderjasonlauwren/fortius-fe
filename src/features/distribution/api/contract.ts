@@ -73,6 +73,11 @@ export interface CreditApprover {
 export interface DispatchResult {
   /** How many surat jalan this run produced — one per stop. */
   issued: number;
+  /**
+   * What the dispatcher should know but that did not stop the truck — a
+   * product's stock gone below zero (Round 1 G13). Finance is told too.
+   */
+  warnings: string[];
 }
 
 /** One change recorded against a plan or one of its runs (GET .../history). */
