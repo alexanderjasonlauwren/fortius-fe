@@ -4,12 +4,17 @@ const getOne = vi.fn();
 const send = vi.fn();
 const upload = vi.fn();
 
-vi.mock("@/lib/api", () => ({
-  apiClient: { defaults: { baseURL: "http://localhost:8010/api/v1" } },
-  getOne: (...args: unknown[]) => getOne(...args),
-  send: (...args: unknown[]) => send(...args),
-  upload: (...args: unknown[]) => upload(...args),
-}));
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>();
+  actual.apiClient.defaults.baseURL = "http://localhost:8010/api/v1";
+  return {
+    apiClient: actual.apiClient,
+    absoluteApiLink: actual.absoluteApiLink,
+    getOne: (...args: unknown[]) => getOne(...args),
+    send: (...args: unknown[]) => send(...args),
+    upload: (...args: unknown[]) => upload(...args),
+  };
+});
 
 const api = await import("./attachmentApi");
 

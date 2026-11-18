@@ -1,4 +1,4 @@
-import { apiClient, getAllPages, getOne, send, upload } from "@/lib/api";
+import { absoluteApiLink, getAllPages, getOne, send, upload } from "@/lib/api";
 import type { ExpenseCategory } from "@/features/expenses/api/contract";
 import type {
   Confidence, DocumentType, OcrApi, ProcessStatus, ReceiptCorrections, ReceiptExtraction, ReceiptStatus,
@@ -185,10 +185,10 @@ async function reviewReceipt(input: ReviewReceiptInput): Promise<ReviewReceiptRe
   };
 }
 
-/** Resolved against the API's origin, as attachment links are. */
+/** Made absolute by absoluteApiLink, as attachment links are. */
 async function receiptFileUrl(id: string): Promise<string> {
   const { url } = await getOne<{ url: string }>(`/ocr/extractions/${id}/file`);
-  return new URL(url, apiClient.defaults.baseURL).href;
+  return absoluteApiLink(url);
 }
 
 async function uploadTransferProof(file: File): Promise<ReceiptExtraction> {
@@ -205,7 +205,7 @@ async function getTransferProofs(): Promise<ReceiptExtraction[]> {
 
 async function transferProofFileUrl(id: string): Promise<string> {
   const { url } = await getOne<{ url: string }>(`/ocr/transfer-proofs/${id}/file`);
-  return new URL(url, apiClient.defaults.baseURL).href;
+  return absoluteApiLink(url);
 }
 
 export const ocrApiHttp: OcrApi = {

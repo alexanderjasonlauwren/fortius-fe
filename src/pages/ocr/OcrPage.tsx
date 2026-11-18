@@ -1,8 +1,10 @@
 /**
- * Bukti pengeluaran: receipts uploaded with their file, read by the OCR
- * engine, reviewed (approve under a category and optionally file an expense,
- * send back, or reject, each with a note), and linked to the expense they
- * became (parity P3).
+ * Bukti & Struk: every photographed proof, read by the OCR engine -- expense
+ * receipts and pangkalan transfer proofs alike (a transfer is recorded from
+ * Penerimaan Kas; its review here points there). Receipts are reviewed
+ * (approve under a category and optionally file an expense, send back, or
+ * reject, each with a note), and linked to the expense they became (parity
+ * P3).
  */
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -121,12 +123,12 @@ export function OcrPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Keuangan"
-        title="Bukti Pengeluaran"
+        title="Bukti & Struk"
         description={
           // Someone who cannot verify -- a sopir -- uploads and waits; telling
           // them to check and archive describes the office's half of the job.
           canVerify
-            ? "Unggah foto struk atau PDF nota. Foto dibaca otomatis; periksa isinya, lalu arsipkan di kategori biaya dan catat sebagai pengeluaran."
+            ? "Unggah foto struk, bukti transfer, atau PDF nota. Foto dibaca otomatis; periksa isinya. Struk dicatat sebagai pengeluaran, bukti transfer pangkalan dicatat di Penerimaan Kas."
             : "Unggah foto struk atau PDF nota dari perjalanan. Foto dibaca otomatis; kantor memeriksa dan mencatatnya sebagai pengeluaran."
         }
         actions={
@@ -151,7 +153,7 @@ export function OcrPage() {
         />
         <DataTable columns={columns} data={rows} isLoading={list.isLoading} rowKey={(row) => row.id} pageSize={12}
           defaultSortKey="date" defaultSortDir="desc" dense emptyIcon={ScanLine}
-          emptyMessage={search || status !== "Semua" ? "Tidak ada bukti yang cocok" : "Belum ada bukti pengeluaran"}
+          emptyMessage={search || status !== "Semua" ? "Tidak ada bukti yang cocok" : "Belum ada bukti atau struk"}
           emptyDescription="Unggah struk bahan bakar, tol, parkir, pemeliharaan, atau kas kecil." />
       </Panel>
       <UploadReceiptDialog open={uploading} onClose={() => setUploading(false)} onUploaded={refresh} />
