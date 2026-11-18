@@ -9,7 +9,7 @@ vi.stubGlobal("localStorage", {
   removeItem: (k: string) => void store.delete(k),
 });
 
-const { apiClient, getAllPages, setSessionExpiredHandler } = await import("./api");
+const { absoluteApiLink, apiClient, getAllPages, setSessionExpiredHandler } = await import("./api");
 
 function respond(config: InternalAxiosRequestConfig, status: number, data: unknown = {}, headers: Record<string, string> = {}) {
   const response = { status, statusText: String(status), data, headers, config } as AxiosResponse;
@@ -142,5 +142,35 @@ describe("getAllPages walks a collection instead of reading its first page", () 
     expect(requested).toEqual([1, 2]);
     expect(result.items).toHaveLength(4);
     expect(result.truncated).toBe(true);
+  });
+});
+
+describe("absoluteApiLink", () => {
+  const configured = apiClient.defaults.baseURL;
+  afterEach(() => {
+    apiClient.defaults.baseURL = configured;
+  });
+
+  // Production builds set VITE_API_URL=/api/v1. Resolving a link straight
+  // against that bare path threw "Invalid base URL" on every Lihat bukti and
+  // attachment download (prod, 18 Nov).
+  it("opens the bucket's link under the production base", () => {
+    apiClient.defaults.baseURL = "/api/v1";
+    const bucket = "https://acct.r2.cloudflarestorage.com/fortius-bucket/t/ocr/a.jpg?X-Amz-Signature=abc";
+    expect(absoluteApiLink(bucket, "https://acceleraide.app")).toBe(bucket);
+  });
+
+  it("puts a path link on the page's host under the production base", () => {
+    apiClient.defaults.baseURL = "/api/v1";
+    expect(absoluteApiLink("/internal/files?key=k", "https://acceleraide.app")).toBe(
+      "https://acceleraide.app/internal/files?key=k",
+    );
+  });
+
+  it("puts a path link on the API's host when the API lives elsewhere", () => {
+    apiClient.defaults.baseURL = "http://localhost:8010/api/v1";
+    expect(absoluteApiLink("/internal/files?key=k", "http://localhost:5173")).toBe(
+      "http://localhost:8010/internal/files?key=k",
+    );
   });
 });

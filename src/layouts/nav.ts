@@ -231,10 +231,10 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: PERMISSIONS.EXPENSES_VIEW,
       },
       {
-        name: "Bukti Pengeluaran",
+        name: "Bukti & Struk",
         href: "/ocr",
         icon: Receipt,
-        hint: "Catat dan klasifikasikan struk biaya operasional",
+        hint: "Struk biaya dan bukti transfer yang dibaca otomatis, untuk diperiksa",
         permission: [PERMISSIONS.OCR_VIEW, PERMISSIONS.OCR_ARCHIVE_VIEW],
       },
       {
@@ -396,7 +396,7 @@ export const DRIVER_NAV_GROUPS: NavGroup[] = [
       {
         // Struk BBM, tol dan perbaikan dari perjalanan. The driver role holds
         // the OCR grants for exactly this; the link was simply missing.
-        name: "Bukti Pengeluaran",
+        name: "Bukti & Struk",
         href: "/ocr",
         icon: Receipt,
         hint: "Unggah struk biaya perjalanan",

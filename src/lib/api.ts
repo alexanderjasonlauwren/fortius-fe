@@ -22,6 +22,21 @@ export const apiClient = axios.create({
   timeout: 10000,
 });
 
+/**
+ * A file link the API handed out, made absolute for opening in a tab. In
+ * production the link is the bucket's own absolute URL; in development it is
+ * a path on the API's host. The API base is resolved against the page first:
+ * production builds use the bare path `/api/v1`, and `new URL(link, "/api/v1")`
+ * throws "Invalid base URL" before the link is even read.
+ */
+export function absoluteApiLink(
+  link: string,
+  pageOrigin: string = globalThis.location?.origin ?? "http://localhost",
+): string {
+  const apiBase = new URL(apiClient.defaults.baseURL ?? "/", pageOrigin);
+  return new URL(link, apiBase).href;
+}
+
 // Request interceptor - Add auth token
 apiClient.interceptors.request.use(
   (config) => {

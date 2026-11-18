@@ -241,10 +241,19 @@ export function useDistributionPlan() {
     mutationFn: ({ tripId, overrides }: { tripId: string; overrides?: CreditOverrideInput[] }) =>
       dispatchTrip(tripId, overrides),
     errorTitle: "Keberangkatan gagal",
-    success: (result) => ({
-      title: "Rit diberangkatkan",
-      description: `${result.issued} surat jalan diterbitkan.`,
-    }),
+    // A warning does not undo the dispatch; it changes the toast's tone so
+    // a stock gone below zero is not read past as a plain success (G13).
+    success: (result) =>
+      result.warnings.length > 0
+        ? {
+            title: "Rit diberangkatkan, periksa stok",
+            description: `${result.issued} surat jalan diterbitkan. ${result.warnings.join(" ")}`,
+            tone: "warning",
+          }
+        : {
+            title: "Rit diberangkatkan",
+            description: `${result.issued} surat jalan diterbitkan.`,
+          },
   });
 
   const createPlanMutation = useDeskMutation({

@@ -4,14 +4,19 @@ const getList = vi.fn();
 const getOne = vi.fn();
 const send = vi.fn();
 const upload = vi.fn();
-vi.mock("@/lib/api", () => ({
-  apiClient: { defaults: { baseURL: "http://localhost:8010/api/v1" } },
-  getList: (...args: unknown[]) => getList(...args),
-  getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
-  getOne: (...args: unknown[]) => getOne(...args),
-  send: (...args: unknown[]) => send(...args),
-  upload: (...args: unknown[]) => upload(...args),
-}));
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>();
+  actual.apiClient.defaults.baseURL = "http://localhost:8010/api/v1";
+  return {
+    apiClient: actual.apiClient,
+    absoluteApiLink: actual.absoluteApiLink,
+    getList: (...args: unknown[]) => getList(...args),
+    getAllPages: async (...args: unknown[]) => ({ items: (await getList(...args)).items, truncated: false }),
+    getOne: (...args: unknown[]) => getOne(...args),
+    send: (...args: unknown[]) => send(...args),
+    upload: (...args: unknown[]) => upload(...args),
+  };
+});
 
 const { ocrApiHttp } = await import("./ocrApi.http");
 
@@ -106,5 +111,21 @@ describe("ocrApiHttp", () => {
   it("resolves a development file link against the API origin", async () => {
     getOne.mockResolvedValue({ url: "/internal/files?key=a&sig=b" });
     expect(await ocrApiHttp.receiptFileUrl("ext-1")).toBe("http://localhost:8010/internal/files?key=a&sig=b");
+  });
+
+  // Production builds use the bare base /api/v1; both Lihat bukti routes
+  // threw "Invalid base URL" there (prod, 18 Nov).
+  it("opens the bucket's link under the production API base", async () => {
+    const { apiClient } = await import("@/lib/api");
+    const configured = apiClient.defaults.baseURL;
+    apiClient.defaults.baseURL = "/api/v1";
+    try {
+      const bucket = "https://acct.r2.cloudflarestorage.com/fortius-bucket/t/ocr/bni_07.jpg?X-Amz-Signature=s";
+      getOne.mockResolvedValue({ url: bucket });
+      expect(await ocrApiHttp.receiptFileUrl("ext-1")).toBe(bucket);
+      expect(await ocrApiHttp.transferProofFileUrl("ext-1")).toBe(bucket);
+    } finally {
+      apiClient.defaults.baseURL = configured;
+    }
   });
 });

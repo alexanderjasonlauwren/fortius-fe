@@ -889,6 +889,7 @@ async function applyAssignment(planId: string, trips: TripAssignment[], version:
 interface DispatchResponse {
   trip_id: string;
   issued: unknown[];
+  warnings?: string[];
 }
 
 /**
@@ -915,7 +916,7 @@ async function dispatchTrip(
       })),
     },
   );
-  return { issued: response.issued.length };
+  return { issued: response.issued.length, warnings: response.warnings ?? [] };
 }
 
 async function getCreditApprovers(): Promise<CreditApprover[]> {

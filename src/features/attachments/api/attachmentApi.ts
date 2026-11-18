@@ -6,7 +6,7 @@
  * backend authorises against the owner's own permissions, and an
  * attachment is only reachable through the document it belongs to.
  */
-import { apiClient, getOne, send, upload } from "@/lib/api";
+import { absoluteApiLink, getOne, send, upload } from "@/lib/api";
 import { PERMISSIONS, type Permission } from "@/features/rbac/permissions";
 
 export type AttachmentOwnerType =
@@ -52,6 +52,8 @@ export interface Attachment {
   jenis: string;
   ukuran: number;
   diunggah: string;
+  /** pending until scanned; infected is never served (Round 1 N22). */
+  pemindaian: "pending" | "clean" | "infected" | "failed";
 }
 
 interface AttachmentResponse {
@@ -59,6 +61,7 @@ interface AttachmentResponse {
   file_name: string;
   mime_type: string;
   size_bytes: number;
+  scan_status?: string;
   created_at: string;
 }
 
@@ -69,6 +72,7 @@ function toAttachment(row: AttachmentResponse): Attachment {
     jenis: row.mime_type,
     ukuran: row.size_bytes,
     diunggah: row.created_at,
+    pemindaian: (["clean", "infected", "failed"].includes(row.scan_status ?? "") ? row.scan_status : "pending") as Attachment["pemindaian"],
   };
 }
 
@@ -88,14 +92,11 @@ export async function deleteAttachment(type: AttachmentOwnerType, ownerId: strin
 }
 
 /**
- * A short-lived link to the file's bytes. In development the backend
- * answers with a path on itself (`/internal/files?...`), which is resolved
- * against the API's origin; in production it is the bucket's own absolute
- * URL, which `new URL` leaves as it is.
+ * A short-lived link to the file's bytes, made absolute by absoluteApiLink.
  */
 export async function attachmentDownloadUrl(
   type: AttachmentOwnerType, ownerId: string, attachmentId: string,
 ): Promise<string> {
   const { url } = await getOne<{ url: string }>(`${ownerPath(type, ownerId)}/${attachmentId}/download`);
-  return new URL(url, apiClient.defaults.baseURL).href;
+  return absoluteApiLink(url);
 }
