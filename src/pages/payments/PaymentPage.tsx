@@ -86,7 +86,7 @@ export function PaymentPage() {
   // recorded: ?outlet=<id> opens this dialog with that outlet pre-selected,
   // so recording one is a single trip rather than a menu hunt back here.
   const outletFromLink = searchParams.get("outlet") ?? "";
-  // From a pangkalan's bukti transfer reviewed on Bukti Pengeluaran:
+  // From a pangkalan's bukti transfer reviewed on Bukti & Struk:
   // ?bukti=<extraction id> opens this dialog recording from it.
   const proofFromLink = searchParams.get("bukti") ?? "";
   const [recording, setRecording] = useState(!!outletFromLink || !!proofFromLink);
