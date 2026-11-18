@@ -1,28 +1,22 @@
 /**
  * The dashboard, against the real API.
  *
- * Sequenced last in D3's own Track B for exactly this reason: every figure
- * here already has a real feature behind it once orders (B2), reports/
- * deliveries (B5) and transactions (B6) are wired, so this composes those
- * rather than re-deriving a sixth copy of the same numbers: pending receipts
- * come from `financeApi.getPendingPayments()` and `openOrders` from
- * `orderApi.getOrderTotals()`, never computed here a second way.
+ * # One request (Round 1 G15)
  *
- * `/payments`, `/deliveries` and schedule agreements have no "today" or
- * "this month" convenience on the wire, so this file fetches each with its
- * own date-scoped request the same way `reportApi.http.ts` already does for
- * its own ranges -- a small duplication, not a shared cache, matching this
- * codebase's own established pattern of every adapter fetching what it
- * needs rather than a cross-feature memoisation layer nothing else has.
+ * Beranda used to compose its tiles from every page of a month's surat
+ * jalan, every pangkalan, vehicle, pending receipt and open order, summing
+ * them here -- twenty requests before the first tile drew. `GET
+ * /dashboard/summary` sums them on the server, on the tenant's day, and
+ * leaves out what the role may not read (G17). This file only shapes it.
  *
  * # The dispatch rail's own gap
  *
  * No field for a stop's planned time of day exists anywhere in the schema
  * (`monitoringApi.http.ts`'s own `jamRencana` already reads empty for the
- * same reason). `getDispatchRail` positions stops by their real dispatch
- * order rather than a fabricated clock time, and sets `hasSchedule: false`
- * so `DispatchRail.tsx` stops drawing an hour ruler, a "now" line and a
- * late verdict over a position that was never a real time.
+ * same reason). The rail positions stops by their real dispatch order rather
+ * than a fabricated clock time, and sets `hasSchedule: false` so
+ * `DispatchRail.tsx` stops drawing an hour ruler, a "now" line and a late
+ * verdict over a position that was never a real time.
  *
  * # Jejak aktivitas
  *
@@ -30,41 +24,50 @@
  * acting tenant's latest successful writes, phrased by `activityLabel`. Roles
  * without `audit.read.audit_trails` are not asked and get an empty list.
  */
-import { getAllPages, getOne } from "@/lib/api";
-import { shareInFlight } from "@/lib/inFlight";
+import { getOne } from "@/lib/api";
+import { getActiveScope } from "@/lib/scope";
 import { holds } from "@/features/rbac/holds";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import type { AuditEntry } from "@/types/domain";
 import { activityLabel } from "../lib/activityLabel";
-import { getOutletList } from "@/features/outlet/api/outletApi";
-import { getVehicles } from "@/features/vehicles/api/vehicleApi";
-import { getPendingPayments } from "@/features/finance/api/financeApi";
-import { getOrderTotals } from "@/features/orders/api/orderApi";
-import { getQuotaSummary } from "@/features/sa/api/saApi";
-import { getSettings } from "@/features/settings/api/settingsApi";
-import { currentJakartaMonth } from "@/features/sa/lib/period";
-import { addDays, isoDate, startOfToday } from "@/lib/date";
-import type { DispatchLane, DispatchRail, DispatchStop, KpiSummary, MonthlyChartPoint, OutletShare, RecentActivity } from "../types";
-import type { DashboardApi, KpiIncludes } from "./contract";
+import type {
+  DispatchLane,
+  DispatchRail,
+  DispatchStop,
+  KpiSummary,
+  MonthlyChartPoint,
+  OutletShare,
+  RecentActivity,
+} from "../types";
+import type { DashboardApi, DashboardSummary } from "./contract";
 
-/** Mirrors the fields of delivery's own DeliveryResponse this adapter needs. */
-interface DeliveryResponse {
+/** Mirrors the backend's dashboard.Summary. */
+export interface SummaryResponse {
+  date: string;
+  daily_target_qty: number;
+  days: { date: string; dispatched_qty: number; delivered_qty: number; failed_stops: number }[];
+  districts: { district: string; delivered_qty: number }[];
+  stops: StopResponse[];
+  outlets: { active: number; total: number } | null;
+  quota: { allocation_qty: number; remaining_qty: number } | null;
+  pending_payments: { count: number; amount: number } | null;
+  open_orders: number | null;
+}
+
+interface StopResponse {
   id: string;
   delivery_number: string;
-  outlet_id?: string;
-  outlet_name?: string;
-  driver_id?: string;
-  driver_name?: string;
-  vehicle_id?: string;
-  plate?: string;
+  outlet_name?: string | null;
+  district?: string | null;
+  driver_id?: string | null;
+  driver_name?: string | null;
+  plate?: string | null;
+  vehicle_label?: string | null;
+  capacity_qty?: number | null;
   dispatched_qty: number;
   delivered_qty: number;
   delivery_status: string;
   created_at: string;
-}
-
-function toIso(d: Date): string {
-  return isoDate(d);
 }
 
 /** Mirrors reportApi.http.ts's own toDeliveryStatus/DeliveryStatus mapping. */
@@ -82,130 +85,64 @@ function toDeliveryStatus(status: string): "Antrian" | "Proses" | "Selesai" | "T
   }
 }
 
-/**
- * `to` is inclusive, but the server's `date` filter compares `lte` literally
- * against midnight UTC of that day -- `lte` on `created_at`, a timestamp,
- * would exclude almost all of `to` itself (verified live: a delivery at
- * 16:52 UTC matched `gte` its own day but not `lte` it). The exclusive `lt`
- * bound one day later is the only one that reads "through the end of `to`"
- * correctly.
- *
- * Every page of the window, not the newest 100: the month chart covers a
- * month of surat jalan, which a busy agency passes in days. The ceiling
- * (5,000 rows) is far above a month's volume; it exists so a bad range cannot
- * loop without end.
- */
-function fetchDeliveries(from: string, to: string): Promise<DeliveryResponse[]> {
-  return shareInFlight(`deliveries:${from}:${to}`, async () => {
-    const exclusiveEnd = isoDate(addDays(new Date(`${to}T00:00:00Z`), 1));
-    const { items } = await getAllPages<DeliveryResponse>("/deliveries", {
-      sort: [{ field: "created_at", direction: "desc" }],
-      filters: [
-        { field: "date", operator: "gte" as const, value: from },
-        { field: "date", operator: "lt" as const, value: exclusiveEnd },
-      ],
-    }, { maxPages: 50 });
-    return items;
-  });
+/** The day before an ISO date, as an ISO date. */
+function dayBefore(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 
-// The widgets below mount together; each source is fetched once and shared
-// (see shareInFlight).
-const outletList = () => shareInFlight("outlets", () => getOutletList());
-const vehicleList = () => shareInFlight("vehicles", () => getVehicles());
-
-/** This month, first to last day: the chart's range, and the shares' too. */
-function thisMonth(): [string, string] {
-  const today = startOfToday();
-  return [
-    toIso(new Date(today.getFullYear(), today.getMonth(), 1)),
-    toIso(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
-  ];
-}
-
-async function getKpiSummary(include: KpiIncludes = {}): Promise<KpiSummary> {
-  const today = toIso(startOfToday());
-  const yesterday = toIso(new Date(startOfToday().getTime() - 86_400_000));
-
-  const [todayRows, yesterdayRows, outlets, quota, pending, orderTotals, settings] =
-    await Promise.all([
-      fetchDeliveries(today, today),
-      fetchDeliveries(yesterday, yesterday),
-      outletList(),
-      getQuotaSummary(currentJakartaMonth()),
-      include.payments ? getPendingPayments() : Promise.resolve(null),
-      include.manualOrders ? getOrderTotals() : Promise.resolve({ baru: 0 }),
-      getSettings(),
-    ]);
-  // What went out today is the target once a run has left; before that, the
-  // tenant's own Target harian (inherited from its group when unset).
-  const dispatchedToday = todayRows.reduce((s, d) => s + d.dispatched_qty, 0);
-
+function toKpi(row: SummaryResponse): KpiSummary {
+  const today = row.days.find((d) => d.date === row.date);
+  const yesterday = row.days.find((d) => d.date === dayBefore(row.date));
+  const dispatchedToday = today?.dispatched_qty ?? 0;
   return {
-    dailyDistributed: todayRows.reduce((s, d) => s + d.delivered_qty, 0),
-    dailyTarget: dispatchedToday > 0 ? dispatchedToday : settings.targetHarian,
-    // The same figures as the SA page's Kuota cabang card. SIM3LON Penyaluran
-    // is the record of what was distributed, so "used" is what it says went
-    // out -- not what plans drew from the agreements, which while plans are
-    // not used read as 0 of the whole allocation.
-    monthlyQuotaTotal: quota.allocationQty,
-    monthlyQuotaRemaining: quota.remainingQty,
-    activeOutlet: outlets.filter((o) => o.status === "Aktif").length,
-    totalOutlet: outlets.length,
-    pendingPayments: pending ? pending.length : null,
-    pendingPaymentValue: pending ? pending.reduce((s, p) => s + p.jumlah, 0) : null,
-    previousDayDistributed: yesterdayRows.reduce((s, d) => s + d.delivered_qty, 0),
-    openOrders: orderTotals.baru,
-    lateDeliveries: todayRows.filter((d) => toDeliveryStatus(d.delivery_status) === "Tertunda")
-      .length,
+    dailyDistributed: today?.delivered_qty ?? 0,
+    // What went out today is the target once a run has left; before that, the
+    // tenant's own Target harian (inherited from its group when unset).
+    dailyTarget: dispatchedToday > 0 ? dispatchedToday : row.daily_target_qty,
+    // The same figures as the SA page's Kuota cabang card.
+    monthlyQuotaTotal: row.quota?.allocation_qty ?? 0,
+    monthlyQuotaRemaining: row.quota?.remaining_qty ?? 0,
+    activeOutlet: row.outlets?.active ?? 0,
+    totalOutlet: row.outlets?.total ?? 0,
+    pendingPayments: row.pending_payments ? row.pending_payments.count : null,
+    pendingPaymentValue: row.pending_payments ? row.pending_payments.amount : null,
+    previousDayDistributed: yesterday?.delivered_qty ?? 0,
+    openOrders: row.open_orders ?? 0,
+    lateDeliveries: today?.failed_stops ?? 0,
   };
 }
 
-async function getMonthlyChart(): Promise<MonthlyChartPoint[]> {
-  const last = new Date(startOfToday().getFullYear(), startOfToday().getMonth() + 1, 0);
-  const rows = await fetchDeliveries(...thisMonth());
-
-  const buckets = Array.from({ length: Math.ceil(last.getDate() / 7) }, (_, i) => ({
+/** This month's days, in 7-day weeks from the 1st. */
+function toMonthlyChart(row: SummaryResponse): MonthlyChartPoint[] {
+  const [year, month] = row.date.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const buckets = Array.from({ length: Math.ceil(lastDay / 7) }, (_, i) => ({
     week: `Minggu ${i + 1}`,
     target: 0,
     realisasi: 0,
   }));
-
-  for (const row of rows) {
-    const day = new Date(row.created_at.slice(0, 10)).getDate();
-    const bucket = buckets[Math.min(buckets.length - 1, Math.floor((day - 1) / 7))];
-    bucket.target += row.dispatched_qty;
-    bucket.realisasi += row.delivered_qty;
+  const monthPrefix = row.date.slice(0, 7);
+  for (const day of row.days) {
+    if (!day.date.startsWith(monthPrefix)) continue; // yesterday, on the 1st
+    const dayOfMonth = Number(day.date.slice(8, 10));
+    const bucket = buckets[Math.min(buckets.length - 1, Math.floor((dayOfMonth - 1) / 7))];
+    bucket.target += day.dispatched_qty;
+    bucket.realisasi += day.delivered_qty;
   }
   return buckets;
 }
 
-// No parameter, matching the contract exactly: `useDashboard.ts` passes this
-// function straight to `useQuery`'s `queryFn`, which calls it with react
-// query's own context object as the first argument -- a `limit` parameter
-// here would silently receive that object instead of a number. (Found live:
-// `sorted.slice(0, context)` coerces to `slice(0, NaN)`, which is `slice(0,
-// 0)` -- everything falls into "Wilayah lain" instead of being ranked.)
 const OUTLET_SHARE_LIMIT = 4;
 
-async function getOutletShares(): Promise<OutletShare[]> {
-  const limit = OUTLET_SHARE_LIMIT;
-  // The whole month, the chart's own range, so the two share one fetch. A
-  // delivery later this month has delivered nothing yet, so the shares are
-  // what they were with the range ending today.
-  const [rows, outlets] = await Promise.all([fetchDeliveries(...thisMonth()), outletList()]);
-  const outletById = new Map(outlets.map((o) => [o.id, o]));
-
-  const totals = new Map<string, number>();
-  for (const row of rows) {
-    if (!row.outlet_id) continue;
-    const kecamatan = outletById.get(row.outlet_id)?.kecamatan ?? "—";
-    totals.set(kecamatan, (totals.get(kecamatan) ?? 0) + row.delivered_qty);
-  }
-
-  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-  const top = sorted.slice(0, limit);
-  const restValue = sorted.slice(limit).reduce((s, [, v]) => s + v, 0);
+/** The four largest kecamatan this month, the rest as "Wilayah lain". */
+function toOutletShares(row: SummaryResponse): OutletShare[] {
+  const sorted = [...row.districts].sort((a, b) => b.delivered_qty - a.delivered_qty);
+  const top: [string, number][] = sorted
+    .slice(0, OUTLET_SHARE_LIMIT)
+    .map((d) => [d.district, d.delivered_qty]);
+  const restValue = sorted.slice(OUTLET_SHARE_LIMIT).reduce((s, d) => s + d.delivered_qty, 0);
   if (restValue > 0) top.push(["Wilayah lain", restValue]);
 
   const grand = top.reduce((s, [, v]) => s + v, 0) || 1;
@@ -216,96 +153,99 @@ async function getOutletShares(): Promise<OutletShare[]> {
   }));
 }
 
-async function getRecentActivities(): Promise<RecentActivity[]> {
-  const today = toIso(startOfToday());
-  const rows = await fetchDeliveries(today, today);
+const ACTIVITY_LIMIT = 8;
 
+function toRecentActivities(row: SummaryResponse): RecentActivity[] {
   const stageLabel: Record<string, RecentActivity["status"]> = {
     Selesai: "Selesai",
     Proses: "Dalam Pengiriman",
     Antrian: "Pending",
     Tertunda: "Pending",
   };
-
-  return rows
+  return [...row.stops]
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, 8)
-    .map((row) => ({
-      id: row.id,
-      tanggal: new Date(row.created_at).toLocaleDateString("id-ID", {
+    .slice(0, ACTIVITY_LIMIT)
+    .map((stop) => ({
+      id: stop.id,
+      tanggal: new Date(stop.created_at).toLocaleDateString("id-ID", {
         day: "numeric",
         month: "short",
       }),
-      outlet: row.outlet_name ?? "—",
-      driver: row.driver_name ?? "—",
-      jumlahUnit: row.delivered_qty || row.dispatched_qty,
-      status: stageLabel[toDeliveryStatus(row.delivery_status)] ?? "Pending",
+      outlet: stop.outlet_name ?? "—",
+      driver: stop.driver_name ?? "—",
+      jumlahUnit: stop.delivered_qty || stop.dispatched_qty,
+      status: stageLabel[toDeliveryStatus(stop.delivery_status)] ?? "Pending",
     }));
 }
 
-async function getDispatchRail(): Promise<DispatchRail> {
-  const today = toIso(startOfToday());
-  const [rows, vehicles, outlets] = await Promise.all([
-    fetchDeliveries(today, today),
-    // The truck's type and capacity, for a role that may read the fleet;
-    // finance follows the day's runs without it (Round 1 G17).
-    holds(PERMISSIONS.VEHICLES_VIEW) ? vehicleList() : Promise.resolve([]),
-    outletList(),
-  ]);
-  const vehiclesById = new Map(vehicles.map((v) => [v.id, v]));
-  const outletsById = new Map(outlets.map((o) => [o.id, o]));
-
+function toRail(row: SummaryResponse): DispatchRail {
   const byDriver = new Map<string, DispatchLane>();
-  for (const row of rows) {
-    if (!row.driver_id) continue;
-    const vehicle = row.vehicle_id ? vehiclesById.get(row.vehicle_id) : undefined;
+  for (const stop of row.stops) {
+    if (!stop.driver_id) continue;
     const lane =
-      byDriver.get(row.driver_id) ??
+      byDriver.get(stop.driver_id) ??
       ({
-        driverId: row.driver_id,
-        driver: row.driver_name ?? "—",
-        plat: row.plate ?? "—",
-        armada: vehicle?.armada ?? "—",
-        kapasitas: vehicle?.kapasitas ?? 0,
+        driverId: stop.driver_id,
+        driver: stop.driver_name ?? "—",
+        plat: stop.plate ?? "—",
+        // The truck's label and capacity only come for a role that may read
+        // the fleet; finance follows the day's runs without them (G17).
+        armada: stop.vehicle_label ?? "—",
+        kapasitas: stop.capacity_qty ?? 0,
         muatan: 0,
         status: "Standby",
         stops: [],
       } satisfies DispatchLane);
-    lane.muatan += row.dispatched_qty;
-    // No planned time exists -- position by real dispatch order instead
-    // of a fabricated clock. One slot per stop, in the order the API
-    // returned them (newest first), reversed so the rail reads left to
-    // right in the order the truck actually left.
+    lane.muatan += stop.dispatched_qty;
+    // No planned time exists -- position by real dispatch order instead of a
+    // fabricated clock: one slot per stop, in the order the server returned.
     const slot = lane.stops.length;
     lane.stops.push({
-      id: row.id,
-      kode: row.delivery_number,
-      outlet: row.outlet_name ?? "—",
-      kecamatan: (row.outlet_id && outletsById.get(row.outlet_id)?.kecamatan) || "—",
+      id: stop.id,
+      kode: stop.delivery_number,
+      outlet: stop.outlet_name ?? "—",
+      kecamatan: stop.district || "—",
       startMinute: slot * 60,
       endMinute: slot * 60 + 45,
-      target: row.dispatched_qty,
-      realisasi: row.delivered_qty,
-      stage: toDeliveryStatus(row.delivery_status),
+      target: stop.dispatched_qty,
+      realisasi: stop.delivered_qty,
+      stage: toDeliveryStatus(stop.delivery_status),
     } satisfies DispatchStop);
-    byDriver.set(row.driver_id, lane);
+    byDriver.set(stop.driver_id, lane);
   }
 
   const lanes = [...byDriver.values()];
-  const dayEnd = Math.max(60, ...lanes.map((l) => l.stops.length * 60));
-
   return {
     dayStart: 0,
-    dayEnd,
+    dayEnd: Math.max(60, ...lanes.map((l) => l.stops.length * 60)),
     nowMinute: 0,
     lanes,
-    // No general driver list is fetched here -- see driverApi's own
-    // contract on why a driver has no static truck to show idle. A driver
-    // with no delivery today simply doesn't appear as a lane, rather than
-    // appearing "idle" with a truck pairing that isn't real.
+    // A driver with no delivery today has no lane rather than an "idle" truck
+    // pairing that isn't real -- see driverApi's own contract.
     idleDrivers: [],
     hasSchedule: false,
   };
+}
+
+/** Shapes the server's summary into every tile; pure, so it is tested alone. */
+export function toDashboardSummary(row: SummaryResponse): DashboardSummary {
+  return {
+    kpi: toKpi(row),
+    rail: toRail(row),
+    monthlyChart: toMonthlyChart(row),
+    outletShares: toOutletShares(row),
+    recentActivities: toRecentActivities(row),
+  };
+}
+
+async function getSummary(): Promise<DashboardSummary> {
+  // The quota follows the scope bar's branch; with none picked the server
+  // reads the default branch, as the SA page's Kuota cabang card does.
+  const branchId = getActiveScope().branchId;
+  const path = branchId
+    ? `/dashboard/summary?${new URLSearchParams({ branch_id: branchId }).toString()}`
+    : "/dashboard/summary";
+  return toDashboardSummary(await getOne<SummaryResponse>(path));
 }
 
 /** Mirrors the backend's audittrail.RecentEvent. */
@@ -333,10 +273,6 @@ async function getRecentAudit(limit = 6): Promise<AuditEntry[]> {
 }
 
 export const dashboardApiHttp: DashboardApi = {
-  getKpiSummary,
-  getMonthlyChart,
-  getOutletShares,
-  getRecentActivities,
-  getDispatchRail,
+  getSummary,
   getRecentAudit,
 };

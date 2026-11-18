@@ -3,58 +3,37 @@ import { useQuery } from "@tanstack/react-query";
 import { useIntakePolicy } from "@/features/distribution/hooks/useIntakePolicy";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { PERMISSIONS } from "@/features/rbac/permissions";
-import {
-  getDispatchRail,
-  getKpiSummary,
-  getMonthlyChart,
-  getOutletShares,
-  getRecentActivities,
-  getRecentAudit,
-} from "../api/dashboardApi";
+import { getRecentAudit, getSummary } from "../api/dashboardApi";
 
+/**
+ * Beranda's operational tiles read one query (Round 1 G15): the rail, the
+ * chart, the shares and the activity table all come from the same
+ * `/dashboard/summary` response, so they load, refresh and fail together.
+ */
 export function useDashboard() {
   const intakePolicy = useIntakePolicy();
   const canReadOrders = useAuthStore((state) => state.hasPermission(PERMISSIONS.ORDERS_VIEW));
   const showManualOrders = intakePolicy.allowsManualIntake && canReadOrders;
-  const canReadPayments = useAuthStore((state) => state.hasPermission(PERMISSIONS.PAYMENTS_VIEW));
-  const kpi = useQuery({
-    queryKey: [...scopeKey(), "kpi", showManualOrders, canReadPayments],
-    queryFn: () => getKpiSummary({ manualOrders: showManualOrders, payments: canReadPayments }),
-  });
-  const rail = useQuery({ queryKey: [...scopeKey(), "dispatch-rail"], queryFn: getDispatchRail });
-  const monthlyChart = useQuery({
-    queryKey: [...scopeKey(), "monthly-chart"],
-    queryFn: getMonthlyChart,
-  });
-  const outletShares = useQuery({
-    queryKey: [...scopeKey(), "outlet-shares"],
-    queryFn: getOutletShares,
-  });
-  const recentActivities = useQuery({
-    queryKey: [...scopeKey(), "recent-activities"],
-    queryFn: getRecentActivities,
-  });
+  const summary = useQuery({ queryKey: [...scopeKey(), "dashboard-summary"], queryFn: getSummary });
   const audit = useQuery({ queryKey: [...scopeKey(), "recent-audit"], queryFn: () => getRecentAudit(6) });
+  const data = summary.data;
 
   return {
     showManualOrders,
-    kpi: kpi.data,
-    rail: rail.data,
-    monthlyChart: monthlyChart.data ?? [],
-    outletShares: outletShares.data ?? [],
-    recentActivities: recentActivities.data ?? [],
+    // Open orders mean nothing where the agent takes no manual orders.
+    kpi: data && { ...data.kpi, openOrders: showManualOrders ? data.kpi.openOrders : 0 },
+    rail: data?.rail,
+    monthlyChart: data?.monthlyChart ?? [],
+    outletShares: data?.outletShares ?? [],
+    recentActivities: data?.recentActivities ?? [],
     audit: audit.data ?? [],
-    isLoading: kpi.isLoading || rail.isLoading,
-    isLoadingCharts: monthlyChart.isLoading || outletShares.isLoading,
-    isLoadingActivities: recentActivities.isLoading,
-    isError: kpi.isError || rail.isError,
-    error: (kpi.error ?? rail.error) as Error | null,
+    isLoading: summary.isLoading,
+    isLoadingCharts: summary.isLoading,
+    isLoadingActivities: summary.isLoading,
+    isError: summary.isError,
+    error: summary.error as Error | null,
     refetch: () => {
-      void kpi.refetch();
-      void rail.refetch();
-      void monthlyChart.refetch();
-      void outletShares.refetch();
-      void recentActivities.refetch();
+      void summary.refetch();
       void audit.refetch();
     },
   };
