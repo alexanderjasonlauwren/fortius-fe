@@ -15,22 +15,22 @@ import type {
   RecentActivity,
 } from "../types";
 
-export interface KpiIncludes {
-  manualOrders?: boolean;
-  payments?: boolean;
+/** Every operational figure Beranda draws, from one request (Round 1 G15). */
+export interface DashboardSummary {
+  kpi: KpiSummary;
+  rail: DispatchRail;
+  monthlyChart: MonthlyChartPoint[];
+  outletShares: OutletShare[];
+  recentActivities: RecentActivity[];
 }
 
 export interface DashboardApi {
   /**
-   * `manualOrders`: the agent takes manual orders and the role may read them.
-   * `payments`: the role may read payments. Nothing the role may not read is
-   * requested -- a 403 per tile was Round 1 G17's "Beranda asks for data the
-   * role can't read".
+   * `GET /dashboard/summary`: the server sums the day, the month and the
+   * tiles that used to take twenty requests. A figure the role may not read
+   * comes back absent -- nothing the role may not read is asked for (G17).
+   * No parameter: it is passed bare to useQuery's queryFn.
    */
-  getKpiSummary(include?: KpiIncludes): Promise<KpiSummary>;
-  getMonthlyChart(): Promise<MonthlyChartPoint[]>;
-  getOutletShares(): Promise<OutletShare[]>;
-  getRecentActivities(): Promise<RecentActivity[]>;
-  getDispatchRail(): Promise<DispatchRail>;
+  getSummary(): Promise<DashboardSummary>;
   getRecentAudit(limit?: number): Promise<AuditEntry[]>;
 }
