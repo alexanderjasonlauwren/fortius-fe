@@ -12,12 +12,9 @@ import { shareInFlight } from "@/lib/inFlight";
 import type { FilterSpec } from "@/lib/listQuery";
 import { getActiveScope, scopeKey } from "@/lib/scope";
 import type {
+  BaseReference,
   PlanningCutoverReport,
   QuotaSummary,
-  SAImportApplied,
-  SAImportBatch,
-  SAImportChangeKind,
-  SAImportDiff,
   SAImportSummary,
   SIM3LONApplied,
   SIM3LONLiveCandidate,
@@ -229,38 +226,6 @@ async function defaultBranchID(): Promise<string> {
   return preferred.id;
 }
 
-/* ── Base SA imports ───────────────────────────────────────────────────── */
-
-/** Mirrors the service's ParseResponse. */
-interface ParseResponse {
-  id: string;
-  status: string;
-  schedule_agreement_id: string;
-  file_name: string;
-  checksum_sha256: string;
-  diff: DiffResponse;
-}
-
-interface DiffResponse {
-  changes: {
-    date: string;
-    change: string;
-    from?: number;
-    to: number;
-  }[];
-  issues: { line: number; value?: string; reason: string }[];
-  new: number;
-  updated: number;
-  unchanged: number;
-  skipped: number;
-}
-
-interface ApplyResponse {
-  id: string;
-  status: string;
-  rows_written: number;
-}
-
 interface DefaultProductResponse {
   default_product_code: string | null;
 }
@@ -362,12 +327,48 @@ interface QuotaSummaryResponse {
   period_month: string;
   today?: string;
   today_qty?: number;
-  days: Array<{ date: string; qty: number }>;
+  days: Array<{ date: string; qty: number; reference_qty?: number }>;
   allocation_qty: number;
   delivered_qty: number;
   remaining_qty: number;
   outlet_count: number;
   kinds: Array<{ code: string; name: string; total_qty: number }>;
+  reference_qty?: number | null;
+  reference_remaining_qty?: number | null;
+  today_reference_qty?: number;
+}
+
+/** Mirrors the SA import usecase's BaseReferenceResponse. */
+interface BaseReferenceResponse {
+  id: string;
+  status: string;
+  branch_id: string;
+  period_month: string;
+  file_name: string;
+  rows: Array<{ supplier_name: string; days: number[]; total_qty: number }>;
+  total_qty: number;
+  applied_at?: string;
+  applied_by?: string;
+  current_total_qty?: number;
+}
+
+function toBaseReference(row: BaseReferenceResponse): BaseReference {
+  return {
+    id: row.id,
+    status: row.status,
+    periodMonth: row.period_month,
+    fileName: row.file_name,
+    rows: row.rows.map((r) => ({ supplierName: r.supplier_name, days: r.days, totalQty: r.total_qty })),
+    totalQty: row.total_qty,
+    appliedAt: row.applied_at ?? null,
+    appliedBy: row.applied_by ?? null,
+    currentTotalQty: row.current_total_qty ?? null,
+  };
+}
+
+/** The scope bar's branch, else the pool agreements are recorded against. */
+async function scopedBranchID(): Promise<string> {
+  return getActiveScope().branchId ?? (await defaultBranchID());
 }
 
 /** Mirrors the SIM3LON usecase's VarianceResponse. */
@@ -516,44 +517,6 @@ function assertScope(originScope: readonly [string, string]): void {
   }
 }
 
-/**
- * The service's three change words, in the console's.
- *
- * An unrecognised kind reads as `berubah` rather than being dropped: a row the
- * console cannot classify still moved a number, and hiding it would understate
- * what the import does.
- */
-const CHANGE_TO_DOMAIN: Record<string, SAImportChangeKind> = {
-  new: "baru",
-  updated: "berubah",
-  unchanged: "tetap",
-};
-
-function toDiff(wire: DiffResponse): SAImportDiff {
-  return {
-    perubahan: (wire.changes ?? []).map((c) => ({
-      tanggal: c.date,
-      jenis: CHANGE_TO_DOMAIN[c.change] ?? "berubah",
-      dari: c.from,
-      menjadi: c.to,
-    })),
-    // The reason text is the server's, passed through rather than translated.
-    // A lookup keyed on English prose would silently fall back to the raw
-    // string the first time the parser rephrased a message, which is worse than
-    // showing the server's words consistently: the parser there is the
-    // authority in this build, and what it says is what happened to the file.
-    masalah: (wire.issues ?? []).map((i) => ({
-      baris: i.line,
-      nilai: i.value,
-      alasan: i.reason,
-    })),
-    baru: wire.new,
-    berubah: wire.updated,
-    tetap: wire.unchanged,
-    dilewati: wire.skipped,
-  };
-}
-
 export const saApiHttp: ScheduleAgreementApi = {
   async getSAList(filters?: SAFilterParams): Promise<ScheduleAgreement[]> {
     const specs: FilterSpec[] = [];
@@ -631,27 +594,6 @@ export const saApiHttp: ScheduleAgreementApi = {
 
   async deleteSA(id: string): Promise<void> {
     await send<null>("delete", `/schedule-agreements/${id}`);
-  },
-
-  async parseImport(saId: string, file: File): Promise<SAImportBatch> {
-    const parsed = await upload<ParseResponse>(
-      `/schedule-agreements/${saId}/imports`,
-      file,
-    );
-    return {
-      id: parsed.id,
-      // Echoed by the service so the console can show what is about to change
-      // without a second request.
-      saId: parsed.schedule_agreement_id,
-      namaBerkas: parsed.file_name,
-      checksum: parsed.checksum_sha256,
-      diff: toDiff(parsed.diff),
-    };
-  },
-
-  async applyImport(batchId: string): Promise<SAImportApplied> {
-    const applied = await send<ApplyResponse>("post", `/imports/${batchId}/apply`);
-    return { id: applied.id, barisDitulis: applied.rows_written };
   },
 
   async previewSIM3LON(file: File, supplierName: string, productId: string): Promise<SIM3LONPreview> {
@@ -751,7 +693,7 @@ export const saApiHttp: ScheduleAgreementApi = {
     const originScope = scopeKey();
     // The branch picked in the scope bar when there is one; consolidated
     // scope falls back to the pool agreements are recorded against.
-    const branchId = getActiveScope().branchId ?? (await defaultBranchID());
+    const branchId = await scopedBranchID();
     // Beranda's tile and the Kuota cabang card read the same month at once.
     const path = `/branches/${branchId}/quota-summary?${new URLSearchParams({ month }).toString()}`;
     const row = await shareInFlight(path, () => getOne<QuotaSummaryResponse>(path));
@@ -760,13 +702,42 @@ export const saApiHttp: ScheduleAgreementApi = {
       periodMonth: row.period_month,
       today: row.today ?? null,
       todayQty: row.today_qty ?? null,
-      days: row.days,
+      days: row.days.map((day) => ({ date: day.date, qty: day.qty, referenceQty: day.reference_qty ?? null })),
       allocationQty: row.allocation_qty,
       deliveredQty: row.delivered_qty,
       remainingQty: row.remaining_qty,
       outletCount: row.outlet_count,
       kinds: row.kinds.map((kind) => ({ code: kind.code, name: kind.name, totalQty: kind.total_qty })),
+      referenceQty: row.reference_qty ?? null,
+      referenceRemainingQty: row.reference_remaining_qty ?? null,
+      todayReferenceQty: row.today_reference_qty ?? null,
     };
+  },
+
+  async previewBaseReference(file: File, month: string): Promise<BaseReference> {
+    const originScope = scopeKey();
+    const branchId = await scopedBranchID();
+    assertScope(originScope);
+    const preview = await upload<BaseReferenceResponse>(
+      `/branches/${branchId}/sa-base-references/preview`, file, "file", 60_000, { period_month: month });
+    assertScope(originScope);
+    return toBaseReference(preview);
+  },
+
+  async applyBaseReference(id: string): Promise<BaseReference> {
+    const originScope = scopeKey();
+    const applied = await send<BaseReferenceResponse>("post", `/sa-base-references/${id}/apply`);
+    assertScope(originScope);
+    return toBaseReference(applied);
+  },
+
+  async getBaseReference(month: string): Promise<BaseReference | null> {
+    const originScope = scopeKey();
+    const branchId = await scopedBranchID();
+    const row = await getOne<BaseReferenceResponse | null>(
+      `/branches/${branchId}/sa-base-reference?${new URLSearchParams({ month }).toString()}`);
+    assertScope(originScope);
+    return row ? toBaseReference(row) : null;
   },
 
   async getSupplierOptions(): Promise<string[]> {

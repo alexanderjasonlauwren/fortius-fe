@@ -115,6 +115,17 @@ describe("the KPI tiles", () => {
     expect(kpi.pendingPayments).toBeNull();
     expect(kpi.pendingPaymentValue).toBeNull();
   });
+
+  it("carries the month's Acuan Base SA target, and none when no PDF was uploaded", () => {
+    const uploaded = toDashboardSummary(summary({
+      quota: { allocation_qty: 20450, remaining_qty: 13650, reference_qty: 11200, reference_remaining_qty: 4400 },
+    })).kpi;
+    expect(uploaded).toMatchObject({ monthlyTarget: 11200, monthlyTargetRemaining: 4400, monthlyQuotaTotal: 20450 });
+
+    const none = toDashboardSummary(summary()).kpi;
+    expect(none.monthlyTarget).toBeNull();
+    expect(none.monthlyTargetRemaining).toBeNull();
+  });
 });
 
 describe("the month chart", () => {

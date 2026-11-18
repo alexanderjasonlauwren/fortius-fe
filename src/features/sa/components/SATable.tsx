@@ -1,4 +1,4 @@
-import { CheckCircle2, FileText, Printer, Trash2, Upload } from "lucide-react";
+import { CheckCircle2, FileText, Printer, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -17,13 +17,6 @@ interface SATableProps {
   onPrint: (id: string) => void;
   /** Omitted for a role that may not delete one. */
   onDelete?: (sa: ScheduleAgreement) => void;
-  /**
-   * Absent when the signed-in user may not import.
-   *
-   * A prop rather than a permission check inside the table: the table renders
-   * what it is given, and the page already knows who is looking.
-   */
-  onImport?: (sa: ScheduleAgreement) => void;
   pendingId?: string;
 }
 
@@ -33,7 +26,6 @@ export function SATable({
   onActivate,
   onPrint,
   onDelete,
-  onImport,
   pendingId,
 }: SATableProps) {
   const columns: Column<ScheduleAgreement>[] = [
@@ -166,20 +158,6 @@ export function SATable({
             >
               <CheckCircle2 className="h-3 w-3" />
               Aktifkan
-            </Button>
-          )}
-          {/* Draft excluded: targets belong to an agreement that is in force,
-              and importing a month of obligations against something nobody has
-              verified yet writes a record with no authority behind it. */}
-          {onImport && row.status !== "Draf" && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Impor target harian ${row.nomorSA}`}
-              title="Impor target harian"
-              onClick={() => onImport(row)}
-            >
-              <Upload className="h-3.5 w-3.5" />
             </Button>
           )}
           <Button

@@ -7,10 +7,9 @@
  * adapter — mapping there keeps every component unaware of the wire.
  */
 import type {
+  BaseReference,
   PlanningCutoverReport,
   QuotaSummary,
-  SAImportApplied,
-  SAImportBatch,
   SAImportSummary,
   SIM3LONApplied,
   SIM3LONLiveCandidate,
@@ -43,17 +42,6 @@ export interface ScheduleAgreementApi {
    */
   getSupplierOptions(): Promise<string[]>;
 
-  /**
-   * Reads a Base SA export and reports what applying it would do. Writes
-   * nothing.
-   *
-   * Two calls rather than one because approving the diff is the point: a
-   * `POST` that parsed and wrote in a single step would make a mistyped column
-   * a month of overwritten obligations instead of a glance at a table.
-   */
-  parseImport(saId: string, file: File): Promise<SAImportBatch>;
-  /** Writes the targets a reviewed batch describes. */
-  applyImport(batchId: string): Promise<SAImportApplied>;
   previewSIM3LON(file: File, supplierName: string, productId: string): Promise<SIM3LONPreview>;
   getSIM3LONReconciliation(batchId: string): Promise<SIM3LONReconciliationPreview>;
   applySIM3LON(batchId: string, review?: SIM3LONApplyReview): Promise<SIM3LONApplied>;
@@ -72,6 +60,17 @@ export interface ScheduleAgreementApi {
   getSIM3LONVariances(productId: string, month: string): Promise<SIM3LONVarianceReport>;
   /** The scoped branch's quota for one month, `YYYY-MM`: daily, then monthly. */
   getQuotaSummary(month: string): Promise<QuotaSummary>;
+
+  /**
+   * Reads the SPBE's Acuan Base SA PDF for the scoped branch and a month and
+   * stores it, writing no baseline. A PDF that does not add up is refused
+   * with each problem in `ApiError.violations`.
+   */
+  previewBaseReference(file: File, month: string): Promise<BaseReference>;
+  /** Makes a previewed PDF the month's baseline, replacing any earlier one. */
+  applyBaseReference(id: string): Promise<BaseReference>;
+  /** The scoped branch's baseline for a month; `null` when none was uploaded. */
+  getBaseReference(month: string): Promise<BaseReference | null>;
 
   /**
    * The tenant's configured preselection for the import dialog's product

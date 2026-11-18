@@ -237,133 +237,6 @@ describe("the supplier list", () => {
   });
 });
 
-describe("mapping an import's diff onto the domain", () => {
-  const file = new File(["tanggal,target\n"], "SA-Agustus-rev2.csv", {
-    type: "text/csv",
-  });
-
-  function parsed(diff: Record<string, unknown> = {}) {
-    return {
-      id: "22222222-2222-4222-8222-222222222222",
-      status: "parsed",
-      schedule_agreement_id: "11111111-1111-4111-8111-111111111111",
-      file_name: "SA-Agustus-rev2.csv",
-      checksum_sha256: "abc123",
-      diff: {
-        changes: [],
-        issues: [],
-        new: 0,
-        updated: 0,
-        unchanged: 0,
-        skipped: 0,
-        ...diff,
-      },
-    };
-  }
-
-  it("posts the file as multipart to the agreement's import route", async () => {
-    upload.mockResolvedValue(parsed());
-
-    await saApiHttp.parseImport("11111111-1111-4111-8111-111111111111", file);
-
-    expect(upload).toHaveBeenCalledWith(
-      "/schedule-agreements/11111111-1111-4111-8111-111111111111/imports",
-      file,
-    );
-  });
-
-  it("translates the three change words", async () => {
-    upload.mockResolvedValue(
-      parsed({
-        changes: [
-          { date: "2026-09-01", change: "unchanged", to: 350 },
-          { date: "2026-09-02", change: "updated", from: 350, to: 300 },
-          { date: "2026-09-03", change: "new", to: 400 },
-        ],
-        new: 1,
-        updated: 1,
-        unchanged: 1,
-      }),
-    );
-
-    const batch = await saApiHttp.parseImport("sa-1", file);
-
-    expect(batch.diff.perubahan.map((c) => c.jenis)).toEqual([
-      "tetap",
-      "berubah",
-      "baru",
-    ]);
-    expect(batch.diff.perubahan[1]).toEqual({
-      tanggal: "2026-09-02",
-      jenis: "berubah",
-      dari: 350,
-      menjadi: 300,
-    });
-    // A new date has no previous value. Undefined, never 0 — a zero would read
-    // as a stated obligation of nothing, which is a different claim.
-    expect(batch.diff.perubahan[2].dari).toBeUndefined();
-    expect(batch.diff).toMatchObject({ baru: 1, berubah: 1, tetap: 1 });
-  });
-
-  it("keeps a change it does not recognise rather than dropping it", async () => {
-    // A row the console cannot classify still moves a number, and hiding it
-    // would understate what applying the file does.
-    upload.mockResolvedValue(
-      parsed({ changes: [{ date: "2026-09-01", change: "reinstated", to: 350 }] }),
-    );
-
-    const batch = await saApiHttp.parseImport("sa-1", file);
-
-    expect(batch.diff.perubahan).toHaveLength(1);
-    expect(batch.diff.perubahan[0].jenis).toBe("berubah");
-  });
-
-  it("passes the parser's own words through for an unreadable line", async () => {
-    upload.mockResolvedValue(
-      parsed({
-        issues: [{ line: 4, value: "kemarin", reason: "not a date the parser recognises" }],
-        skipped: 1,
-      }),
-    );
-
-    const batch = await saApiHttp.parseImport("sa-1", file);
-
-    expect(batch.diff.masalah).toEqual([
-      { baris: 4, nilai: "kemarin", alasan: "not a date the parser recognises" },
-    ]);
-    expect(batch.diff.dilewati).toBe(1);
-  });
-
-  it("survives a diff with no arrays at all", async () => {
-    // Go marshals an empty slice as null, so a file that changed nothing and
-    // broke nothing arrives with both lists absent.
-    upload.mockResolvedValue(
-      parsed({ changes: undefined, issues: undefined }),
-    );
-
-    const batch = await saApiHttp.parseImport("sa-1", file);
-
-    expect(batch.diff.perubahan).toEqual([]);
-    expect(batch.diff.masalah).toEqual([]);
-  });
-
-  it("reports what applying actually wrote", async () => {
-    send.mockResolvedValue({
-      id: "22222222-2222-4222-8222-222222222222",
-      status: "applied",
-      rows_written: 31,
-    });
-
-    const applied = await saApiHttp.applyImport("22222222-2222-4222-8222-222222222222");
-
-    expect(send).toHaveBeenCalledWith(
-      "post",
-      "/imports/22222222-2222-4222-8222-222222222222/apply",
-    );
-    expect(applied.barisDitulis).toBe(31);
-  });
-});
-
 describe("the per-product quota breakdown", () => {
   // This is the field the SA list/detail screens and the distribution
   // planner's product default all depend on -- see PlanDetailPanel's
@@ -662,4 +535,48 @@ it("sends a manual SA's quota with the product it is for", async () => {
   const [, path, body] = send.mock.calls[0];
   expect(path).toBe("/schedule-agreements");
   expect(body.products).toEqual([{ product_id: "product-1", total_quota_qty: 12000 }]);
+});
+
+describe("the Acuan Base SA", () => {
+  const wireReference = {
+    id: "batch-1", status: "parsed", branch_id: "branch-1", period_month: "2026-11",
+    file_name: "Acuan Base SA November 2026 PT. BDA .pdf",
+    rows: [{ supplier_name: "YOSO ARTO POTRO", days: [0, 560, 360], total_qty: 920 }],
+    total_qty: 920,
+  };
+
+  it("posts the PDF and its month to the scoped branch and maps the rows", async () => {
+    getList.mockResolvedValue({ items: [{ id: "branch-1", is_default: true }] });
+    upload.mockResolvedValue({ ...wireReference, current_total_qty: 11200 });
+    const file = new File(["%PDF-1.4"], "acuan.pdf", { type: "application/pdf" });
+
+    const preview = await saApiHttp.previewBaseReference(file, "2026-11");
+
+    expect(upload).toHaveBeenCalledWith(
+      "/branches/branch-1/sa-base-references/preview", file, "file", 60_000, { period_month: "2026-11" });
+    expect(preview).toMatchObject({
+      id: "batch-1", totalQty: 920, currentTotalQty: 11200, appliedBy: null,
+      rows: [{ supplierName: "YOSO ARTO POTRO", days: [0, 560, 360], totalQty: 920 }],
+    });
+  });
+
+  it("reads a month nobody uploaded as null, not as a zero target", async () => {
+    getList.mockResolvedValue({ items: [{ id: "branch-1", is_default: true }] });
+    getOne.mockResolvedValue(null);
+    expect(await saApiHttp.getBaseReference("2026-12")).toBeNull();
+    expect(getOne).toHaveBeenCalledWith("/branches/branch-1/sa-base-reference?month=2026-12");
+  });
+
+  it("carries the baseline onto the quota summary, null when the month has none", async () => {
+    getList.mockResolvedValue({ items: [{ id: "branch-1", is_default: true }] });
+    getOne.mockResolvedValue({
+      period_month: "2026-11", today: "2026-11-18", today_qty: 360,
+      days: [{ date: "2026-11-18", qty: 360, reference_qty: 360 }, { date: "2026-11-19", qty: 310 }],
+      allocation_qty: 20450, delivered_qty: 6800, remaining_qty: 13650, outlet_count: 25, kinds: [],
+      reference_qty: 11200, reference_remaining_qty: 4400, today_reference_qty: 360,
+    });
+    const summary = await saApiHttp.getQuotaSummary("2026-11");
+    expect(summary).toMatchObject({ referenceQty: 11200, referenceRemainingQty: 4400, todayReferenceQty: 360 });
+    expect(summary.days.map((day) => day.referenceQty)).toEqual([360, null]);
+  });
 });

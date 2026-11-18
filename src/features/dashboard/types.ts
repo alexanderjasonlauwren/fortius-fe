@@ -3,6 +3,10 @@ export interface KpiSummary {
   dailyTarget: number;
   monthlyQuotaRemaining: number;
   monthlyQuotaTotal: number;
+  /** The month's Acuan Base SA total; `null` when no PDF was uploaded. */
+  monthlyTarget: number | null;
+  /** That target less what was distributed; negative once delivery passes it. */
+  monthlyTargetRemaining: number | null;
   activeOutlet: number;
   totalOutlet: number;
   /** Receipts awaiting verification; null for a role that may not read payments. */
