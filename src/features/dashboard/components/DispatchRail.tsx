@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -6,7 +6,8 @@ import { formatNumber, minutesToClock } from "@/lib/format";
 import { Skeleton } from "@/components/common/Panel";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
-import type { DispatchRail as RailData, DispatchStop } from "../types";
+import type { DispatchRail as RailData, DispatchStop, StopStage } from "../types";
+import { splitLanes, STAGE_WORD, VISIBLE_LANES } from "../lib/railLanes";
 import { outletLabelTitle } from "@/lib/lexicon";
 
 /**
@@ -24,6 +25,14 @@ import { outletLabelTitle } from "@/lib/lexicon";
  * -- it just stops drawing a clock ruler, a "now" line and a late verdict
  * over a position that isn't a real time, rather than presenting an
  * invented one as real.
+ *
+ * # A large fleet
+ *
+ * Trucks are ordered by what needs someone (a failed stop first, finished
+ * trucks last), and past six the rest fold into one summary row that counts
+ * them by state. Not a scroll box: the rail already scrolls sideways on a
+ * phone, and a box scrolling both ways inside a scrolling page traps the
+ * swipe and hides how many trucks there are.
  */
 export function DispatchRail({
   data,
@@ -33,6 +42,7 @@ export function DispatchRail({
   isLoading?: boolean;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   // The marker ticks on its own so the rail is never stale on screen; until the
   // first tick it uses the minute the snapshot was taken.
@@ -74,7 +84,8 @@ export function DispatchRail({
     );
   }
 
-  const { dayStart, dayEnd, lanes, hasSchedule } = data;
+  const { dayStart, dayEnd, hasSchedule } = data;
+  const { shown: lanes, hidden, folds, hiddenByStage } = splitLanes(data.lanes, expanded);
   const span = Math.max(60, dayEnd - dayStart);
   const pct = (minute: number) =>
     ((Math.min(dayEnd, Math.max(dayStart, minute)) - dayStart) / span) * 100;
@@ -89,99 +100,169 @@ export function DispatchRail({
   const nowVisible = hasSchedule && nowMinute >= dayStart && nowMinute <= dayEnd;
 
   return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[46rem]">
-        {/* Hour ruler */}
-        <div className="flex border-b border-line">
-          {/* Sticky: the rail scrolls sideways on a phone, and without this the
-              driver names scroll away and leave unlabelled colour blocks. It
-              needs its own background or the timeline shows through. */}
-          <div className="sticky left-0 z-10 w-32 shrink-0 border-r border-line bg-panel px-3 py-2 sm:w-52 sm:px-5">
-            <span className="label text-2xs text-ink-muted">Armada</span>
-          </div>
-          <div className="relative flex-1 py-2 pr-5">
-            {!hasSchedule && (
-              <span className="text-2xs text-ink-muted">Urutan kunjungan →</span>
-            )}
-            {hours.map((h) => {
-              const at = pct(h);
-              return (
-                <span
-                  key={h}
-                  className={cn(
-                    "data absolute top-2 text-2xs text-ink-muted",
-                    // Keep the first and last labels inside the track.
-                    at <= 1 ? "translate-x-0" : at >= 99 ? "-translate-x-full" : "-translate-x-1/2",
-                  )}
-                  style={{ left: `${at}%` }}
-                >
-                  {minutesToClock(h)}
-                </span>
-              );
-            })}
-            <span className="block h-4" />
-          </div>
-        </div>
-
-        {/* Lanes */}
-        <div className="relative">
-          {lanes.map((lane, laneIndex) => (
-            <div key={lane.driverId} className="flex border-b border-line last:border-b-0">
-              <div className="sticky left-0 z-10 w-32 shrink-0 border-r border-line bg-panel px-3 py-2.5 sm:w-52 sm:px-5">
-                <Link
-                  to={`/drivers/${lane.driverId}`}
-                  className="block truncate text-sm font-semibold text-ink hover:underline hover:decoration-signal hover:decoration-2 hover:underline-offset-4"
-                >
-                  {lane.driver}
-                </Link>
-                <p className="data mt-0.5 truncate text-2xs text-ink-muted">
-                  {lane.plat} · {formatNumber(lane.muatan)}/{formatNumber(lane.kapasitas)}
-                </p>
-              </div>
-
-              <div className="relative flex-1 py-2.5 pr-5">
-                {/* Two-hour gridlines, kept faint so the blocks carry the read. */}
-                {hours.map((h) => (
+    <div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[46rem]">
+          {/* Hour ruler */}
+          <div className="flex border-b border-line">
+            {/* Sticky: the rail scrolls sideways on a phone, and without this the
+                driver names scroll away and leave unlabelled colour blocks. It
+                needs its own background or the timeline shows through. */}
+            <div className="sticky left-0 z-10 w-32 shrink-0 border-r border-line bg-panel px-3 py-2 sm:w-52 sm:px-5">
+              <span className="label text-2xs text-ink-muted">Armada</span>
+            </div>
+            <div className="relative flex-1 py-2 pr-5">
+              {!hasSchedule && (
+                <span className="text-2xs text-ink-muted">Urutan kunjungan →</span>
+              )}
+              {hours.map((h) => {
+                const at = pct(h);
+                return (
                   <span
                     key={h}
-                    className="absolute inset-y-0 w-px bg-line"
-                    style={{ left: `${pct(h)}%` }}
-                    aria-hidden
-                  />
-                ))}
-
-                {/* Stacked across lanes these segments read as one "now" line. */}
-                {nowVisible && (
-                  <div
-                    className="pointer-events-none absolute inset-y-0 z-20 w-px bg-signal"
-                    style={{ left: `${pct(nowMinute)}%` }}
-                    aria-hidden
-                  >
-                    {laneIndex === 0 && (
-                      <span className="now-pulse absolute -left-[3px] -top-[3px] h-[7px] w-[7px] rounded-full bg-signal" />
+                    className={cn(
+                      "data absolute top-2 text-2xs text-ink-muted",
+                      // Keep the first and last labels inside the track.
+                      at <= 1 ? "translate-x-0" : at >= 99 ? "-translate-x-full" : "-translate-x-1/2",
                     )}
-                  </div>
-                )}
+                    style={{ left: `${at}%` }}
+                  >
+                    {minutesToClock(h)}
+                  </span>
+                );
+              })}
+              <span className="block h-4" />
+            </div>
+          </div>
 
-                <div className="relative h-7">
-                  {lane.stops.map((stop) => (
-                    <StopBlock
-                      key={stop.id}
-                      stop={stop}
-                      left={pct(stop.startMinute)}
-                      width={Math.max(4, pct(stop.endMinute) - pct(stop.startMinute))}
-                      nowMinute={nowMinute}
-                      hasSchedule={hasSchedule}
-                      isHovered={hovered === stop.id}
-                      onHover={setHovered}
+          {/* Lanes */}
+          <div className="relative">
+            {lanes.map((lane, laneIndex) => (
+              <div key={lane.driverId} className="flex border-b border-line last:border-b-0">
+                <div className="sticky left-0 z-10 w-32 shrink-0 border-r border-line bg-panel px-3 py-2.5 sm:w-52 sm:px-5">
+                  <Link
+                    to={`/drivers/${lane.driverId}`}
+                    className="block truncate text-sm font-semibold text-ink hover:underline hover:decoration-signal hover:decoration-2 hover:underline-offset-4"
+                  >
+                    {lane.driver}
+                  </Link>
+                  <p className="data mt-0.5 truncate text-2xs text-ink-muted">
+                    {lane.plat} · {formatNumber(lane.muatan)}/{formatNumber(lane.kapasitas)}
+                  </p>
+                </div>
+
+                <div className="relative flex-1 py-2.5 pr-5">
+                  {/* Two-hour gridlines, kept faint so the blocks carry the read. */}
+                  {hours.map((h) => (
+                    <span
+                      key={h}
+                      className="absolute inset-y-0 w-px bg-line"
+                      style={{ left: `${pct(h)}%` }}
+                      aria-hidden
                     />
                   ))}
+
+                  {/* Stacked across lanes these segments read as one "now" line. */}
+                  {nowVisible && (
+                    <div
+                      className="pointer-events-none absolute inset-y-0 z-20 w-px bg-signal"
+                      style={{ left: `${pct(nowMinute)}%` }}
+                      aria-hidden
+                    >
+                      {laneIndex === 0 && (
+                        <span className="now-pulse absolute -left-[3px] -top-[3px] h-[7px] w-[7px] rounded-full bg-signal" />
+                      )}
+                    </div>
+                  )}
+
+                  <div className="relative h-7">
+                    {lane.stops.map((stop) => (
+                      <StopBlock
+                        key={stop.id}
+                        stop={stop}
+                        left={pct(stop.startMinute)}
+                        width={Math.max(4, pct(stop.endMinute) - pct(stop.startMinute))}
+                        nowMinute={nowMinute}
+                        hasSchedule={hasSchedule}
+                        isHovered={hovered === stop.id}
+                        onHover={setHovered}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
+      {folds && (
+        <FoldRow
+          hiddenCount={hidden.length}
+          total={data.lanes.length}
+          byStage={hiddenByStage}
+          expanded={expanded}
+          onToggle={() => setExpanded((open) => !open)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The legend's own swatches, so the counts read as part of the same board. */
+const STAGE_SWATCH: Record<StopStage, string> = {
+  Selesai: "bg-pine",
+  Proses: "bg-signal",
+  Antrian: "bg-panel-raised ring-1 ring-inset ring-line-strong",
+  Tertunda: "bg-rust",
+};
+
+/**
+ * The trucks past the first six, counted by state, and the switch that draws
+ * them. What is drawn plus what is counted is always the whole fleet.
+ */
+function FoldRow({
+  hiddenCount,
+  total,
+  byStage,
+  expanded,
+  onToggle,
+}: {
+  hiddenCount: number;
+  total: number;
+  byStage: { stage: StopStage; count: number }[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  const toggle = () => {
+    onToggle();
+    // Folding a long board from its bottom shrinks the page under the reader
+    // and leaves them in the tiles below. Bring the row back to the bottom of
+    // the view, so the six trucks it now folds under are above it.
+    if (expanded) requestAnimationFrame(() => row.current?.scrollIntoView?.({ block: "end" }));
+  };
+  return (
+    <div
+      ref={row}
+      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-t border-line px-3 py-2.5 sm:px-5"
+    >
+      {expanded ? (
+        <p className="text-xs text-ink-muted">Semua {formatNumber(total)} armada ditampilkan.</p>
+      ) : (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+          <span className="font-semibold text-ink">+{formatNumber(hiddenCount)} armada lain</span>
+          {byStage.map(({ stage, count }) => (
+            <span key={stage} className="flex items-center gap-1.5">
+              <span className={cn("h-2.5 w-2.5 rounded-[2px]", STAGE_SWATCH[stage])} aria-hidden />
+              {formatNumber(count)} {STAGE_WORD[stage]}
+            </span>
+          ))}
+        </p>
+      )}
+      {/* -ml-3: aligned with the counts above when it wraps under them on a phone. */}
+      <Button variant="ghost" size="sm" onClick={toggle} aria-expanded={expanded} className="-ml-3 sm:ml-0">
+        {expanded ? `Tampilkan ${VISIBLE_LANES} saja` : `Tampilkan semua (${formatNumber(total)})`}
+      </Button>
     </div>
   );
 }
