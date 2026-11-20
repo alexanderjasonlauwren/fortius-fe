@@ -39,6 +39,11 @@ export interface UsersApi {
   /** `password` is the initial one, required by the server on create only. */
   createOrUpdateUser(input: Partial<UserEntity> & { id?: string; password?: string }): Promise<UserEntity>;
   removeUser(id: string): Promise<void>;
+  /**
+   * An administrator sets someone's password. The server applies the tenant's
+   * password policy and ends every session the user has, in every tenant.
+   */
+  resetPassword(userId: string, password: string): Promise<void>;
   listGrantableRoles(): Promise<GrantableRole[]>;
   getUserRoles(userId: string): Promise<RoleGrant[]>;
   /**
