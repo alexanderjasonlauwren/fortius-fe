@@ -5,6 +5,8 @@ import { ToastProvider } from "./components/ui/toast";
 import { OldDateConfirmHost } from "./components/common/OldDateConfirmHost";
 import { TooltipProvider } from "./components/ui/tooltip";
 import App from "./App.tsx";
+// Imported for its listener: the install prompt can fire before React mounts.
+import "./lib/installPrompt";
 import "./index.css";
 
 const queryClient = new QueryClient({
