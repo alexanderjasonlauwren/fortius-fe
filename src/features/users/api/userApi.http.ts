@@ -218,11 +218,19 @@ export async function removeUser(id: string): Promise<void> {
   await send<null>("delete", `/users/${id}`);
 }
 
+export async function resetPassword(userId: string, password: string): Promise<void> {
+  // Only the version and the password. The profile editor derives `username`
+  // from the email; sending that here would rename an account whose username
+  // was never its email's local part (crew logins such as ary.nurfianto).
+  const current = await getOne<UserResponse>(`/users/${userId}`);
+  await send<UserResponse>("put", `/users/${userId}`, { version: current.version, password });
+}
+
 // Compile-time proof that this adapter satisfies the contract. Without it a
 // drifting signature is discovered by a page that fails to build, or worse by
 // one that builds and reads a field that is not there.
 const _contract: UsersApi = {
-  getUsers, getUsersWithAccess, createOrUpdateUser, removeUser,
+  getUsers, getUsersWithAccess, createOrUpdateUser, removeUser, resetPassword,
   listGrantableRoles, getUserRoles, grantRole, revokeRole,
 };
 void _contract;

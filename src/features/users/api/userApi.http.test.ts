@@ -148,3 +148,21 @@ describe("role grants", () => {
     expect(send.mock.calls[0][2]).toMatchObject({ username: "kasir2", password: "Rahasia-2026!" });
   });
 });
+
+describe("password reset", () => {
+  beforeEach(() => {
+    getOne.mockReset();
+    send.mockReset();
+  });
+
+  // A crew login such as ary.nurfianto is not its email's local part. Sending
+  // the profile editor's derived username with the reset would rename it.
+  it("sends only the version it read and the new password", async () => {
+    const { resetPassword } = await import("./userApi.http");
+    getOne.mockResolvedValue(wire({ username: "ary.nurfianto", email: "ary@fortius.local", version: 7 }));
+    send.mockResolvedValue(wire());
+    await resetPassword(USER_ID, "Baru-Sekali-2026!");
+    expect(getOne).toHaveBeenCalledWith(`/users/${USER_ID}`);
+    expect(send).toHaveBeenCalledWith("put", `/users/${USER_ID}`, { version: 7, password: "Baru-Sekali-2026!" });
+  });
+});

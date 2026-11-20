@@ -1,7 +1,7 @@
 import { scopeKey } from "@/lib/scope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, Pencil, Trash2, UserPlus, Users } from "lucide-react";
+import { KeyRound, LockKeyhole, Pencil, Trash2, UserPlus, Users } from "lucide-react";
 import {
   createOrUpdateUser,
   getUsersWithAccess,
@@ -10,6 +10,7 @@ import {
 } from "@/features/users/api/userApi";
 import { describeRoles } from "@/features/rbac/access";
 import { RoleGrantDialog } from "@/features/users/components/RoleGrantDialog";
+import { ResetPasswordDialog } from "@/features/users/components/ResetPasswordDialog";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
@@ -68,6 +69,7 @@ export function UserListPage() {
     queryFn: () => getUsersWithAccess({ search, role }),
   });
   const [rolesFor, setRolesFor] = useState<UserEntity | null>(null);
+  const [resettingFor, setResettingFor] = useState<UserEntity | null>(null);
 
   const saveMutation = useDeskMutation({
     mutationFn: (values: FormState) => createOrUpdateUser(values),
@@ -187,6 +189,17 @@ export function UserListPage() {
               <KeyRound className="h-3.5 w-3.5" />
             </Button>
           </CanAccess>
+          <CanAccess permission={PERMISSIONS.USERS_EDIT}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Atur ulang kata sandi ${row.nama}`}
+              title="Atur ulang kata sandi"
+              onClick={() => setResettingFor(row)}
+            >
+              <LockKeyhole className="h-3.5 w-3.5" />
+            </Button>
+          </CanAccess>
           <Button
             variant="ghost"
             size="icon-xs"
@@ -277,6 +290,7 @@ export function UserListPage() {
       </Panel>
 
       <RoleGrantDialog user={rolesFor} onClose={() => setRolesFor(null)} />
+      <ResetPasswordDialog user={resettingFor} onClose={() => setResettingFor(null)} />
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-lg">

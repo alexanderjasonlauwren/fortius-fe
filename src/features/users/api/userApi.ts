@@ -3,6 +3,7 @@ export {
   getUsersWithAccess,
   createOrUpdateUser,
   removeUser,
+  resetPassword,
   listGrantableRoles,
   getUserRoles,
   grantRole,
