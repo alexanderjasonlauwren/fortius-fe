@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
   Check,
+  Download,
   KeyRound,
   LogOut,
   MonitorSmartphone,
@@ -31,6 +32,7 @@ import { describeRoles } from "@/features/rbac/access";
 import { ChangePasswordDialog } from "@/features/auth/components/ChangePasswordDialog";
 import { authApi } from "@/features/auth/api/authApi";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { promptInstall, useCanInstall } from "@/lib/installPrompt";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -38,6 +40,7 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const user = useAuthStore((state) => state.user);
+  const canInstall = useCanInstall();
   const logout = useAuthStore((state) => state.logout);
   const location = useLocation();
   const navigate = useNavigate();
@@ -348,6 +351,20 @@ export function Header({ onMenuClick }: HeaderProps) {
                   )}
                   {theme === "dark" ? "Tema terang" : "Tema gelap"}
                 </button>
+                {/* Only while the browser offers it: never in Safari, and gone
+                    once installed or when opened from the installed app. */}
+                {canInstall && (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      void promptInstall();
+                    }}
+                    className="flex w-full items-center gap-2.5 border-t border-line px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-panel-sunk hover:text-ink"
+                  >
+                    <Download className="h-4 w-4" />
+                    Pasang aplikasi
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setMenuOpen(false);
