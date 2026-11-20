@@ -173,25 +173,46 @@ export function DashboardPage() {
           }
         />
 
-        <StatTile
-          label="Sisa kuota bulan ini"
-          value={kpi ? formatNumber(kpi.monthlyQuotaRemaining) : undefined}
-          unit={unitLabel()}
-          isLoading={isLoading}
-          meter={
-            kpi ? { value: quotaUsed, max: kpi.monthlyQuotaTotal, tone: "ink" as const } : undefined
-          }
-          hint={
-            kpi ? (
+        {kpi && kpi.monthlyTarget !== null && kpi.monthlyTargetRemaining !== null ? (
+          // The SPBE's Acuan Base SA leads when uploaded; the SIM3LON
+          // allocation stays as the line beneath (user's decision, 18 Nov).
+          <StatTile
+            label="Sisa target bulan ini"
+            value={formatNumber(kpi.monthlyTargetRemaining)}
+            unit={unitLabel()}
+            isLoading={isLoading}
+            meter={{ value: quotaUsed, max: kpi.monthlyTarget, tone: kpi.monthlyTargetRemaining < 0 ? "rust" as const : "ink" as const }}
+            hint={
               <>
                 <span className="data">{formatNumber(quotaUsed)}</span> dari{" "}
-                <span className="data">{formatNumber(kpi.monthlyQuotaTotal)}</span> tersalurkan
+                <span className="data">{formatNumber(kpi.monthlyTarget)}</span> target Acuan SA · alokasi SIM3LON{" "}
+                <span className="data">{formatNumber(kpi.monthlyQuotaTotal)}</span>
               </>
-            ) : undefined
-          }
-          href="/sa"
-          icon={Package}
-        />
+            }
+            href="/sa"
+            icon={Package}
+          />
+        ) : (
+          <StatTile
+            label="Sisa kuota bulan ini"
+            value={kpi ? formatNumber(kpi.monthlyQuotaRemaining) : undefined}
+            unit={unitLabel()}
+            isLoading={isLoading}
+            meter={
+              kpi ? { value: quotaUsed, max: kpi.monthlyQuotaTotal, tone: "ink" as const } : undefined
+            }
+            hint={
+              kpi ? (
+                <>
+                  <span className="data">{formatNumber(quotaUsed)}</span> dari{" "}
+                  <span className="data">{formatNumber(kpi.monthlyQuotaTotal)}</span> tersalurkan · Acuan SA belum diunggah
+                </>
+              ) : undefined
+            }
+            href="/sa"
+            icon={Package}
+          />
+        )}
 
         {showManualOrders ? <StatTile
           label="Pesanan menunggu"

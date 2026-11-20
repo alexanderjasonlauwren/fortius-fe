@@ -49,7 +49,12 @@ export interface SummaryResponse {
   districts: { district: string; delivered_qty: number }[];
   stops: StopResponse[];
   outlets: { active: number; total: number } | null;
-  quota: { allocation_qty: number; remaining_qty: number } | null;
+  quota: {
+    allocation_qty: number;
+    remaining_qty: number;
+    reference_qty?: number | null;
+    reference_remaining_qty?: number | null;
+  } | null;
   pending_payments: { count: number; amount: number } | null;
   open_orders: number | null;
 }
@@ -104,6 +109,10 @@ function toKpi(row: SummaryResponse): KpiSummary {
     // The same figures as the SA page's Kuota cabang card.
     monthlyQuotaTotal: row.quota?.allocation_qty ?? 0,
     monthlyQuotaRemaining: row.quota?.remaining_qty ?? 0,
+    // The month's Acuan Base SA, the SPBE's target; null when none was
+    // uploaded, so the tile falls back to the allocation rather than a 0.
+    monthlyTarget: row.quota?.reference_qty ?? null,
+    monthlyTargetRemaining: row.quota?.reference_remaining_qty ?? null,
     activeOutlet: row.outlets?.active ?? 0,
     totalOutlet: row.outlets?.total ?? 0,
     pendingPayments: row.pending_payments ? row.pending_payments.count : null,

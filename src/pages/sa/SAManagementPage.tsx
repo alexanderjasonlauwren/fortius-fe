@@ -2,13 +2,13 @@ import { holds } from "@/features/rbac/holds";
 import { useState } from "react";
 import { SupplierSection } from "@/features/settings/components/SupplierSection";
 import { Link } from "react-router-dom";
-import { AlertCircle, ArrowRight, CalendarClock, FileSpreadsheet, Upload } from "lucide-react";
+import { AlertCircle, ArrowRight, CalendarClock, FileSpreadsheet, FileText, Upload } from "lucide-react";
 import { useScheduleAgreement } from "@/features/sa/hooks/useScheduleAgreement";
 import { SAFilterBar } from "@/features/sa/components/SAFilterBar";
 import { SATable } from "@/features/sa/components/SATable";
 import { UploadSAForm } from "@/features/sa/components/UploadSAForm";
-import { ImportTargetsDialog } from "@/features/sa/components/ImportTargetsDialog";
 import { SIM3LONImportDialog } from "@/features/sa/components/SIM3LONImportDialog";
+import { BaseReferenceDialog } from "@/features/sa/components/BaseReferenceDialog";
 import { LivePenyaluranPanel } from "@/features/sa/components/LivePenyaluranPanel";
 import { QuotaSummaryPanel } from "@/features/sa/components/QuotaSummaryPanel";
 import { PlanningCutoverDialog } from "@/features/sa/components/PlanningCutoverDialog";
@@ -51,8 +51,8 @@ export function SAManagementPage() {
   // done on one click (Round 1 G21).
   const [pendingActivate, setPendingActivate] = useState<ScheduleAgreement | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [importing, setImporting] = useState<ScheduleAgreement | null>(null);
   const [importingSIM3LON, setImportingSIM3LON] = useState(false);
+  const [uploadingReference, setUploadingReference] = useState(false);
   const [settingCutover, setSettingCutover] = useState(false);
 
   // Importing replaces a month of contractual obligations from a spreadsheet,
@@ -84,7 +84,7 @@ export function SAManagementPage() {
         eyebrow="Operasi harian"
         title="Schedule Agreement"
         description={`Kuota yang diterbitkan ${supplierLabel()} mitra. Setiap rencana distribusi menarik dari SA yang aktif, jadi angka di sini adalah kuota maksimal bulan ini.`}
-        actions={<div className="flex gap-2">
+        actions={<div className="flex flex-wrap gap-2">
           {canCreate && (
             <Button variant="outline" onClick={() => setUploading(true)}>
               <Upload className="h-3.5 w-3.5" />
@@ -95,6 +95,14 @@ export function SAManagementPage() {
             <Button variant="outline" onClick={() => setSettingCutover(true)}>
               <CalendarClock className="h-3.5 w-3.5" />
               Tanggal mulai sistem
+            </Button>
+          )}
+          {/* The SPBE's monthly Acuan Base SA: a target to read beside SIM3LON,
+              replaced in bulk, so it takes the import permission. */}
+          {canImport && (
+            <Button variant="outline" onClick={() => setUploadingReference(true)}>
+              <FileText className="h-3.5 w-3.5" />
+              Unggah Acuan SA
             </Button>
           )}
           {canImport && (
@@ -143,7 +151,10 @@ export function SAManagementPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <QuotaSummaryPanel className="lg:col-span-2" />
+        <QuotaSummaryPanel
+          className="lg:col-span-2"
+          onUploadReference={canImport ? () => setUploadingReference(true) : undefined}
+        />
 
         <Panel>
           <PanelHeader title="Alur kuota" />
@@ -186,7 +197,6 @@ export function SAManagementPage() {
           }
           onPrint={(id) => printMutation.mutate(id)}
           onDelete={canDelete ? setPendingDelete : undefined}
-          onImport={canImport ? setImporting : undefined}
           pendingId={activateMutation.variables}
         />
       </Panel>
@@ -207,13 +217,13 @@ export function SAManagementPage() {
         </DialogContent>
       </Dialog>
 
-      <ImportTargetsDialog sa={importing} onClose={() => setImporting(null)} />
       <SIM3LONImportDialog
         open={importingSIM3LON}
         onClose={() => setImportingSIM3LON(false)}
         supplierOptions={supplierOptions}
       />
       <PlanningCutoverDialog open={settingCutover} onClose={() => setSettingCutover(false)} />
+      <BaseReferenceDialog open={uploadingReference} onClose={() => setUploadingReference(false)} />
 
       <ConfirmDialog
         isOpen={!!pendingDelete}

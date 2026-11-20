@@ -83,69 +83,6 @@ export interface UploadSAPayload {
   namaDokumen?: string;
 }
 
-/* ── Base SA daily targets, imported from a file ───────────────────────── */
-
-/**
- * What one imported date would do to the record.
- *
- * `tetap` is reported rather than dropped: "28 of 31 unchanged" is what makes
- * the three that move stand out, and a diff listing only changes cannot say how
- * much of the month the file covered.
- */
-export type SAImportChangeKind = "baru" | "berubah" | "tetap";
-
-export interface SAImportChange {
-  /** ISO date. */
-  tanggal: string;
-  jenis: SAImportChangeKind;
-  /** The quantity on record. Absent when the agreement did not cover this date. */
-  dari?: number;
-  menjadi: number;
-}
-
-/**
- * A line the parser could not use.
- *
- * Collected rather than fatal: a sheet with one bad cell should still show the
- * other thirty dates and say which one needs attention.
- */
-export interface SAImportIssue {
-  /** 1-based line in the source file. */
-  baris: number;
-  nilai?: string;
-  alasan: string;
-}
-
-export interface SAImportDiff {
-  perubahan: SAImportChange[];
-  masalah: SAImportIssue[];
-  baru: number;
-  berubah: number;
-  tetap: number;
-  dilewati: number;
-}
-
-/**
- * A parsed import that has written nothing.
- *
- * Applying it is a separate act, because counts alone are not enough to decide
- * with — the number that matters is whether the sheet moves the 24th from 350
- * to 300, which is what a penalty is argued from.
- */
-export interface SAImportBatch {
-  id: string;
-  saId: string;
-  namaBerkas: string;
-  /** SHA-256 of the bytes read, so the file applied is the file reviewed. */
-  checksum: string;
-  diff: SAImportDiff;
-}
-
-export interface SAImportApplied {
-  id: string;
-  barisDitulis: number;
-}
-
 export interface SIM3LONTotals {
   allocationQty: number;
   normalQty: number;
@@ -316,13 +253,47 @@ export interface QuotaSummary {
   /** `null` unless the month is the current one. */
   today: string | null;
   todayQty: number | null;
-  days: Array<{ date: string; qty: number }>;
+  /** `referenceQty` is the Acuan Base SA's figure for the date; `null` with no PDF. */
+  days: Array<{ date: string; qty: number; referenceQty: number | null }>;
   allocationQty: number;
   deliveredQty: number;
   /** Negative when more was distributed than allocated. */
   remainingQty: number;
   outletCount: number;
   kinds: QuotaSummaryKind[];
+  /**
+   * The month's Acuan Base SA total: the SPBE's baseline, read beside the
+   * SIM3LON allocation and never instead of it. `null` when nobody uploaded
+   * the month's PDF.
+   */
+  referenceQty: number | null;
+  /** `referenceQty` less `deliveredQty`; negative once delivery passes it. */
+  referenceRemainingQty: number | null;
+  todayReferenceQty: number | null;
+}
+
+/** One SPBE row of an Acuan Base SA. `days[0]` is the 1st of the month. */
+export interface BaseReferenceRow {
+  supplierName: string;
+  days: number[];
+  totalQty: number;
+}
+
+/**
+ * The SPBE's monthly Acuan Base SA PDF, as read: an upload waiting to be saved
+ * (`parsed`) or the month's baseline in force (`applied`).
+ */
+export interface BaseReference {
+  id: string;
+  status: string;
+  periodMonth: string;
+  fileName: string;
+  rows: BaseReferenceRow[];
+  totalQty: number;
+  appliedAt: string | null;
+  appliedBy: string | null;
+  /** On a preview, the total of the baseline saving it would replace. */
+  currentTotalQty: number | null;
 }
 
 export interface SIM3LONVarianceReport {
