@@ -1,5 +1,6 @@
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { holds } from "@/features/rbac/holds";
+import { MONITORING_PERMISSIONS } from "@/layouts/nav";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -91,6 +92,9 @@ export function DashboardPage() {
   // The panel reads the audit trail; a role that may not is not offered it.
   const canSeeActivity = holds(PERMISSIONS.AUDIT_VIEW);
   const canSeePayments = holds(PERMISSIONS.PAYMENTS_VIEW);
+  // Finance reads the day's stops here but can't open the board (R3-14).
+  const canMonitor = MONITORING_PERMISSIONS.every(holds);
+  const canOpenDrivers = holds(PERMISSIONS.DRIVERS_VIEW);
 
   const delta = kpi ? formatDelta(kpi.dailyDistributed, kpi.previousDayDistributed) : null;
   const quotaUsed = kpi ? kpi.monthlyQuotaTotal - kpi.monthlyQuotaRemaining : 0;
@@ -127,7 +131,9 @@ export function DashboardPage() {
             </>
           }
         />
-        <DispatchRail data={rail} isLoading={isLoading} />
+        <DispatchRail data={rail} isLoading={isLoading} canMonitor={canMonitor}
+          canOpenDrivers={canOpenDrivers}
+        />
         {rail && rail.idleDrivers.length > 0 && (
           <p className="border-t border-line px-5 py-2.5 text-xs text-ink-muted">
             Tanpa penugasan hari ini:{" "}
@@ -261,9 +267,11 @@ export function DashboardPage() {
               {outletLabelTitle()} tidak menerima muatan sesuai jadwal.
             </span>
           </p>
-          <Button asChild size="sm" variant="outline">
-            <Link to="/monitoring">Tinjau di monitoring</Link>
-          </Button>
+          {canMonitor && (
+            <Button asChild size="sm" variant="outline">
+              <Link to="/monitoring">Tinjau di monitoring</Link>
+            </Button>
+          )}
         </Panel>
       )}
 
@@ -298,12 +306,14 @@ export function DashboardPage() {
             title="Surat jalan hari ini"
             hint="Delapan pemberhentian terakhir menurut jadwal"
             actions={
-              <Button asChild variant="ghost" size="sm">
-                <Link to="/monitoring">
-                  Semua surat jalan
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
+              canMonitor && (
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/monitoring">
+                    Semua surat jalan
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              )
             }
           />
           <DataTable
