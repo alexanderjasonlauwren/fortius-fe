@@ -222,9 +222,13 @@ function CloseRunDialog({
 
   const open = openDocuments(run.dokumen);
   const counts: RunCount[] = countsToSend(run.dokumen, draft);
+  // A changed figure issues a credit note, so it needs a reason; the server
+  // refuses one without (CORRECTION_NEEDS_REASON).
+  const needsReason = (d: RunSummary["dokumen"][number]) =>
+    draft[d.id].diterima !== d.diterima && draft[d.id].catatan.trim().length < 3;
   const invalid = run.dokumen.filter((d) => {
     const row = draft[d.id];
-    return row.diterima < 0 || row.kembali < 0 || row.diterima + row.kembali !== d.dimuat;
+    return row.diterima < 0 || row.kembali < 0 || row.diterima + row.kembali !== d.dimuat || needsReason(d);
   });
   const kembaliTotal = run.dokumen.reduce((sum, d) => sum + draft[d.id].kembali, 0);
 
@@ -332,19 +336,27 @@ function CloseRunDialog({
                         />
                       </label>
                       {changed && (
-                        <TextareaInput
-                          aria-label={`Alasan koreksi ${d.kode}`}
-                          className="col-span-3 sm:col-span-4"
-                          rows={2}
-                          placeholder="Alasan koreksi (contoh: sopir salah ketik)"
-                          value={row.catatan}
-                          onChange={(e) =>
-                            setDraft((current) => ({
-                              ...current,
-                              [d.id]: { ...current[d.id], catatan: e.target.value },
-                            }))
-                          }
-                        />
+                        <div className="col-span-3 sm:col-span-4">
+                          <TextareaInput
+                            aria-label={`Alasan koreksi ${d.kode}`}
+                            aria-required
+                            invalid={needsReason(d)}
+                            rows={2}
+                            placeholder="Alasan koreksi (contoh: sopir salah ketik)"
+                            value={row.catatan}
+                            onChange={(e) =>
+                              setDraft((current) => ({
+                                ...current,
+                                [d.id]: { ...current[d.id], catatan: e.target.value },
+                              }))
+                            }
+                          />
+                          {needsReason(d) && (
+                            <p className="mt-1 text-xs text-rust-ink">
+                              Wajib diisi: koreksi ini menerbitkan nota kredit.
+                            </p>
+                          )}
+                        </div>
                       )}
                     </li>
                   );
