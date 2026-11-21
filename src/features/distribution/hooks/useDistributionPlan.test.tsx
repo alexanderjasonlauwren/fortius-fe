@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 const state = vi.hoisted(() => ({ review: vi.fn(), create: vi.fn(), createSource: vi.fn(), save: vi.fn(), apply: vi.fn(), toast: vi.fn(), plans: [] as unknown[], scope: ["tenant", "branch"], intakeMode: "external_schedule", canAssign: true }));
@@ -36,7 +37,7 @@ describe("source-backed plan creation", () => {
   it("does not leave an empty plan when source review fails", async () => {
     state.review.mockRejectedValue(new Error("network"));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
     const { result } = renderHook(useDistributionPlan, { wrapper });
     await act(async () => { await expect(result.current.createPlanMutation.mutateAsync({ tanggal: plan.tanggal, saId: plan.saId })).rejects.toThrow("network"); });
     expect(state.create).not.toHaveBeenCalled();
@@ -48,7 +49,7 @@ describe("source-backed plan creation", () => {
   it("creates a ready external plan through the atomic source endpoint", async () => {
     state.review.mockResolvedValue({ status: "ready", batchId: "batch", branchId: "branch", productId: "product", periodMonth: "2026-09", date: plan.tanggal, rows: [{ outletId: "outlet", outlet: "A", productId: "product", jumlah: 50 }], unresolvedRegistrationCodes: [] });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
     const { result } = renderHook(useDistributionPlan, { wrapper });
     await act(async () => { await result.current.createPlanMutation.mutateAsync({ tanggal: plan.tanggal, saId: plan.saId }); });
     expect(state.createSource).toHaveBeenCalledWith({ batchId: "batch", tanggal: plan.tanggal });
@@ -58,7 +59,7 @@ describe("source-backed plan creation", () => {
   it("does not write source rows into a switched tenant after an awaited fetch", async () => {
     state.plans = [plan];
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
     const { result } = renderHook(useDistributionPlan, { wrapper });
     await waitFor(() => expect(result.current.selectedPlan).toBeTruthy());
     state.review.mockImplementation(async () => {
@@ -79,7 +80,7 @@ describe("source-backed plan creation", () => {
       resolveCreate = resolve;
     }));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
     const { result, rerender } = renderHook(useDistributionPlan, { wrapper });
     await waitFor(() => expect(result.current.isLoadingList).toBe(false));
 
@@ -108,7 +109,7 @@ describe("source-backed plan creation", () => {
       resolveSave = resolve;
     }));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
     const { result, rerender } = renderHook(useDistributionPlan, { wrapper });
     await waitFor(() => expect(result.current.selectedPlan?.id).toBe(plan.id));
 
@@ -149,7 +150,7 @@ describe("source-backed plan creation", () => {
     state.plans = [plan];
     state.save.mockResolvedValue({ ...plan, version: 2 });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
     const { result } = renderHook(useDistributionPlan, { wrapper });
     await waitFor(() => expect(result.current.selectedPlan?.id).toBe(plan.id));
 
@@ -174,7 +175,7 @@ describe("source-backed plan creation", () => {
   it("sends only the crew assignment for a SIM3LON plan, at the plan's own version", async () => {
     state.plans = [{ ...plan, sourceManaged: true, version: 2 }];
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
     const { result } = renderHook(useDistributionPlan, { wrapper });
     await waitFor(() => expect(result.current.selectedPlan?.id).toBe(plan.id));
 
@@ -201,7 +202,7 @@ describe("source-backed plan creation", () => {
     state.canAssign = false;
     state.plans = [{ ...plan, sourceManaged: true }];
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
     const { result } = renderHook(useDistributionPlan, { wrapper });
     await waitFor(() => expect(result.current.selectedPlan?.id).toBe(plan.id));
 
@@ -266,5 +267,29 @@ describe("toTripAssignments", () => {
     const trips = toTripAssignments(rows);
 
     expect(trips[0].stops.map((s) => s.outletId)).toEqual(["b", "a"]);
+  });
+});
+
+describe("a link to a plan", () => {
+  // A SIM3LON notice links to /distribution?plan=<id>; the plan it names
+  // opens, and stays open only until the planner picks another.
+  it("opens the named plan, and a list refetch does not pull the planner back", async () => {
+    state.plans = [plan, { ...plan, id: "other", kode: "RD-2" }];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <MemoryRouter initialEntries={["/distribution?plan=other"]}>
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      </MemoryRouter>
+    );
+    const { result } = renderHook(useDistributionPlan, { wrapper });
+    expect(result.current.selectedPlanId).toBe("other");
+    await waitFor(() => expect(result.current.planList).toHaveLength(2));
+    expect(result.current.selectedPlanId).toBe("other");
+
+    act(() => result.current.setSelectedPlanId("plan"));
+    state.plans = [...state.plans, { ...plan, id: "third", kode: "RD-3" }];
+    await act(async () => { await client.invalidateQueries(); });
+    await waitFor(() => expect(result.current.planList).toHaveLength(3));
+    expect(result.current.selectedPlanId).not.toBe("other");
   });
 });

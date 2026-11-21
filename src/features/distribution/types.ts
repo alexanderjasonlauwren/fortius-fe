@@ -25,6 +25,13 @@ export interface DistributionPlan {
    */
   sourceManaged: boolean;
   /**
+   * Set on an extra plan made by "Tambah dari SIM3LON": the SIM3LON plan it
+   * delivers an increase for.
+   */
+  topupOf?: { id: string; kode: string };
+  /** On a SIM3LON plan: its extra plans, oldest first (single read only). */
+  topups: { id: string; kode: string; status: PlanStatus; totalUnit: number }[];
+  /**
    * The optimistic-locking counter the caller must echo back to save, assign,
    * confirm or cancel.
    *

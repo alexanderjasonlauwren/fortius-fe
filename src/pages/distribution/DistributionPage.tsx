@@ -6,6 +6,8 @@ import { PlanListPanel } from "@/features/distribution/components/PlanListPanel"
 import { PlanDetailPanel } from "@/features/distribution/components/PlanDetailPanel";
 import { AllocationMatrixPanel } from "@/features/distribution/components/AllocationMatrixPanel";
 import { SourcePlanStatus } from "@/features/distribution/components/SourcePlanStatus";
+import { Sim3lonAdjustmentPanel } from "@/features/distribution/components/Sim3lonAdjustmentPanel";
+import { useSim3lonAdjustment } from "@/features/distribution/hooks/useSim3lonAdjustment";
 import { getCreditApprovers } from "@/features/distribution/api/distributionApi";
 import { creditBreachOf, type CreditBreach } from "@/features/distribution/lib/creditBreach";
 import { useAuthStore } from "@/features/auth/store/authStore";
@@ -62,6 +64,9 @@ export function DistributionPage() {
     cancelPlanMutation,
     printMutation,
   } = useDistributionPlan();
+
+  const { adjustment, applyMutation: adjustMutation, enabled: adjustmentShown } =
+    useSim3lonAdjustment(selectedPlan, setSelectedPlanId);
 
   const [creating, setCreating] = useState(false);
   const [view, setView] = useState<"daily" | "allocation">("daily");
@@ -144,6 +149,18 @@ export function DistributionPage() {
           else void sourceReview.refetch();
         }}
       /> : null}
+
+      {selectedPlan && (adjustmentShown || selectedPlan.topupOf || selectedPlan.topups.length > 0) ? (
+        <Sim3lonAdjustmentPanel
+          plan={selectedPlan}
+          adjustment={adjustment.data}
+          isLoading={adjustment.isLoading}
+          error={adjustment.error}
+          isApplying={adjustMutation.isPending}
+          onApply={(current) => adjustMutation.mutate({ planId: current.planId, fingerprint: current.fingerprint })}
+          onOpenPlan={setSelectedPlanId}
+        />
+      ) : null}
 
       <div className="flex w-fit rounded-lg border border-line bg-panel p-1">
         <Button
