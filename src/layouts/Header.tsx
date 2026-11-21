@@ -120,8 +120,12 @@ export function Header({ onMenuClick }: HeaderProps) {
   return (
     <>
       {/* Sticky inside the content column, so there is no left offset to keep
-          in sync with the sidebar. */}
-      <header className="sticky top-0 z-[1001] flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-panel/85 px-4 backdrop-blur-md lg:px-7">
+          in sync with the sidebar. z-40: above page content (z-30 at most),
+          below dialogs, menus and pickers (z-50). It was z-1001 to clear
+          Leaflet's panes, which put every dialog under the header on a phone
+          (title and close button hidden); each map wrapper is now `isolate`,
+          so Leaflet's z-indexes stay inside the map. */}
+      <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-panel/85 px-4 backdrop-blur-md lg:px-7">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
             onClick={onMenuClick}

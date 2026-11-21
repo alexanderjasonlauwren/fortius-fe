@@ -98,8 +98,8 @@ export function DashboardLayout() {
         Lompat ke konten
       </a>
 
-      {/* Above the header (z-1001, which clears Leaflet's 1000-deep panes).
-          At z-40 the scrim and drawer slid UNDER the header, which hid the
+      {/* Above the header (z-40). At the header's level the scrim and drawer
+          slid UNDER it, which hid the
           drawer's own wordmark and put its close button behind the header —
           untappable, with the hamburger sitting on top of it. */}
       {sidebarOpen && (
