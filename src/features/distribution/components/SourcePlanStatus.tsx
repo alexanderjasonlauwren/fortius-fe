@@ -13,10 +13,12 @@ export function SourcePlanStatus({ review, isLoading, error, fillError, isFillin
     </p>
     {fillError ? <p className="mt-1 text-rust-ink">{fillError.message} Rencana tetap tersimpan.</p> : null}
     {review?.unresolvedRegistrationCodes.length ? <p className="mt-1">Kode pangkalan belum cocok: {review.unresolvedRegistrationCodes.join(", ")}</p> : null}
-    <p className="mt-2 text-xs">Upload baru belum otomatis memperbarui draf lama. Tinjau kuantitas sebelum konfirmasi; rekonsiliasi sumber belum tersedia.</p>
+    {/* Both halves used to be false: an applied sync does update a draft, and
+        a confirmed plan has "SIM3LON berubah" for what changes after (R3-2). */}
+    <p className="mt-2 text-xs">Draf ikut diperbarui setiap kali Penyaluran SIM3LON terbaru diterapkan. Setelah rencana dikonfirmasi, perubahan dari SIM3LON muncul di panel &ldquo;SIM3LON berubah&rdquo; untuk ditambah atau disesuaikan.</p>
     <div className="mt-3 flex flex-wrap items-center gap-3">
       {(error || fillError || (canFill && review?.status === "ready")) ? <Button size="sm" variant="outline" disabled={isFilling} onClick={onRetry}>{canFill && !error && !fillError ? "Isi alokasi pada draf ini" : "Coba lagi pada rencana ini"}</Button> : null}
-      <Link to="/sa" className="text-xs text-ink underline">Periksa unggahan SA</Link>
+      <Link to="/sa" className="text-xs text-ink underline">Buka Schedule Agreement</Link>
     </div>
   </section>;
 }
