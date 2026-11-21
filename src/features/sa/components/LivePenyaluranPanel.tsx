@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { syncStatus } from "../lib/syncStatus";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,8 @@ export function LivePenyaluranPanel() {
   // that says what the SA holds now, and older ones are history.
   const [latest, ...older] = [...(candidates.data ?? [])].sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
   const pending = sync.isPending || apply.isPending;
+  // Measured against when the list was read, which keeps render pure.
+  const status = candidates.data ? syncStatus(candidates.data, candidates.dataUpdatedAt) : undefined;
 
   return (
     <Panel>
@@ -61,11 +64,21 @@ export function LivePenyaluranPanel() {
         <p className="text-xs text-ink-muted">
           Data Penyaluran di SIM3LON menjadi acuan SA. Setiap kali disinkronkan, sistem menyimpan salinan datanya, lalu memperbarui alokasi pangkalan, kuota Base dan Fakultatif, serta target harian untuk sebulan penuh.
         </p>
-        {/* Only when the newest pull is waiting: whether the server applies
-            pulls by itself is visible here as appliedToSA, so the panel speaks
-            up exactly when someone has to act. */}
-        {latest && !latest.appliedToSA && latest.status === "parsed" && (
-          <p className="text-xs text-signal-ink">Data ini belum dipakai di SA. Klik Periksa, lalu Terapkan ke SA.</p>
+        {/* What the SA is on, and since when newer data has waited. The
+            server applies pulls by itself, so a wait is something to act on;
+            past two hours the manager is alerted too (Round 3 R3-1). */}
+        {status && (status.appliedFetchedAt || status.waitingSince) && (
+          <p role={status.stuck ? "alert" : "status"} className={`text-xs ${status.stuck ? "text-rust-ink" : status.waitingSince ? "text-signal-ink" : "text-ink-muted"}`}>
+            {status.appliedFetchedAt
+              ? `Dipakai di SA: tarikan ${when(status.appliedFetchedAt)}.`
+              : "Belum ada tarikan yang dipakai di SA bulan ini."}
+            {status.waitingSince && (
+              <>
+                {" "}{status.stuck ? "Tertahan" : "Menunggu diterapkan"} sejak {when(status.waitingSince)}
+                {status.waitingReason ? `: ${status.waitingReason}` : ""}. Klik Periksa pada tarikan terbaru, selesaikan masalahnya, lalu Terapkan ke SA.
+              </>
+            )}
+          </p>
         )}
         {candidates.isPending && <p className="text-xs text-ink-muted">Memuat data Penyaluran…</p>}
         {candidates.isError && <p className="text-xs text-rust-ink">{(candidates.error as Error).message}</p>}
@@ -153,4 +166,8 @@ function CandidateRow({ candidate, onReview, children }: {
       </div>
     </div>
   );
+}
+
+function when(iso: string): string {
+  return new Date(iso).toLocaleString("id-ID", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }

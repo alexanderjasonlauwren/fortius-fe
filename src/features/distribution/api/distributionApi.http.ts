@@ -110,6 +110,10 @@ interface OrderResponse {
   notes?: string;
   /** Present on a single read; a list row leaves it false. */
   source_managed?: boolean;
+  /** The SIM3LON plan an extra ("Tambah dari SIM3LON") plan tops up. */
+  topup_of?: { id: string; order_number: string };
+  /** On a SIM3LON plan, single read only: its extra plans. */
+  topups?: { id: string; order_number: string; order_status: string; total_qty?: number }[];
   agreement_id?: string;
   agreement_number?: string;
   agreement_remaining?: number;
@@ -351,6 +355,10 @@ function toPlanView(order: OrderResponse): DistributionPlan {
     dikonfirmasiOleh: order.confirmed_by,
     dikonfirmasiPada: order.confirmed_at,
     sourceManaged: order.source_managed ?? false,
+    topupOf: order.topup_of ? { id: order.topup_of.id, kode: order.topup_of.order_number } : undefined,
+    topups: (order.topups ?? []).map((t) => ({
+      id: t.id, kode: t.order_number, status: toPlanStatus(t.order_status), totalUnit: t.total_qty ?? 0,
+    })),
     version: order.version,
   };
 }
