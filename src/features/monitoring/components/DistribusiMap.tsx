@@ -407,9 +407,11 @@ export function DistribusiMap({
   const focusKey = focused ? `driver:${focused.driver.id}` : "all";
 
   return (
+    // `isolate` keeps Leaflet's pane z-indexes (up to 1000) inside the map, so
+    // it stays under the header, dialogs and menus.
     <div
       className={cn(
-        "relative overflow-hidden rounded-md border border-line",
+        "relative isolate overflow-hidden rounded-md border border-line",
         heightClass,
       )}
     >
