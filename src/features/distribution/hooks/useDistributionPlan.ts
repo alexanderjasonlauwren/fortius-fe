@@ -1,5 +1,6 @@
 import { scopeKey } from "@/lib/scope";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import {
   addApprovedOrders,
@@ -51,14 +52,27 @@ export function useDistributionPlan() {
   // The list is the only dependency: an explicit selection survives a refetch
   // because setSelectedPlanId replaces the value without disturbing the seed,
   // and only a genuinely new list re-runs the choice.
-  const [selectedPlanId, setSelectedPlanId] = useResettableState<string | null>(
-    [planList.data],
+  //
+  // A link that names a plan (`?plan=`, as a SIM3LON notice sends) opens that
+  // one; it is read by id on its own, so it need not be on the list's page.
+  // It wins until the planner picks another plan, so a list refetch does not
+  // pull them back to it.
+  const [searchParams] = useSearchParams();
+  const linkedPlan = searchParams.get("plan");
+  const [pickedAway, setPickedAway] = useResettableState([linkedPlan], () => false);
+  const [selectedPlanId, selectPlan] = useResettableState<string | null>(
+    [planList.data, linkedPlan],
     () => {
+      if (linkedPlan && !pickedAway) return linkedPlan;
       const plans = planList.data;
       if (!plans?.length) return null;
       return (plans.find((p) => p.status === "Draf") ?? plans[0]).id;
     },
   );
+  const setSelectedPlanId = (planId: string | null) => {
+    setPickedAway(true);
+    selectPlan(planId);
+  };
 
   // The selected plan is read on its own rather than found in the list.
   //
