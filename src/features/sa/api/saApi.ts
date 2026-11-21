@@ -17,6 +17,7 @@ export const getSIM3LONReconciliation = api.getSIM3LONReconciliation.bind(api);
 export const applySIM3LON = api.applySIM3LON.bind(api);
 export const syncLivePenyaluran = api.syncLivePenyaluran.bind(api);
 export const getLivePenyaluranCandidates = api.getLivePenyaluranCandidates.bind(api);
+export const getSIM3LONSyncHealth = api.getSIM3LONSyncHealth.bind(api);
 export const setPlanningCutover = api.setPlanningCutover.bind(api);
 export const getSIM3LONVariances = api.getSIM3LONVariances.bind(api);
 export const getQuotaSummary = api.getQuotaSummary.bind(api);

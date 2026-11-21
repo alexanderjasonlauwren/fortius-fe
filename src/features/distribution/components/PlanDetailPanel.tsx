@@ -40,6 +40,7 @@ import type {
 import { PlanHistory } from "./PlanHistory";
 import { suggestAssignment } from "../api/distributionApi";
 import { applySuggestion, compareStops, moveStop } from "../lib/stopOrder";
+import { runCanBeDispatched } from "../lib/tripDispatch";
 import { outletLabel, outletLabelTitle, unitLabel } from "@/lib/lexicon";
 import { useResettableState } from "@/hooks/useResettableState";
 
@@ -1438,12 +1439,10 @@ function TripHeader({
   isDispatching?: boolean;
 }) {
   const over = trip.muatan > trip.kapasitas;
-  // Only a confirmed plan has a real trip to dispatch, and only once, not
-  // twice — "dispatched" is the one status this button hides itself for; any
-  // other value (or none, on a build that cannot yet say) still offers it,
-  // since the service's own guard is what actually refuses a second attempt.
+  // Only a confirmed plan has a real trip to dispatch, and only while it is
+  // still planned (see runCanBeDispatched).
   const canDispatch =
-    !editable && !!trip.tripId && trip.tripStatus !== "dispatched" && onDispatchTrip;
+    !editable && !!trip.tripId && runCanBeDispatched(trip.tripStatus) && onDispatchTrip;
 
   return (
     <tr className="border-b border-line bg-panel-sunk">

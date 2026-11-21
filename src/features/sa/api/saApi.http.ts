@@ -18,6 +18,7 @@ import type {
   SAImportSummary,
   SIM3LONApplied,
   SIM3LONLiveCandidate,
+  SIM3LONSyncHealth,
   SIM3LONApplyReview,
   SIM3LONPreview,
   SIM3LONReconciliationPreview,
@@ -78,6 +79,13 @@ interface ImportSummaryResponse {
     remaining_qty: number;
     opening_qty?: number;
   }>;
+}
+
+interface SIM3LONSyncHealthResponse {
+  last_success_at: string | null;
+  failing_since: string | null;
+  last_failure_at: string | null;
+  last_error_code: string | null;
 }
 
 interface SIM3LONLiveCandidateResponse {
@@ -663,6 +671,18 @@ export const saApiHttp: ScheduleAgreementApi = {
     );
     assertScope(originScope);
     return candidates.map(toLiveCandidate);
+  },
+
+  async getSIM3LONSyncHealth(): Promise<SIM3LONSyncHealth> {
+    const originScope = scopeKey();
+    const health = await getOne<SIM3LONSyncHealthResponse>("/integrations/sim3lon/sync-health");
+    assertScope(originScope);
+    return {
+      lastSuccessAt: health.last_success_at ?? undefined,
+      failingSince: health.failing_since ?? undefined,
+      lastFailureAt: health.last_failure_at ?? undefined,
+      lastErrorCode: health.last_error_code ?? undefined,
+    };
   },
 
   async setPlanningCutover(planningStartDate: string, dryRun: boolean): Promise<PlanningCutoverReport> {

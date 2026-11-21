@@ -48,6 +48,16 @@ export const PLANNING_PERMISSIONS = [
   PERMISSIONS.VEHICLES_VIEW,
 ] as const;
 
+/**
+ * What the monitoring board reads: GET /monitoring/board needs both. The menu,
+ * the route and every link to the page (Beranda's) use this list, so a role
+ * holding one of the two (finance) is never sent to a page it can't load.
+ */
+export const MONITORING_PERMISSIONS = [
+  PERMISSIONS.DELIVERIES_VIEW,
+  PERMISSIONS.GPS_TRACKS_VIEW,
+] as const;
+
 export interface NavItem {
   name: string;
   href: string;
@@ -152,7 +162,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/monitoring",
         icon: Map,
         hint: "Posisi armada dan status tiap surat jalan",
-        permission: [PERMISSIONS.DELIVERIES_VIEW, PERMISSIONS.GPS_TRACKS_VIEW],
+        permission: MONITORING_PERMISSIONS,
       },
       {
         name: "SIM3LON",

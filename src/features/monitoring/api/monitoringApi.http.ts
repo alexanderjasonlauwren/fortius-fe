@@ -529,6 +529,7 @@ async function setDeliveryStatus(input: SetDeliveryStatusInput): Promise<StatusR
       delivered_qty: delivered,
       returned_qty: doc.dispatched_qty - delivered,
       empties_collected: 0,
+      recipient_name: input.diterimaOleh?.trim() || undefined,
     });
   }
   return receipt(docs, "Selesai", filed);

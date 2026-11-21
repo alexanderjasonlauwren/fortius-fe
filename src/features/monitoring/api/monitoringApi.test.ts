@@ -388,20 +388,24 @@ describe("filing against a stop from the desk", () => {
       deliveryId: snap.rows[0].id,
       status: "Selesai",
       realisasi: 60,
+      diterimaOleh: "  Bu Sri ",
     });
 
     // 50 goes to the first document in full, the remaining 10 to the second.
+    // Both carry who took them: the service refuses a drop with nobody named.
     expect(send).toHaveBeenNthCalledWith(1, "post", `/deliveries/${D1}/complete`, {
       version: 1,
       delivered_qty: 50,
       returned_qty: 0,
       empties_collected: 0,
+      recipient_name: "Bu Sri",
     });
     expect(send).toHaveBeenNthCalledWith(2, "post", `/deliveries/${D2}/complete`, {
       version: 1,
       delivered_qty: 10,
       returned_qty: 10,
       empties_collected: 0,
+      recipient_name: "Bu Sri",
     });
     expect(result.realisasi).toBe(60);
   });

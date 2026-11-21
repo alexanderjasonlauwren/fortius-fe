@@ -61,6 +61,7 @@ export function MonitoringPage() {
   const [hoveredDriver, setHoveredDriver] = useState<string | null>(null);
   const [completing, setCompleting] = useState<MonitoringRow | null>(null);
   const [realisasi, setRealisasi] = useState(0);
+  const [penerima, setPenerima] = useState("");
   const [holding, setHolding] = useState<MonitoringRow | null>(null);
   const [alasan, setAlasan] = useState("");
 
@@ -235,6 +236,7 @@ export function MonitoringPage() {
           }
           onComplete={(row) => {
             setRealisasi(row.realisasi || row.target);
+            setPenerima("");
             setCompleting(row);
           }}
           onHold={(row) => {
@@ -283,6 +285,20 @@ export function MonitoringPage() {
             />
           </Field>
 
+          {/* Required whenever anything was handed over: the server refuses a
+              drop with nobody named (R3-9), and the name is the only proof a
+              pangkalan disputing its invoice can be shown. */}
+          {realisasi > 0 && (
+            <Field label="Diterima oleh" htmlFor="m-penerima" required>
+              <TextInput
+                id="m-penerima"
+                value={penerima}
+                onChange={(e) => setPenerima(e.target.value)}
+                placeholder="Nama orang di pangkalan yang menerima"
+              />
+            </Field>
+          )}
+
           {completing && realisasi < completing.target && (
             <p className="rounded-md border border-line bg-signal-soft px-3 py-2 text-xs text-ink">
               Kurang <span className="data">{formatNumber(completing.target - realisasi)}</span>{" "}
@@ -296,11 +312,11 @@ export function MonitoringPage() {
               Batal
             </Button>
             <Button
-              disabled={statusMutation.isPending}
+              disabled={statusMutation.isPending || (realisasi > 0 && penerima.trim().length < 2)}
               onClick={() =>
                 completing &&
                 statusMutation.mutate(
-                  { deliveryId: completing.id, status: "Selesai", realisasi },
+                  { deliveryId: completing.id, status: "Selesai", realisasi, diterimaOleh: penerima },
                   { onSettled: () => setCompleting(null) },
                 )
               }
