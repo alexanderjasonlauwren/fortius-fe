@@ -109,7 +109,7 @@ export function FencePicker({
 
   return (
     <div className="space-y-2">
-      <div className="relative h-64 overflow-hidden rounded-md border border-line">
+      <div className="relative isolate h-64 overflow-hidden rounded-md border border-line">
         <MapContainer
           center={[opening.lat, opening.lng]}
           zoom={14}

@@ -265,77 +265,91 @@ function CloseRunDialog({
                 atau catat kendalanya dulu, lalu tutup rit.
               </p>
             )}
-            <div className="-mx-1 max-h-[55vh] overflow-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="label text-left text-2xs text-ink-muted">
-                    <th className="px-2 py-1.5">Surat jalan</th>
-                    <th className="px-2 py-1.5 text-right">Dimuat</th>
-                    <th className="px-2 py-1.5 text-right">Diterima</th>
-                    <th className="px-2 py-1.5 text-right">Kembali</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {run.dokumen.map((d) => {
-                    const row = draft[d.id];
-                    const changed = row.diterima !== d.diterima || row.kembali !== d.dimuat - d.diterima;
-                    const locked = d.status === "Antrian" || d.status === "Proses";
-                    return (
-                      <tr key={d.id} className="align-top">
-                        <td className="px-2 py-2">
-                          <p className="font-medium text-ink">{d.outlet}</p>
-                          <p className="text-xs text-ink-muted">
-                            <span className="data">{d.kode}</span> · {d.produk}
-                            {d.status === "Tertunda" ? " · gagal" : ""}
-                          </p>
-                          {changed && (
-                            <TextareaInput
-                              aria-label={`Alasan koreksi ${d.kode}`}
-                              className="mt-2"
-                              rows={2}
-                              placeholder="Alasan koreksi (contoh: sopir salah ketik)"
-                              value={row.catatan}
-                              onChange={(e) =>
-                                setDraft((current) => ({
-                                  ...current,
-                                  [d.id]: { ...current[d.id], catatan: e.target.value },
-                                }))
-                              }
-                            />
-                          )}
-                        </td>
-                        <td className="data px-2 py-2 text-right">{formatNumber(d.dimuat)}</td>
-                        <td className="px-2 py-2">
-                          <TextInput
-                            aria-label={`Diterima ${d.kode}`}
-                            type="number"
-                            mono
-                            min={0}
-                            max={d.dimuat}
-                            disabled={locked}
-                            className="ml-auto w-20 text-right"
-                            value={row.diterima}
-                            onChange={(e) => set(d.id, "diterima", Number(e.target.value), d.dimuat)}
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <TextInput
-                            aria-label={`Kembali ${d.kode}`}
-                            type="number"
-                            mono
-                            min={0}
-                            max={d.dimuat}
-                            disabled={locked}
-                            className="ml-auto w-20 text-right"
-                            value={row.kembali}
-                            onChange={(e) => set(d.id, "kembali", Number(e.target.value), d.dimuat)}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {/* A grid, not a table: on a phone each surat jalan stacks (name,
+                then the three counts side by side, each labelled), because four
+                columns at 360 px squeeze the name and the inputs to nothing.
+                The dialog itself scrolls, so the list only scrolls on its own
+                where there is room for two scrollers. */}
+            <div className="-mx-1 text-sm sm:max-h-[55vh] sm:overflow-auto">
+              <div
+                aria-hidden
+                className="label hidden grid-cols-[minmax(0,1fr)_4.5rem_6rem_6rem] gap-3 px-2 py-1.5 text-2xs text-ink-muted sm:grid"
+              >
+                <span>Surat jalan</span>
+                <span className="text-right">Dimuat</span>
+                <span className="text-right">Diterima</span>
+                <span className="text-right">Kembali</span>
+              </div>
+              <ul className="divide-y divide-line">
+                {run.dokumen.map((d) => {
+                  const row = draft[d.id];
+                  const changed = row.diterima !== d.diterima || row.kembali !== d.dimuat - d.diterima;
+                  const locked = d.status === "Antrian" || d.status === "Proses";
+                  return (
+                    <li
+                      key={d.id}
+                      className="grid grid-cols-3 gap-x-3 gap-y-2 px-2 py-3 sm:grid-cols-[minmax(0,1fr)_4.5rem_6rem_6rem] sm:items-start sm:py-2"
+                    >
+                      <div className="col-span-3 min-w-0 sm:col-span-1">
+                        <p className="font-medium text-ink">{d.outlet}</p>
+                        <p className="break-words text-xs text-ink-muted">
+                          <span className="data">{d.kode}</span> · {d.produk}
+                          {d.status === "Tertunda" ? " · gagal" : ""}
+                        </p>
+                      </div>
+                      <div className="sm:pt-2 sm:text-right">
+                        <span className="label block text-2xs text-ink-muted sm:hidden">Dimuat</span>
+                        <span className="data">{formatNumber(d.dimuat)}</span>
+                      </div>
+                      <label className="block">
+                        <span className="label mb-1 block text-2xs text-ink-muted sm:hidden">Diterima</span>
+                        <TextInput
+                          aria-label={`Diterima ${d.kode}`}
+                          type="number"
+                          inputMode="numeric"
+                          mono
+                          min={0}
+                          max={d.dimuat}
+                          disabled={locked}
+                          className="w-full text-right"
+                          value={row.diterima}
+                          onChange={(e) => set(d.id, "diterima", Number(e.target.value), d.dimuat)}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="label mb-1 block text-2xs text-ink-muted sm:hidden">Kembali</span>
+                        <TextInput
+                          aria-label={`Kembali ${d.kode}`}
+                          type="number"
+                          inputMode="numeric"
+                          mono
+                          min={0}
+                          max={d.dimuat}
+                          disabled={locked}
+                          className="w-full text-right"
+                          value={row.kembali}
+                          onChange={(e) => set(d.id, "kembali", Number(e.target.value), d.dimuat)}
+                        />
+                      </label>
+                      {changed && (
+                        <TextareaInput
+                          aria-label={`Alasan koreksi ${d.kode}`}
+                          className="col-span-3 sm:col-span-4"
+                          rows={2}
+                          placeholder="Alasan koreksi (contoh: sopir salah ketik)"
+                          value={row.catatan}
+                          onChange={(e) =>
+                            setDraft((current) => ({
+                              ...current,
+                              [d.id]: { ...current[d.id], catatan: e.target.value },
+                            }))
+                          }
+                        />
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
             <p className="text-xs text-ink-muted">
               Total kembali ke gudang:{" "}

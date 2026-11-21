@@ -52,7 +52,7 @@ export function LocationPicker({
 
   return (
     <div className="space-y-2 sm:col-span-2">
-      <div className="relative h-56 overflow-hidden rounded-md border border-line">
+      <div className="relative isolate h-56 overflow-hidden rounded-md border border-line">
         <MapContainer
           center={[centre.lat, centre.lng]}
           zoom={placed ? 15 : 13}
