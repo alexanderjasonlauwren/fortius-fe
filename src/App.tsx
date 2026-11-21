@@ -5,7 +5,7 @@ import { Button } from "./components/ui/button";
 import { createBrowserRouter, RouterProvider, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./features/auth/store/authStore";
 import { setSessionExpiredHandler } from "./lib/api";
-import { landingPathFor, PLANNING_PERMISSIONS } from "./layouts/nav";
+import { landingPathFor, MONITORING_PERMISSIONS, PLANNING_PERMISSIONS } from "./layouts/nav";
 import { DashboardLayout } from "./layouts/DashboardLayout";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
@@ -118,9 +118,7 @@ const router = createBrowserRouter([
       // AND. Gated on DELIVERIES_VIEW alone this page opened for three roles
       // whose only request on it answers 403.
       { path: "monitoring", element: (
-        <RequirePermission
-          permissions={[PERMISSIONS.DELIVERIES_VIEW, PERMISSIONS.GPS_TRACKS_VIEW]}
-        >
+        <RequirePermission permissions={MONITORING_PERMISSIONS}>
           <MonitoringPage />
         </RequirePermission>
       ) },

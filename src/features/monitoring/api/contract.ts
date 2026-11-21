@@ -45,6 +45,12 @@ export interface SetDeliveryStatusInput {
   status: "Proses" | "Selesai" | "Tertunda";
   realisasi?: number;
   /**
+   * Who took the load, required for "Selesai" when anything was handed over:
+   * `POST /deliveries/:id/complete` refuses a drop with nobody named
+   * (`RECIPIENT_REQUIRED`, Round 3 R3-9).
+   */
+  diterimaOleh?: string;
+  /**
    * Required for "Tertunda": `POST /deliveries/:id/fail` refuses a failure
    * nobody explained, and the database agrees
    * (`ck_deliveries_failure_reason`), so the dialog always supplies one.

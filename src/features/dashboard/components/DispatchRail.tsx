@@ -37,9 +37,15 @@ import { outletLabelTitle } from "@/lib/lexicon";
 export function DispatchRail({
   data,
   isLoading,
+  canMonitor = true,
+  canOpenDrivers = true,
 }: {
   data?: RailData;
   isLoading?: boolean;
+  /** Whether the stops link to Monitoring; false for a role that can't open it. */
+  canMonitor?: boolean;
+  /** Whether a driver's name links to their page; false without drivers read. */
+  canOpenDrivers?: boolean;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -140,12 +146,16 @@ export function DispatchRail({
             {lanes.map((lane, laneIndex) => (
               <div key={lane.driverId} className="flex border-b border-line last:border-b-0">
                 <div className="sticky left-0 z-10 w-32 shrink-0 border-r border-line bg-panel px-3 py-2.5 sm:w-52 sm:px-5">
-                  <Link
-                    to={`/drivers/${lane.driverId}`}
-                    className="block truncate text-sm font-semibold text-ink hover:underline hover:decoration-signal hover:decoration-2 hover:underline-offset-4"
-                  >
-                    {lane.driver}
-                  </Link>
+                  {canOpenDrivers ? (
+                    <Link
+                      to={`/drivers/${lane.driverId}`}
+                      className="block truncate text-sm font-semibold text-ink hover:underline hover:decoration-signal hover:decoration-2 hover:underline-offset-4"
+                    >
+                      {lane.driver}
+                    </Link>
+                  ) : (
+                    <p className="truncate text-sm font-semibold text-ink">{lane.driver}</p>
+                  )}
                   <p className="data mt-0.5 truncate text-2xs text-ink-muted">
                     {lane.plat} · {formatNumber(lane.muatan)}/{formatNumber(lane.kapasitas)}
                   </p>
@@ -186,6 +196,7 @@ export function DispatchRail({
                         hasSchedule={hasSchedule}
                         isHovered={hovered === stop.id}
                         onHover={setHovered}
+                        canMonitor={canMonitor}
                       />
                     ))}
                   </div>
@@ -287,6 +298,7 @@ function StopBlock({
   hasSchedule,
   isHovered,
   onHover,
+  canMonitor,
 }: {
   stop: DispatchStop;
   left: number;
@@ -295,6 +307,7 @@ function StopBlock({
   hasSchedule: boolean;
   isHovered: boolean;
   onHover: (id: string | null) => void;
+  canMonitor: boolean;
 }) {
   // A queued stop whose window has already passed is running late — the one
   // thing on this screen worth interrupting someone for. Meaningless without
@@ -310,6 +323,12 @@ function StopBlock({
         Tertunda: "bg-rust text-white",
       }[stop.stage];
 
+  const label = `${stop.kode} ke ${stop.outlet}, ${stop.stage}`;
+  const blockClass = cn(
+    "flex h-full items-center overflow-hidden rounded-sm px-2 text-2xs font-semibold transition-transform duration-150 hover:z-10 hover:scale-[1.02]",
+    tone,
+  );
+
   return (
     <div
       className="absolute inset-y-0"
@@ -317,27 +336,39 @@ function StopBlock({
       onMouseEnter={() => onHover(stop.id)}
       onMouseLeave={() => onHover(null)}
     >
-      <Link
-        to="/monitoring"
-        aria-label={`${stop.kode} ke ${stop.outlet}, ${stop.stage}`}
-        // The block itself shows only a truncated name, so on a touch device
-        // the stop code, its window and its load were unreachable — hover is
-        // the only thing that revealed them. Focus and a first tap now do too.
-        onFocus={() => onHover(stop.id)}
-        onBlur={() => onHover(null)}
-        onClick={(e) => {
-          if (window.matchMedia("(hover: none)").matches && !isHovered) {
-            e.preventDefault();
-            onHover(stop.id);
-          }
-        }}
-        className={cn(
-          "flex h-full items-center overflow-hidden rounded-sm px-2 text-2xs font-semibold transition-transform duration-150 hover:z-10 hover:scale-[1.02]",
-          tone,
-        )}
-      >
-        <span className="truncate">{shortName(stop.outlet)}</span>
-      </Link>
+      {canMonitor ? (
+        <Link
+          to="/monitoring"
+          aria-label={label}
+          // The block itself shows only a truncated name, so on a touch device
+          // the stop code, its window and its load were unreachable — hover is
+          // the only thing that revealed them. Focus and a first tap now do too.
+          onFocus={() => onHover(stop.id)}
+          onBlur={() => onHover(null)}
+          onClick={(e) => {
+            if (window.matchMedia("(hover: none)").matches && !isHovered) {
+              e.preventDefault();
+              onHover(stop.id);
+            }
+          }}
+          className={blockClass}
+        >
+          <span className="truncate">{shortName(stop.outlet)}</span>
+        </Link>
+      ) : (
+        // A role that can't open Monitoring (finance) still reads the stop
+        // here; a link would only lead to "di luar akses Anda" (R3-14).
+        <button
+          type="button"
+          aria-label={label}
+          onFocus={() => onHover(stop.id)}
+          onBlur={() => onHover(null)}
+          onClick={() => onHover(isHovered ? null : stop.id)}
+          className={cn(blockClass, "w-full text-left")}
+        >
+          <span className="truncate">{shortName(stop.outlet)}</span>
+        </button>
+      )}
 
       {isHovered && (
         // max-w keeps it inside the scroller on a narrow track; left-0 alone

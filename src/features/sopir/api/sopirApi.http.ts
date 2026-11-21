@@ -468,9 +468,9 @@ async function arriveStop(deliveryId: string): Promise<StopReceipt> {
  *
  * `recipient_name` is filed per document and the service writes it to
  * core.delivery_proofs as evidence, alongside the position this call carries.
- * It is a name, not a signature — see the proof_type vocabulary — and a drop
- * where the driver could not get one is filed without it rather than with a
- * placeholder.
+ * It is a name, not a signature — see the proof_type vocabulary. A drop that
+ * handed anything over must carry one (`RECIPIENT_REQUIRED`, Round 3 R3-9);
+ * the form asks for it before the button is enabled.
  */
 async function completeStop(input: CompleteStopInput): Promise<StopReceipt> {
   const rows = documentsFor(input.deliveryId);

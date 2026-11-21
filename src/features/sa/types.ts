@@ -308,6 +308,16 @@ export interface SIM3LONApplyReview {
   acceptedPlans: Array<{ planId: string; expectedVersion: number }>;
 }
 
+/** Whether the live pull reaches SIM3LON (GET /integrations/sim3lon/sync-health). */
+export interface SIM3LONSyncHealth {
+  lastSuccessAt?: string;
+  /** Set while SIM3LON is not answering usefully: the start of the outage. */
+  failingSince?: string;
+  lastFailureAt?: string;
+  /** SIM3LON_UNAVAILABLE or SIM3LON_BAD_RESPONSE. */
+  lastErrorCode?: string;
+}
+
 export interface SIM3LONLiveCandidate {
   id: string;
   period: string;

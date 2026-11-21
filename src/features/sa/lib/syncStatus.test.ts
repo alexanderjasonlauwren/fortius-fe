@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { syncStatus } from "./syncStatus";
+import { reachability, syncStatus } from "./syncStatus";
 import type { SIM3LONLiveCandidate } from "../types";
 
 const at = (iso: string, status: string, appliedToSA = false, reviewReason?: string): SIM3LONLiveCandidate => ({
@@ -31,5 +31,22 @@ describe("SIM3LON sync status", () => {
 
   it("a discarded fetch is not waiting", () => {
     expect(syncStatus([at("2026-11-20T00:00:00Z", "discarded")], now).waitingSince).toBeUndefined();
+  });
+});
+
+describe("whether SIM3LON answers", () => {
+  const now = new Date("2026-11-21T05:00:00Z").getTime();
+
+  it("is quiet while SIM3LON answers, with when it last did", () => {
+    expect(reachability({ lastSuccessAt: "2026-11-21T04:05:00Z" }, now)).toMatchObject({
+      failing: false, unreachable: false, lastSuccessAt: "2026-11-21T04:05:00Z",
+    });
+  });
+
+  it("says it is failing at once, and unreachable from two hours, as the server's alert does", () => {
+    const fresh = reachability({ failingSince: "2026-11-21T04:00:00Z", lastErrorCode: "SIM3LON_UNAVAILABLE" }, now);
+    expect(fresh).toMatchObject({ failing: true, unreachable: false, what: "tidak bisa dihubungi" });
+    const long = reachability({ failingSince: "2026-11-21T02:59:00Z", lastErrorCode: "SIM3LON_BAD_RESPONSE" }, now);
+    expect(long).toMatchObject({ failing: true, unreachable: true, what: "mengirim data yang tidak terbaca" });
   });
 });

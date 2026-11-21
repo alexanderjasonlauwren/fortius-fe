@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { syncStatus } from "../lib/syncStatus";
+import { reachability, syncStatus } from "../lib/syncStatus";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { scopeKey } from "@/lib/scope";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { applySIM3LON, getLivePenyaluranCandidates, getSIM3LONReconciliation, syncLivePenyaluran } from "../api/saApi";
+import { applySIM3LON, getLivePenyaluranCandidates, getSIM3LONReconciliation, getSIM3LONSyncHealth, syncLivePenyaluran } from "../api/saApi";
 import { buildSIM3LONApplyReview } from "../hooks/useSIM3LONImport";
 import { currentJakartaMonth } from "../lib/period";
 import type { SIM3LONLiveCandidate } from "../types";
@@ -22,6 +22,12 @@ export function LivePenyaluranPanel() {
     queryKey: [...scopeKey(), "sim3lon-live-sa-candidates", period],
     queryFn: () => getLivePenyaluranCandidates(period),
   });
+  // Whether SIM3LON answers at all: a pull that finds nothing new leaves no
+  // candidate, so the list alone can't tell "unchanged" from "down".
+  const health = useQuery({
+    queryKey: [...scopeKey(), "sim3lon-sync-health"],
+    queryFn: getSIM3LONSyncHealth,
+  });
   const review = useQuery({
     queryKey: [...scopeKey(), "sim3lon-live-sa-review", selectedId],
     queryFn: () => getSIM3LONReconciliation(selectedId!),
@@ -31,6 +37,9 @@ export function LivePenyaluranPanel() {
     mutationFn: syncLivePenyaluran,
     errorTitle: "Penyaluran gagal ditarik dari SIM3LON",
     onDone: (candidate) => setSelectedId(candidate.status === "parsed" ? candidate.id : null),
+    // A failed pull is news too: the server records it, and the line above
+    // should say so without a reload.
+    onFail: () => void health.refetch(),
   });
   const apply = useDeskMutation({
     mutationFn: ({ id }: { id: string }) => applySIM3LON(id, buildSIM3LONApplyReview(review.data!)),
@@ -45,6 +54,7 @@ export function LivePenyaluranPanel() {
   const pending = sync.isPending || apply.isPending;
   // Measured against when the list was read, which keeps render pure.
   const status = candidates.data ? syncStatus(candidates.data, candidates.dataUpdatedAt) : undefined;
+  const reach = health.data ? reachability(health.data, health.dataUpdatedAt) : undefined;
 
   return (
     <Panel>
@@ -80,6 +90,15 @@ export function LivePenyaluranPanel() {
             )}
           </p>
         )}
+        {reach?.failing ? (
+          <p role={reach.unreachable ? "alert" : "status"} className={cn("text-xs", reach.unreachable ? "text-rust-ink" : "text-signal-ink")}>
+            SIM3LON {reach.what} sejak {when(reach.failingSince!)}
+            {reach.lastSuccessAt ? ` (terakhir berhasil ${when(reach.lastSuccessAt)})` : ""}. Data yang sudah dipakai di SA tetap berlaku.
+            Sinkronkan lagi nanti; bila berlanjut, hubungi admin sistem.
+          </p>
+        ) : reach?.lastSuccessAt ? (
+          <p className="text-xs text-ink-muted">SIM3LON terakhir menjawab {when(reach.lastSuccessAt)}.</p>
+        ) : null}
         {candidates.isPending && <p className="text-xs text-ink-muted">Memuat data Penyaluran…</p>}
         {candidates.isError && <p className="text-xs text-rust-ink">{(candidates.error as Error).message}</p>}
         {candidates.data?.length === 0 && <p className="text-xs text-ink-muted">Belum ada data yang ditarik untuk bulan ini. Klik Sinkronkan sekarang.</p>}

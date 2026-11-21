@@ -13,7 +13,10 @@ describe("source allocation state", () => {
     fireEvent.click(screen.getByRole("button", { name: "Coba lagi pada rencana ini" }));
     expect(retry).toHaveBeenCalledOnce();
     expect(screen.queryByRole("link", { name: "Lihat pesanan" })).toBeNull();
-    expect(screen.getByText(/belum otomatis memperbarui draf/)).toBeTruthy();
+    // It used to say a new upload never updates a draft and that there was no
+    // reconciliation; both stopped being true (applied syncs update drafts,
+    // and a confirmed plan has "SIM3LON berubah").
+    expect(screen.getByText(/Draf ikut diperbarui/).textContent).toContain("SIM3LON berubah");
   });
   it.each(["no_source", "uncovered_date", "empty_day", "incomplete"] as const)("displays %s without an action to invent allocations", (status) => {
     const review: SourcePlanReview = { status, date: "2026-09-19", rows: [], unresolvedRegistrationCodes: status === "incomplete" ? ["CODE-1"] : [] };

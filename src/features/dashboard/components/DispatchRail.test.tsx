@@ -52,3 +52,27 @@ describe("the dispatch board on a large day", () => {
     expect(screen.queryByRole("button", { name: /Tampilkan/ })).toBeNull();
   });
 });
+
+describe("the dispatch board for a role that can't open Monitoring or Sopir", () => {
+  // Round 3 R3-14: finance's Beranda linked every stop to Monitoring and every
+  // driver to their page, and both answered "di luar akses Anda".
+  it("draws the stops and drivers without links, and still shows a stop's detail", () => {
+    render(
+      <MemoryRouter>
+        <DispatchRail data={rail([lane("Ishak", "Proses")])} canMonitor={false} canOpenDrivers={false} />
+      </MemoryRouter>,
+    );
+    const hrefs = screen.queryAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs.filter((h) => h === "/monitoring" || h?.startsWith("/drivers/"))).toEqual([]);
+    expect(screen.getByText("Ishak")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "SJ ke Pangkalan A, Proses" }));
+    expect(screen.getByText("Muatan")).toBeTruthy();
+  });
+
+  it("links both for a role that can open them", () => {
+    draw(rail([lane("Ishak", "Proses")]));
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("/monitoring");
+    expect(hrefs).toContain("/drivers/Ishak");
+  });
+});
