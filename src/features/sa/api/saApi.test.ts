@@ -94,6 +94,25 @@ describe("live Penyaluran candidate mapping", () => {
   });
 });
 
+describe("SIM3LON sync health", () => {
+  it("reads an outage and leaves the empty fields out", async () => {
+    getOne.mockResolvedValue({
+      last_success_at: "2026-11-21T01:05:00Z", failing_since: "2026-11-21T02:05:00Z",
+      last_failure_at: "2026-11-21T04:05:00Z", last_error_code: "SIM3LON_UNAVAILABLE",
+    });
+    expect(await saApiHttp.getSIM3LONSyncHealth()).toEqual({
+      lastSuccessAt: "2026-11-21T01:05:00Z", failingSince: "2026-11-21T02:05:00Z",
+      lastFailureAt: "2026-11-21T04:05:00Z", lastErrorCode: "SIM3LON_UNAVAILABLE",
+    });
+    expect(getOne).toHaveBeenCalledWith("/integrations/sim3lon/sync-health");
+
+    getOne.mockResolvedValue({ last_success_at: null, failing_since: null, last_failure_at: null, last_error_code: null });
+    expect(await saApiHttp.getSIM3LONSyncHealth()).toEqual({
+      lastSuccessAt: undefined, failingSince: undefined, lastFailureAt: undefined, lastErrorCode: undefined,
+    });
+  });
+});
+
 describe("mapping the wire shape onto the domain", () => {
   it("carries the quota numbers across", async () => {
     getList.mockResolvedValue({ items: [wire()], pagination: {} });
