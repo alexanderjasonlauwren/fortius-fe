@@ -7,6 +7,7 @@ import { cn, getInitials } from "@/lib/utils";
 import { fleetColor } from "@/lib/chart";
 import { useTheme } from "@/hooks/useTheme";
 import { formatNumber } from "@/lib/format";
+import { unitLabel } from "@/lib/lexicon";
 import type { DriverCard } from "../types";
 
 interface DriverCardRowProps {
@@ -26,6 +27,7 @@ export function DriverCardRow({
   onHover,
 }: DriverCardRowProps) {
   const { isDark } = useTheme();
+  const unit = unitLabel();
 
   if (isLoading) {
     return (
@@ -121,15 +123,25 @@ export function DriverCardRow({
                 )}
               </p>
 
+              <span className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 text-2xs text-ink-muted">
+                <span>Muatan rit</span>
+                <span className="text-right text-ink">
+                  <span className="data">{formatNumber(card.muatan)}</span> {unit}
+                </span>
+                <span>Kapasitas truk</span>
+                {card.kapasitas > 0 ? (
+                  <span className="text-right text-ink">
+                    <span className="data">{formatNumber(card.kapasitas)}</span> {unit}
+                  </span>
+                ) : (
+                  <span className="text-right">Belum tercatat</span>
+                )}
+              </span>
+
               <div className="mt-3">
-                <div className="mb-1.5 flex items-baseline justify-between text-2xs text-ink-muted">
-                  <span>
-                    <span className="data text-ink">{card.selesai}</span>/
-                    <span className="data">{card.total}</span> singgah
-                  </span>
-                  <span className="data">
-                    {formatNumber(card.muatan)}/{formatNumber(card.kapasitas)}
-                  </span>
+                <div className="mb-1.5 text-2xs text-ink-muted">
+                  <span className="data text-ink">{card.selesai}</span>/
+                  <span className="data">{card.total}</span> singgah selesai
                 </div>
                 <Meter
                   value={card.selesai}

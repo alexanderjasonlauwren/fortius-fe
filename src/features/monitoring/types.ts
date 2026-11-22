@@ -127,6 +127,8 @@ export interface RunDocument {
 export interface RunSummary {
   id: string;
   ritKe?: number;
+  nomorRencana?: string;
+  tanggalRencana?: string;
   driver: string;
   plat: string;
   berangkat?: string;

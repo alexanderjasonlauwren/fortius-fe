@@ -124,6 +124,8 @@ interface BoardDriverWire {
   trip_id?: string;
   trip_status?: string;
   trip_no?: number;
+  order_number?: string;
+  planned_delivery_date?: string;
   departed_at?: string;
   returned_at?: string;
   latitude?: number;
@@ -411,6 +413,8 @@ export function toRuns(board: Pick<BoardResponseWire, "drivers" | "stops">): Run
       return {
         id: driver.trip_id as string,
         ritKe: driver.trip_no,
+        nomorRencana: driver.order_number,
+        tanggalRencana: driver.planned_delivery_date,
         driver: driver.driver_name,
         plat: driver.plate ?? "—",
         berangkat: driver.departed_at,

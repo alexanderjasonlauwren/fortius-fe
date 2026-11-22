@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
 import { PERMISSIONS } from "@/features/rbac/permissions";
-import { formatNumber, formatTime } from "@/lib/format";
+import { formatDateId, formatNumber, formatTime } from "@/lib/format";
 import { formatCurrency } from "@/lib/utils";
 import { outletLabel, unitLabel } from "@/lib/lexicon";
 import type { RunDocument, RunSummary } from "../types";
@@ -101,6 +101,29 @@ function runTitle(run: RunSummary) {
   return `${run.ritKe ? `Rit ${run.ritKe}` : "Rit"} · ${run.plat} · ${run.driver}`;
 }
 
+function runPlanDate(run: RunSummary) {
+  return run.tanggalRencana ? formatDateId(`${run.tanggalRencana}T00:00:00`) : undefined;
+}
+
+function RunPlanLabel({ run }: { run: RunSummary }) {
+  const tanggal = runPlanDate(run);
+  if (!run.nomorRencana && !tanggal) return null;
+
+  return (
+    <span className="block break-words text-xs font-medium text-ink">
+      {run.nomorRencana && <>Rencana <span className="data">{run.nomorRencana}</span></>}
+      {run.nomorRencana && tanggal && " · "}
+      {tanggal && <time dateTime={run.tanggalRencana}>{tanggal}</time>}
+    </span>
+  );
+}
+
+function runEventTime(timestamp: string, planDate: string | undefined) {
+  const day = formatDateId(timestamp);
+  const clock = formatTime(timestamp);
+  return day === planDate ? clock : `${day}, ${clock}`;
+}
+
 function RunLine({
   run,
   onClose,
@@ -115,14 +138,16 @@ function RunLine({
   const selesai = run.dokumen.filter((d) => d.status === "Selesai" || d.status === "Tertunda").length;
   const tertunda = run.dokumen.filter((d) => d.koreksiTertunda);
   const kembali = run.dokumen.filter((d) => redeliverable(d) || d.kirimUlang);
+  const planDate = runPlanDate(run);
 
   return (
     <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-ink">{runTitle(run)}</p>
+        <p className="break-words text-sm font-medium text-ink">{runTitle(run)}</p>
+        <RunPlanLabel run={run} />
         <p className="text-xs text-ink-muted">
-          {run.berangkat ? `Berangkat ${formatTime(run.berangkat)}` : "Belum berangkat"}
-          {run.kembali ? ` · Ditutup ${formatTime(run.kembali)}` : ""}
+          {run.berangkat ? `Berangkat ${runEventTime(run.berangkat, planDate)}` : "Belum berangkat"}
+          {run.kembali ? ` · Ditutup ${runEventTime(run.kembali, planDate)}` : ""}
           {` · ${selesai}/${run.dokumen.length} surat jalan selesai`}
         </p>
         {tertunda.length > 0 && (
@@ -253,6 +278,7 @@ function CloseRunDialog({
         <DialogHeader>
           <DialogTitle>{result ? "Rit ditutup" : `Tutup ${runTitle(run)}`}</DialogTitle>
           <DialogDescription>
+            <RunPlanLabel run={run} />
             {result
               ? "Jumlah yang dikonfirmasi dan koreksi tagihannya."
               : `Periksa jumlah yang diterima tiap ${outletLabel()}. Tagihan sudah terbit saat berangkat untuk seluruh muatan; ${unitLabel()} yang kembali dikreditkan, uangnya menjadi titipan ${outletLabel()}, dan ${unitLabel()}-nya masuk stok lagi.`}
@@ -432,7 +458,7 @@ function ClosedSummary({ result }: { result: CloseRunResult }) {
         </p>
       )}
       {result.rencanaSelesai && (
-        <p className="text-xs text-ink-muted">Ini rit terakhir; rencana distribusi hari ini selesai.</p>
+        <p className="text-xs text-ink-muted">Ini rit terakhir. Rencana distribusi selesai.</p>
       )}
     </div>
   );
