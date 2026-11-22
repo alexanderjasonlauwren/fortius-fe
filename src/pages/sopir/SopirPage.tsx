@@ -278,15 +278,17 @@ export function SopirPage() {
               <PanelBody className="space-y-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
+                    {/* The signed-in crew member, not always the driver: the
+                        kernet saw the sopir's name as their own (R4-12). */}
                     <p className="text-lg font-semibold tracking-[-0.01em] text-ink">
-                      {data.driver.nama}
+                      {data.peran === "Kernet" && data.kernet ? data.kernet : data.driver.nama}
                     </p>
                     <p className="data text-xs text-ink-muted">
                       {data.driver.plat} · {data.driver.armada}
                     </p>
                     {data.peran === "Kernet" ? (
                       <p className="text-xs text-ink-muted">
-                        Anda ikut sebagai kernet. Rute direkam dari ponsel sopir.
+                        Anda ikut sebagai kernet bersama {data.driver.nama}. Rute direkam dari ponsel sopir.
                       </p>
                     ) : (
                       data.kernet && <p className="text-xs text-ink-muted">Kernet: {data.kernet}</p>
@@ -541,7 +543,7 @@ export function SopirPage() {
             <Field
               label="Diterima oleh"
               htmlFor="s-diterima"
-              hint="Nama orang yang menerima dan menandatangani surat jalan."
+              hint="Nama orang yang menerima dan menandatangani surat jalan (minimal 2 huruf)."
               required
             >
               <TextInput
@@ -598,7 +600,9 @@ export function SopirPage() {
               className="min-h-12"
               disabled={
                 !completing ||
-                !form.diterimaOleh.trim() ||
+                // The server refuses fewer than 2 characters
+                // (RECIPIENT_REQUIRED); the button said yes to one (R4-13).
+                form.diterimaOleh.trim().length < 2 ||
                 form.lines.some(
                   (l, i) =>
                     !Number.isInteger(l.realisasi) ||

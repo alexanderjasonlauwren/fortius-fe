@@ -1,3 +1,4 @@
+import { useCallback, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError, confirmOldDateOnNextWrite } from "@/lib/api";
 import { askOldDate } from "@/lib/oldDateConfirmation";
@@ -62,8 +63,9 @@ export function useDeskMutation<TArgs, TResult>({
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const inFlight = useRef(new Map<string, Promise<TResult>>());
 
-  return useMutation<TResult, Error, TArgs>({
+  const mutation = useMutation<TResult, Error, TArgs>({
     // A date more than 31 days back is asked about, and the same write is
     // sent again once confirmed (Round 1 G24). Every dated form goes through
     // here, so none of them has to know.
@@ -103,6 +105,78 @@ export function useDeskMutation<TArgs, TResult>({
       onFail?.(error, args);
     },
   });
+
+  // A double click sent the same write twice (Round 4 R4-10, R4-20, R4-31,
+  // R4-32, R4-34–36): the buttons disable on isPending, but React Query only
+  // flips it on a later tick, so the second click of a double click arrived
+  // first. Two vendor bills, two payments and two journals were posted for
+  // one gesture. A call identical to one still in flight now joins that one
+  // instead of sending again; a different row or a different value is not a
+  // duplicate and goes through as before.
+  const { mutate: rawMutate, mutateAsync: rawMutateAsync } = mutation;
+  const mutateAsync = useCallback(
+    (args: TArgs): Promise<TResult> => {
+      const key = writeKey(args);
+      const pending = key === undefined ? undefined : inFlight.current.get(key);
+      if (pending) return pending;
+      const started = rawMutateAsync(args);
+      if (key !== undefined) {
+        inFlight.current.set(key, started);
+        started.then(
+          () => inFlight.current.delete(key),
+          () => inFlight.current.delete(key),
+        );
+      }
+      return started;
+    },
+    [rawMutateAsync],
+  );
+  const mutate: typeof rawMutate = useCallback(
+    (args, options) => {
+      const key = writeKey(args);
+      if (key !== undefined) {
+        if (inFlight.current.has(key)) return;
+        // Held until the write settles, and settles with it, so a
+        // mutateAsync joining it gets the same answer.
+        let settle: (data: TResult | undefined, error: Error | null) => void = () => {};
+        const slot = new Promise<TResult>((resolve, reject) => {
+          settle = (data, error) => (error ? reject(error) : resolve(data as TResult));
+        });
+        slot.catch(() => undefined);
+        inFlight.current.set(key, slot);
+        rawMutate(args, {
+          ...options,
+          onSettled: (...settled) => {
+            inFlight.current.delete(key);
+            settle(settled[0], settled[1]);
+            options?.onSettled?.(...settled);
+          },
+        });
+        return;
+      }
+      rawMutate(args, options);
+    },
+    [rawMutate],
+  );
+
+  return { ...mutation, mutate, mutateAsync };
+}
+
+/**
+ * The identity of a write, for spotting a repeat while the first is in flight.
+ * Files are told apart by name, size and modification time, which JSON alone
+ * would flatten to "{}". Anything that can't be serialised is never treated
+ * as a duplicate.
+ */
+function writeKey(args: unknown): string | undefined {
+  try {
+    return JSON.stringify(args ?? null, (_key, value: unknown) =>
+      value instanceof File ? `file:${value.name}:${value.size}:${value.lastModified}`
+        : value instanceof Blob ? `blob:${value.type}:${value.size}` : value,
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 /**

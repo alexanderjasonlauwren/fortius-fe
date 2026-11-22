@@ -262,7 +262,14 @@ function toRow(stop: BoardStopWire, driverName: string, radiusM: number): Monito
 /** The stage a driver's fleet card shows. */
 function toDriverStatus(driver: BoardDriverWire, mine: BoardStopWire[]): DriverStatus {
   if (driver.employment_status === "on_leave") return "Cuti";
-  if (mine.length > 0 && mine.every((s) => s.stop_status === "delivered" || s.stop_status === "partial")) {
+  // A closed run is over, whatever its stops say. Without this a run with a
+  // failed stop never counted as finished and read "Dalam Perjalanan" --
+  // five closed runs showed as five trucks on the road (Round 4 R4-11).
+  if (driver.trip_status === "completed") return "Selesai";
+  // A failed stop is settled too: the truck has left it.
+  const settled = (s: BoardStopWire) =>
+    s.stop_status === "delivered" || s.stop_status === "partial" || s.stop_status === "failed";
+  if (mine.length > 0 && mine.every(settled)) {
     return "Selesai";
   }
   if (mine.some((s) => s.stop_status === "on_route" && s.arrived_at)) return "Bongkar Muat";
@@ -352,8 +359,10 @@ function toAssignment(
     outletId: target.outlet_id,
     driverCoord,
     stops: (remaining.length > 0 ? remaining : sorted).map(coordOf),
-    berjalan: !!driver.departed_at,
-    selesai: remaining.length === 0,
+    // On the road means left and not yet closed: a closed run kept counting
+    // in "armada berjalan" (Round 4 R4-11).
+    berjalan: !!driver.departed_at && driver.trip_status !== "completed",
+    selesai: remaining.length === 0 || driver.trip_status === "completed",
   };
 }
 

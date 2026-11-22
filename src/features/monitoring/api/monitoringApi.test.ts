@@ -261,6 +261,28 @@ describe("the driver card", () => {
     expect(snap.drivers[0].status).toBe("Selesai");
   });
 
+  // Round 4 R4-11: five closed runs, one with a failed stop, all read
+  // "Dalam Perjalanan" and "5 armada berjalan".
+  it("shows a closed run as Selesai even with a failed stop", async () => {
+    const snap = await load(
+      board({
+        drivers: [driver({ trip_status: "completed", departed_at: "2026-09-06T01:00:00Z" })],
+        stops: [stop({ stop_status: "failed" })],
+      }),
+    );
+    expect(snap.drivers[0].status).toBe("Selesai");
+  });
+
+  it("counts a failed stop as settled for a run still open", async () => {
+    const snap = await load(
+      board({
+        drivers: [driver({ trip_status: "dispatched", departed_at: "2026-09-06T01:00:00Z" })],
+        stops: [stop({ stop_status: "delivered" }), stop({ id: "s2", stop_status: "failed" })],
+      }),
+    );
+    expect(snap.drivers[0].status).toBe("Selesai");
+  });
+
   it("shows Bongkar Muat only once the truck has arrived at the running stop", async () => {
     const snap = await load(
       board({ stops: [stop({ stop_status: "on_route", arrived_at: "2026-09-06T03:00:00Z" })] }),
@@ -298,6 +320,15 @@ describe("the driver card", () => {
 });
 
 describe("the map assignment", () => {
+  // Round 4 R4-11: a closed run kept counting in "armada berjalan".
+  it("does not count a closed run as on the road", async () => {
+    const open = await load(board({ drivers: [driver({ trip_status: "dispatched", departed_at: "2026-09-06T01:00:00Z" })] }));
+    expect(open.assignments[0].berjalan).toBe(true);
+    const closed = await load(board({ drivers: [driver({ trip_status: "completed", departed_at: "2026-09-06T01:00:00Z" })] }));
+    expect(closed.assignments[0].berjalan).toBe(false);
+    expect(closed.assignments[0].selesai).toBe(true);
+  });
+
   it("draws a truck at its reported position when one exists", async () => {
     const snap = await load(
       board({ drivers: [driver({ latitude: -6.99, longitude: 110.34 })] }),
