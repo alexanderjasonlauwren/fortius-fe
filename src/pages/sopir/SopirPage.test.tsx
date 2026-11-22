@@ -108,6 +108,21 @@ const received = (d: HTMLElement) => within(d).getByLabelText(/Diterima \(/) as 
 const empties = (d: HTMLElement) => within(d).getByLabelText(/kosong diterima/i) as HTMLInputElement;
 const submit = (d: HTMLElement) => within(d).getByRole("button", { name: /Tutup surat jalan|Menyimpan/ });
 
+describe("whose route it is", () => {
+  // Round 4 R4-12: the kernet's page was headed with the driver's name.
+  it("names the kernet, and the driver they ride with", async () => {
+    api.getMyRun.mockResolvedValue({ ...runWith([stop()]), peran: "Kernet", kernet: "Ary Nurfianto" });
+    setup();
+    expect(await screen.findByText("Ary Nurfianto")).toBeTruthy();
+    expect(screen.getByText(/Anda ikut sebagai kernet bersama Agus Prasetyo/)).toBeTruthy();
+  });
+
+  it("names the driver on the driver's own page", async () => {
+    setup();
+    expect(await screen.findByText("Agus Prasetyo")).toBeTruthy();
+  });
+});
+
 describe("closing a drop", () => {
   it("will not file a count above what was loaded", async () => {
     const d = await openClose();
@@ -127,6 +142,16 @@ describe("closing a drop", () => {
     const d = await openClose();
     fireEvent.change(within(d).getByLabelText(/Diterima oleh/), { target: { value: "   " } });
     expect((submit(d) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  // Round 4 R4-13: one letter enabled the button, then the server refused
+  // it (RECIPIENT_REQUIRED wants two characters).
+  it("will not file a one-letter recipient name", async () => {
+    const d = await openClose();
+    fireEvent.change(within(d).getByLabelText(/Diterima oleh/), { target: { value: " A " } });
+    expect((submit(d) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(d).getByLabelText(/Diterima oleh/), { target: { value: "Bu" } });
+    expect((submit(d) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("will not file a negative number of empties", async () => {
