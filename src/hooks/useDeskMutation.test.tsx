@@ -150,4 +150,62 @@ describe("an old document date", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(write).toHaveBeenCalledTimes(1);
   });
+
+});
+
+// Round 4: a double click posted two vendor bills, two payments, two
+// journals. The second click of a double click arrives before isPending
+// disables the button, so the hook itself refuses to send it twice.
+describe("useDeskMutation: a write sent twice while the first is in flight", () => {
+  function slowWrite() {
+    const calls: unknown[] = [];
+    let finish: (value: string) => void = () => {};
+    const mutationFn = vi.fn((args: unknown) => {
+      calls.push(args);
+      return new Promise<string>((resolve) => { finish = resolve; });
+    });
+    return { calls, mutationFn, finish: (value: string) => finish(value) };
+  }
+
+  it("sends the same write once, and tells both callers the one outcome", async () => {
+    const { wrapper } = harness();
+    const write = slowWrite();
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => useDeskMutation({ mutationFn: write.mutationFn, onDone: onSuccess }), { wrapper });
+
+    result.current.mutate({ supplier: "UJI-R4", amount: 50000 });
+    result.current.mutate({ supplier: "UJI-R4", amount: 50000 });
+    const joined = result.current.mutateAsync({ supplier: "UJI-R4", amount: 50000 });
+    await waitFor(() => expect(write.mutationFn).toHaveBeenCalledTimes(1));
+
+    write.finish("TBS-0001");
+    await expect(joined).resolves.toBe("TBS-0001");
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expect(write.calls).toHaveLength(1);
+  });
+
+  it("lets a different write through, and the same one again once it has finished", async () => {
+    const { wrapper } = harness();
+    const write = slowWrite();
+    const { result } = renderHook(() => useDeskMutation({ mutationFn: write.mutationFn }), { wrapper });
+
+    result.current.mutate({ stop: "A" });
+    result.current.mutate({ stop: "B" });
+    await waitFor(() => expect(write.mutationFn).toHaveBeenCalledTimes(2));
+
+    write.finish("done");
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    result.current.mutate({ stop: "B" });
+    await waitFor(() => expect(write.mutationFn).toHaveBeenCalledTimes(3));
+  });
+
+  it("tells two files apart, which plain JSON would not", async () => {
+    const { wrapper } = harness();
+    const write = slowWrite();
+    const { result } = renderHook(() => useDeskMutation({ mutationFn: write.mutationFn }), { wrapper });
+
+    result.current.mutate({ file: new File(["a"], "struk-1.jpg") });
+    result.current.mutate({ file: new File(["bb"], "struk-2.jpg") });
+    await waitFor(() => expect(write.mutationFn).toHaveBeenCalledTimes(2));
+  });
 });
