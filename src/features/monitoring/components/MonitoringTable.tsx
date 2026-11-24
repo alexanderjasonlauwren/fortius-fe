@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { formatNumber, formatPercentId } from "@/lib/format";
 import { formatDistance } from "@/lib/geo";
 import { cn } from "@/lib/utils";
-import type { MonitoringRow } from "../types";
+import type { FilingLocation, MonitoringRow } from "../types";
 import { outletLabel, outletLabelTitle } from "@/lib/lexicon";
 
 interface MonitoringTableProps {
@@ -117,25 +117,12 @@ export function MonitoringTable({
       render: (row) => (
         <>
           <StatusBadge variant={getStatusVariant(row.status)} label={row.status} />
-          {/* Only worth a row's attention when it contradicts the claim; a fix
-              that lands at the outlet is the expected case and says nothing. */}
-          {row.lokasi && row.lokasi.verdict !== "sesuai" && (
-            <span
-              className={cn(
-                "mt-1 flex items-center gap-1 text-2xs leading-snug",
-                row.lokasi.verdict === "jauh" ? "font-semibold text-rust-ink" : "text-ink-muted",
-              )}
-              title={
-                row.lokasi.verdict === "jauh"
-                  ? `Surat jalan ditutup jauh dari titik ${outletLabel()}`
-                  : "Lokasi saat penutupan tidak dapat dipastikan"
-              }
-            >
-              <Crosshair className="h-3 w-3 shrink-0" aria-hidden />
-              {row.lokasi.verdict === "jauh"
-                ? `Ditutup ${formatDistance(row.lokasi.jarakMeter ?? 0)} dari ${outletLabel()}`
-                : "Lokasi penutupan tidak terekam"}
-            </span>
+          {/* Every closed stop says how far from the pangkalan it was closed
+              (client request, 24 Nov): the dispatcher reads the distance on
+              every row, not only on the ones past the geofence. Past it stays
+              loud; within it, or on a fix too coarse to judge, it is quiet. */}
+          {(row.lokasi || row.status === "Selesai" || row.status === "Tertunda") && (
+            <ClosingDistance lokasi={row.lokasi} />
           )}
           {row.catatan && (
             <span className="mt-1 block text-2xs leading-snug text-ink-muted">
@@ -216,5 +203,49 @@ export function MonitoringTable({
       emptyDescription="Ubah rentang tanggal, atau konfirmasi rencana distribusi untuk menerbitkan surat jalan."
       dense
     />
+  );
+}
+
+/**
+ * `lokasi` is absent on a closed stop when nothing filed a position: the
+ * office closed it (a desk files none, by design), or the driver's phone gave
+ * no fix. Said as such, so no closed row is silently without a distance.
+ */
+function ClosingDistance({ lokasi }: { lokasi?: FilingLocation }) {
+  if (!lokasi) {
+    return (
+      <span
+        className="mt-1 flex items-start gap-1 text-2xs leading-snug text-ink-muted"
+        title="Ditutup dari kantor, atau ponsel sopir tidak mengirim lokasi"
+      >
+        <Crosshair className="mt-px h-3 w-3 shrink-0" aria-hidden />
+        <span>Lokasi penutupan tidak terekam</span>
+      </span>
+    );
+  }
+  const known = lokasi.verdict !== "tanpa-lokasi" && lokasi.jarakMeter != null;
+  const radius = `radius ${formatDistance(lokasi.radiusMeter)}`;
+  const accuracy = lokasi.akurasiMeter ? `akurasi GPS ±${formatDistance(lokasi.akurasiMeter)}` : undefined;
+  const title = !known
+    ? "Lokasi saat penutupan tidak dapat dipastikan"
+    : lokasi.verdict === "jauh"
+      ? `Surat jalan ditutup di luar ${radius} titik ${outletLabel()}`
+      : lokasi.verdict === "kasar"
+        ? `Sinyal GPS terlalu kasar untuk memastikan ${radius}`
+        : `Di dalam ${radius} titik ${outletLabel()}`;
+  return (
+    <span
+      className={cn(
+        "mt-1 flex items-start gap-1 text-2xs leading-snug",
+        lokasi.verdict === "jauh" ? "font-semibold text-rust-ink" : "text-ink-muted",
+      )}
+      title={[title, accuracy].filter(Boolean).join(" · ")}
+    >
+      <Crosshair className="mt-px h-3 w-3 shrink-0" aria-hidden />
+      <span>
+        {known ? `Ditutup ${formatDistance(lokasi.jarakMeter!)} dari ${outletLabel()}` : "Lokasi penutupan tidak terekam"}
+        {known && lokasi.verdict === "kasar" && accuracy && <span className="block">{accuracy}</span>}
+      </span>
+    </span>
   );
 }

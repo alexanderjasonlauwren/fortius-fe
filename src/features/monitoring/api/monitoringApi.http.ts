@@ -252,6 +252,8 @@ function toRow(stop: BoardStopWire, driverName: string, radiusM: number): Monito
             radiusM,
           ),
           jarakMeter: stop.filed_distance_m,
+          akurasiMeter: stop.filed_accuracy_m,
+          radiusMeter: radiusM,
         }
       : undefined,
     catatan: stop.failure_reason ?? stop.notes,

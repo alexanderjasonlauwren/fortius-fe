@@ -39,6 +39,10 @@ export interface DriverCard {
 export interface FilingLocation {
   verdict: GeoVerdict;
   jarakMeter?: number;
+  /** The device's own stated error on the fix, when it gave one. */
+  akurasiMeter?: number;
+  /** The tenant's geofence radius the verdict was judged against. */
+  radiusMeter: number;
 }
 
 /** One surat jalan on the monitoring board. */
