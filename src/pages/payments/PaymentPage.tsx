@@ -90,7 +90,7 @@ export function PaymentPage() {
   // ?bukti=<extraction id> opens this dialog recording from it.
   const proofFromLink = searchParams.get("bukti") ?? "";
   const [recording, setRecording] = useState(!!outletFromLink || !!proofFromLink);
-  const { open: openProof, opening: openingProof } = useOpenReceipt(transferProofFileUrl);
+  const { open: openProof, opening: openingProof, dialog: proofPreview } = useOpenReceipt(transferProofFileUrl);
 
   const [page, setPage] = useResettableState([tab, search], () => 1);
   const payments = useQuery({
@@ -226,7 +226,7 @@ export function PaymentPage() {
           {row.buktiTransfer && (
             <CanAccess permission={PERMISSIONS.PAYMENT_PROOFS_VIEW}>
               <Button size="xs" variant="ghost" aria-label={`Lihat bukti transfer ${row.nomor}`} title="Bukti transfer"
-                disabled={openingProof === row.buktiTransfer} onClick={() => void openProof(row.buktiTransfer!)}>
+                disabled={openingProof === row.buktiTransfer} onClick={() => openProof(row.buktiTransfer!)}>
                 <FileSearch className="h-3 w-3" />
               </Button>
             </CanAccess>
@@ -451,6 +451,7 @@ export function PaymentPage() {
         onClose={() => setVoidingPayment(null)}
       />
       <RefundDialog payment={refunding} onClose={() => setRefunding(null)} />
+      {proofPreview}
     </div>
   );
 }

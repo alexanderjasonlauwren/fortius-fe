@@ -1,36 +1,18 @@
-import { useState } from "react";
+import { useCallback } from "react";
 import { receiptFileUrl } from "@/features/ocr/api/ocrApi";
-import { useToast } from "@/hooks/useToast";
+import { useFilePreview } from "@/hooks/useFilePreview";
 
 /**
- * Opens a receipt's stored file in a new tab, the way attachments open.
- * `resolve` is the route that issues the link: the expense inbox's by
- * default, the cashier's transferProofFileUrl for a bukti transfer.
+ * Shows a receipt's stored photo in the console's preview, the way
+ * attachments open; a PDF receipt still opens in a tab. `resolve` is the
+ * route that issues the link: the expense inbox's by default, the cashier's
+ * transferProofFileUrl for a bukti transfer. Render `dialog` once.
  */
 export function useOpenReceipt(resolve: (id: string) => Promise<string> = receiptFileUrl) {
-  const { toast } = useToast();
-  const [opening, setOpening] = useState<string | null>(null);
-
-  async function open(id: string) {
-    // Opened before the await so the browser treats it as the click's own
-    // window rather than a pop-up.
-    const tab = window.open("", "_blank");
-    setOpening(id);
-    try {
-      const url = await resolve(id);
-      if (tab) tab.location.href = url;
-      else window.location.assign(url);
-    } catch (error) {
-      tab?.close();
-      toast({
-        title: "Bukti tidak dapat dibuka",
-        description: error instanceof Error ? error.message : String(error),
-        tone: "error",
-      });
-    } finally {
-      setOpening(null);
-    }
-  }
-
-  return { open, opening };
+  const { preview, opening, dialog } = useFilePreview();
+  const open = useCallback(
+    (id: string, name?: string) => preview([{ id, name, resolve: () => resolve(id) }]),
+    [preview, resolve],
+  );
+  return { open, opening, dialog };
 }
