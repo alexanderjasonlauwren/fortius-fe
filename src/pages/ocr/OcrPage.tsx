@@ -37,7 +37,7 @@ export function OcrPage() {
   const [status, setStatus] = useState<ReceiptStatus | "Semua">("Semua");
   const [uploading, setUploading] = useState(false);
   const [reviewing, setReviewing] = useState<ReceiptExtraction | null>(null);
-  const { open: openFile, opening } = useOpenReceipt();
+  const { open: openFile, opening, dialog: previewDialog } = useOpenReceipt();
 
   // Polls only while the engine has a receipt: a reading takes seconds, and
   // the uploader is watching the row for it. Idle, the queue does not poll.
@@ -64,7 +64,7 @@ export function OcrPage() {
         <span className="flex items-center gap-2">
           {row.hasFile ? (
             <Button variant="ghost" size="icon-xs" aria-label={`Lihat ${row.fileName ?? "bukti"}`} disabled={opening === row.id}
-              onClick={() => void openFile(row.id)}>
+              onClick={() => openFile(row.id, row.fileName)}>
               <FileSearch className="h-3.5 w-3.5" />
             </Button>
           ) : <span className="w-6" />}
@@ -158,6 +158,7 @@ export function OcrPage() {
       </Panel>
       <UploadReceiptDialog open={uploading} onClose={() => setUploading(false)} onUploaded={refresh} />
       <ReviewReceiptDialog receipt={reviewing} onClose={() => setReviewing(null)} onReviewed={refresh} />
+      {previewDialog}
     </div>
   );
 }

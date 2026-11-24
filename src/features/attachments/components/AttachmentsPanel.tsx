@@ -4,9 +4,9 @@
  * form mounts it with its own owner, so attaching a nota works the same on
  * an expense as on a purchase or a journal.
  */
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, FileText, Paperclip, Trash2, Upload } from "lucide-react";
+import { Download, Eye, FileText, Image as ImageIcon, Paperclip, Trash2, Upload } from "lucide-react";
 import { scopeKey } from "@/lib/scope";
 import { formatDateTimeId, formatNumber } from "@/lib/format";
 import { useAuthStore } from "@/features/auth/store/authStore";
@@ -14,6 +14,8 @@ import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { useToast } from "@/hooks/useToast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/common/Panel";
+import { useFilePreview } from "@/hooks/useFilePreview";
+import { looksLikeImage, type PreviewFile } from "@/lib/filePreview";
 import {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_MAX_BYTES,
@@ -44,7 +46,7 @@ export function AttachmentsPanel({ ownerType, ownerId, readOnly = false }: Attac
   const mayManage = useAuthStore((s) => s.hasPermission(ATTACHMENT_PERMISSIONS[ownerType].manage));
   const canManage = mayManage && !readOnly;
   const input = useRef<HTMLInputElement>(null);
-  const [opening, setOpening] = useState<string | null>(null);
+  const { preview, opening, dialog: previewDialog } = useFilePreview();
   const queryKey = [...scopeKey(), "attachments", ownerType, ownerId];
 
   const files = useQuery({ queryKey, queryFn: () => listAttachments(ownerType, ownerId) });
@@ -71,28 +73,20 @@ export function AttachmentsPanel({ ownerType, ownerId, readOnly = false }: Attac
     add.mutate(file);
   }
 
-  async function open(row: Attachment) {
-    // Opened before the await so the browser treats it as the click's own
-    // window rather than a pop-up.
-    const tab = window.open("", "_blank");
-    setOpening(row.id);
-    try {
-      const url = await attachmentDownloadUrl(ownerType, ownerId, row.id);
-      if (tab) tab.location.href = url;
-      else window.location.assign(url);
-    } catch (error) {
-      tab?.close();
-      toast({
-        title: "Lampiran tidak dapat dibuka",
-        description: error instanceof Error ? error.message : String(error),
-        tone: "error",
-      });
-    } finally {
-      setOpening(null);
-    }
-  }
-
   const rows = files.data ?? [];
+  // An infected file is never served, so it is never part of the set the
+  // preview steps through.
+  const viewable: PreviewFile[] = rows
+    .filter((row) => row.pemindaian !== "infected")
+    .map((row) => ({
+      id: row.id,
+      name: row.namaFile,
+      mime: row.jenis,
+      resolve: () => attachmentDownloadUrl(ownerType, ownerId, row.id),
+    }));
+  function open(row: Attachment) {
+    preview(viewable, viewable.findIndex((file) => file.id === row.id));
+  }
 
   return (
     <div className="space-y-3">
@@ -134,11 +128,26 @@ export function AttachmentsPanel({ ownerType, ownerId, readOnly = false }: Attac
         </p>
       ) : (
         <ul className="divide-y divide-line rounded-md border border-line">
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const image = looksLikeImage({ mime: row.jenis, name: row.namaFile });
+            return (
             <li key={row.id} className="flex items-center gap-3 px-3 py-2">
-              <FileText className="h-4 w-4 shrink-0 text-ink-muted" />
+              {image
+                ? <ImageIcon className="h-4 w-4 shrink-0 text-ink-muted" />
+                : <FileText className="h-4 w-4 shrink-0 text-ink-muted" />}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-ink" title={row.namaFile}>{row.namaFile}</p>
+                {row.pemindaian === "infected" ? (
+                  <p className="truncate text-sm text-ink" title={row.namaFile}>{row.namaFile}</p>
+                ) : (
+                  <button
+                    type="button"
+                    className="block max-w-full truncate text-left text-sm text-ink hover:underline"
+                    title={row.namaFile}
+                    onClick={() => open(row)}
+                  >
+                    {row.namaFile}
+                  </button>
+                )}
                 <p className="data text-2xs text-ink-muted">
                   {formatSize(row.ukuran)} · {formatDateTimeId(row.diunggah)}
                   {/* The scan's verdict, so a file is flagged before anyone
@@ -152,11 +161,12 @@ export function AttachmentsPanel({ ownerType, ownerId, readOnly = false }: Attac
               </div>
               <Button
                 type="button" variant="ghost" size="icon-xs"
-                aria-label={`Buka ${row.namaFile}`}
+                aria-label={`${image ? "Lihat" : "Buka"} ${row.namaFile}`}
+                title={image ? "Lihat" : "Buka di tab baru"}
                 disabled={opening === row.id || row.pemindaian === "infected"}
-                onClick={() => void open(row)}
+                onClick={() => open(row)}
               >
-                <Download />
+                {image ? <Eye /> : <Download />}
               </Button>
               {canManage && (
                 <Button
@@ -170,9 +180,11 @@ export function AttachmentsPanel({ ownerType, ownerId, readOnly = false }: Attac
                 </Button>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
+      {previewDialog}
     </div>
   );
 }

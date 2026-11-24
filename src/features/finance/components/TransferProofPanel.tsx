@@ -34,7 +34,7 @@ interface Props {
 
 export function TransferProofPanel({ proofId, proof: row, onProofChange, onApply }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
-  const { open: openFile, opening } = useOpenReceipt(transferProofFileUrl);
+  const { open: openFile, opening, dialog: previewDialog } = useOpenReceipt(transferProofFileUrl);
   const { toast } = useToast();
 
   const waiting = useQuery({
@@ -105,7 +105,7 @@ export function TransferProofPanel({ proofId, proof: row, onProofChange, onApply
         )}
         <span className="ml-auto flex items-center gap-1">
           {row?.hasFile && (
-            <Button size="xs" variant="ghost" disabled={opening === proofId} onClick={() => void openFile(proofId)}>
+            <Button size="xs" variant="ghost" disabled={opening === proofId} onClick={() => openFile(proofId, row.fileName)}>
               <FileSearch className="h-3.5 w-3.5" />Lihat
             </Button>
           )}
@@ -143,6 +143,7 @@ export function TransferProofPanel({ proofId, proof: row, onProofChange, onApply
           {row.reviewReasons.map((reason) => <li key={reason}>{reason}</li>)}
         </ul>
       )}
+      {previewDialog}
     </div>
   );
 }

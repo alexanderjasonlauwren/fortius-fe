@@ -95,7 +95,7 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
     setSeenFor(receipt.id);
     setForm(initial(receipt));
   }
-  const { open: openFile, opening } = useOpenReceipt();
+  const { open: openFile, opening, dialog: previewDialog } = useOpenReceipt();
 
   const categories = useQuery({ queryKey: [...scopeKey(), "expense-categories"], queryFn: getExpenseCategories, enabled: !!receipt });
   const accounts = useQuery({ queryKey: [...scopeKey(), "bank-accounts"], queryFn: getBankAccounts, enabled: !!receipt });
@@ -169,7 +169,7 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
             <div className="col-span-2 flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2 text-sm">
               <span className="data truncate text-ink-muted">{receipt.fileName ?? "—"}</span>
               {receipt.hasFile ? (
-                <Button type="button" size="sm" variant="outline" disabled={opening === receipt.id} onClick={() => void openFile(receipt.id)}>
+                <Button type="button" size="sm" variant="outline" disabled={opening === receipt.id} onClick={() => openFile(receipt.id, receipt.fileName)}>
                   <FileSearch className="h-3.5 w-3.5" /> Lihat bukti
                 </Button>
               ) : <span className="text-2xs text-ink-muted">Dicatat tanpa berkas</span>}
@@ -295,6 +295,7 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
             </Button>
           </DialogFooter>
         </form>
+        {previewDialog}
       </DialogContent>
     </Dialog>
   );
