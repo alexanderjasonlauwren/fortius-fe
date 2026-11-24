@@ -518,14 +518,19 @@ describe("printing a surat jalan", () => {
 });
 
 describe("closing a run", () => {
-  // A driver on two runs has one card but two runs, and each is closed on
-  // its own. A run cancelled with its plan is not offered at all (Round 1 N9).
-  it("lists each run with its own surat jalan, and leaves a cancelled run out", async () => {
+  it("keeps the plan and surat jalan with each run when trip numbers repeat, excluding cancelled runs", async () => {
     const snap = await load(
       board({
         drivers: [
-          driver({ trip_id: "trip-1", trip_no: 1, departed_at: "2026-09-06T00:10:00Z", returned_at: "2026-09-06T04:00:00Z" }),
-          driver({ trip_id: "trip-2", trip_no: 2, departed_at: "2026-09-06T05:00:00Z" }),
+          driver({
+            trip_id: "trip-1", trip_no: 1, order_number: "RD-SLT-20260905-0001",
+            planned_delivery_date: "2026-09-05",
+            departed_at: "2026-09-05T00:10:00Z", returned_at: "2026-09-06T04:00:00Z",
+          }),
+          driver({
+            trip_id: "trip-2", trip_no: 1, order_number: "RD-SLT-20260906-0001",
+            planned_delivery_date: "2026-09-06", departed_at: "2026-09-06T05:00:00Z",
+          }),
           driver({ trip_id: "trip-3", trip_no: 3, trip_status: "cancelled" }),
         ],
         stops: [
@@ -546,9 +551,9 @@ describe("closing a run", () => {
         ],
       }),
     );
-    expect(snap.runs.map((r) => [r.ritKe, r.bisaDitutup])).toEqual([
-      [1, false],
-      [2, true],
+    expect(snap.runs.map((r) => [r.ritKe, r.nomorRencana, r.tanggalRencana, r.bisaDitutup])).toEqual([
+      [1, "RD-SLT-20260905-0001", "2026-09-05", false],
+      [1, "RD-SLT-20260906-0001", "2026-09-06", true],
     ]);
     expect(snap.runs[0].dokumen[0]).toMatchObject({
       diterima: 40, kembali: 10, status: "Selesai", dikonfirmasi: true, koreksiTertunda: true,
