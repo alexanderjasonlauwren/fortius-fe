@@ -46,8 +46,8 @@ const QUICK_TEMPLATES: {
   accountCode?: string;
   counterparty: string;
 } [] = [
-  { label: "Jasa giro", voucherType: "receipt", accountCode: "4-3100", counterparty: "Jasa giro bank" },
-  { label: "Biaya admin bank", voucherType: "disbursement", accountCode: "5-6100", counterparty: "Administrasi bank" },
+  { label: "Jasa giro", voucherType: "receipt", accountCode: "491.89", counterparty: "Jasa giro bank" },
+  { label: "Biaya admin bank", voucherType: "disbursement", accountCode: "581.01", counterparty: "Administrasi bank" },
   { label: "Pengisian kas kecil", voucherType: "transfer", counterparty: "Pengisian kas kecil" },
 ];
 
