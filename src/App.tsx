@@ -29,6 +29,7 @@ import { InvoiceDetailPage } from "./pages/receivables/InvoiceDetailPage";
 import { CashBankPage } from "./pages/cashbank/CashBankPage";
 import { AssetsPage } from "./pages/assets/AssetsPage";
 import { PurchaseDetailPage } from "./pages/purchases/PurchaseDetailPage";
+import { RedemptionDetailPage } from "./pages/purchases/RedemptionDetailPage";
 import { PurchasesPage } from "./pages/purchases/PurchasesPage";
 import { OpeningBalanceWizardPage } from "./pages/openingbalance/OpeningBalanceWizardPage";
 import { LedgerPage } from "./pages/ledger/LedgerPage";
@@ -212,6 +213,11 @@ const router = createBrowserRouter([
       { path: "purchases", element: (
         <RequirePermission permission={PERMISSIONS.PURCHASES_VIEW}>
           <PurchasesPage />
+        </RequirePermission>
+      ) },
+      { path: "purchases/penebusan/:id", element: (
+        <RequirePermission permission={PERMISSIONS.PURCHASES_VIEW}>
+          <RedemptionDetailPage />
         </RequirePermission>
       ) },
       { path: "purchases/:id", element: (

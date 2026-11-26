@@ -15,6 +15,7 @@ import { getOpenPurchases, getPurchases, type PurchaseView } from "@/features/pu
 import type { PurchaseFilters } from "@/features/purchases/api/contract";
 import { getVendors } from "@/features/suppliers/api/vendorApi";
 import { RecordPurchaseDialog } from "@/features/purchases/components/RecordPurchaseDialog";
+import { RedemptionsSection } from "@/features/saredemptions/components/RedemptionsSection";
 import { PayBillDialog } from "@/features/purchases/components/PayBillDialog";
 import { PayBillsDialog } from "@/features/purchases/components/PayBillsDialog";
 import { isOverdue, PURCHASE_STATUS_LABEL, purchaseStatusVariant } from "@/features/purchases/lib/status";
@@ -35,8 +36,8 @@ export function PurchasesPage() {
   // Vendors lived in Pengaturan until accounting parity P6; Jurnal keeps them under Pembelian.
   const [params] = useSearchParams();
   const canSeeMaster = useAuthStore((st) => st.hasPermission(PERMISSIONS.SUPPLIERS_VIEW));
-  const [view, setView] = useState<"tagihan" | "vendor">(() =>
-    params.get("tab") === "vendor" && canSeeMaster ? "vendor" : "tagihan",
+  const [view, setView] = useState<"tagihan" | "penebusan" | "vendor">(() =>
+    params.get("tab") === "vendor" && canSeeMaster ? "vendor" : params.get("tab") === "penebusan" ? "penebusan" : "tagihan",
   );
   const [status, setStatus] = useState<StatusFilter>("open");
   const [supplierId, setSupplierId] = useState("");
@@ -147,7 +148,7 @@ export function PurchasesPage() {
       <PageHeader
         eyebrow="Keuangan"
         title="Pembelian"
-        description="Tagihan dari vendor (penebusan SA dan pembelian umum) beserta pembayarannya, sekaligus atau bertahap."
+        description="Tagihan dari vendor beserta pembayarannya, dan penebusan SA dari PDF BNI Pops."
         actions={
           <div className="flex gap-2">
             <CanAccess permission={PERMISSIONS.PURCHASES_VERIFY}>
@@ -169,17 +170,17 @@ export function PurchasesPage() {
           </span>
         }
       />
-      {canSeeMaster && (
-        <SegmentedControl<"tagihan" | "vendor">
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "tagihan", label: "Tagihan vendor" },
-            { value: "vendor", label: "Vendor" },
-          ]}
-        />
-      )}
+      <SegmentedControl<"tagihan" | "penebusan" | "vendor">
+        value={view}
+        onChange={setView}
+        options={[
+          { value: "tagihan", label: "Tagihan vendor" },
+          { value: "penebusan", label: "Penebusan SA" },
+          ...(canSeeMaster ? [{ value: "vendor" as const, label: "Vendor" }] : []),
+        ]}
+      />
       {view === "vendor" && <VendorSection />}
+      {view === "penebusan" && <RedemptionsSection prefillSA={params.get("sa") ?? undefined} />}
       {view === "tagihan" && (
         <>
 
@@ -221,7 +222,7 @@ export function PurchasesPage() {
           dense
           emptyIcon={ShoppingCart}
           emptyMessage="Tidak ada tagihan vendor"
-          emptyDescription="Catat tagihan dari vendor; penebusan SA muncul di sini dengan sendirinya."
+          emptyDescription="Catat tagihan dari vendor. Penebusan SA dicatat di tab Penebusan SA."
         />
       </Panel>
 

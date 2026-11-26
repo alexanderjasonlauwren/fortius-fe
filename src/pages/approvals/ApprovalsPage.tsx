@@ -49,6 +49,7 @@ function documentLink(r: VoidRequest): string {
     case "depreciation_run": return "/fixed-assets?tab=penyusutan";
     case "payment": return "/payments";
     case "credit_note": return "/receivables?tab=nota-kredit";
+    case "sa_redemption": return `/purchases/penebusan/${r.documentId}`;
   }
 }
 
