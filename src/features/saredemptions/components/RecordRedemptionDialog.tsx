@@ -17,13 +17,14 @@ import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_BYTES, uploadAttachment } from "@/fea
 import { useScope } from "@/features/tenancy/useScope";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Field, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { todayIso } from "@/lib/date";
-import { formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
+import { formatRupiah, formatNumber } from "@/lib/format";
 
 interface Row {
   key: number;
@@ -121,7 +122,7 @@ export function RecordRedemptionDialog({ open, saNumber: initialSA, onClose, onS
     success: (row) => ({
       title: `${row.redemptionNumber} dicatat`,
       description: [
-        `${row.receivedQuantity.toLocaleString("id-ID")} dari ${row.totalQuantity.toLocaleString("id-ID")} tabung sudah diterima.`,
+        `${formatNumber(row.receivedQuantity)} dari ${formatNumber(row.totalQuantity)} tabung sudah diterima.`,
         ...row.warnings,
       ].join(" "),
     }),
@@ -179,20 +180,20 @@ export function RecordRedemptionDialog({ open, saNumber: initialSA, onClose, onS
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             <Field label="Net Price" htmlFor="pnb-net">
-              <TextInput id="pnb-net" type="number" min={0} mono value={netPrice} onChange={(e) => setNetPrice(e.target.value)} />
+              <NumberInput id="pnb-net" placeholder="0" value={amountOf(netPrice) ?? 0} onValueChange={(value) => setNetPrice(value ? String(value) : "")} />
             </Field>
             <Field label="PPn" htmlFor="pnb-ppn">
-              <TextInput id="pnb-ppn" type="number" min={0} mono value={ppn} onChange={(e) => setPpn(e.target.value)} />
+              <NumberInput id="pnb-ppn" placeholder="0" value={amountOf(ppn) ?? 0} onValueChange={(value) => setPpn(value ? String(value) : "")} />
             </Field>
             <Field label="PBBKB" htmlFor="pnb-pbbkb">
-              <TextInput id="pnb-pbbkb" type="number" min={0} mono value={pbbkb} onChange={(e) => setPbbkb(e.target.value)} />
+              <NumberInput id="pnb-pbbkb" placeholder="0" value={amountOf(pbbkb) ?? 0} onValueChange={(value) => setPbbkb(value ? String(value) : "")} />
             </Field>
             <Field label="PPh" htmlFor="pnb-pph">
-              <TextInput id="pnb-pph" type="number" min={0} mono value={pph} onChange={(e) => setPph(e.target.value)} />
+              <NumberInput id="pnb-pph" placeholder="0" value={amountOf(pph) ?? 0} onValueChange={(value) => setPph(value ? String(value) : "")} />
             </Field>
             <Field label="Total Debit Amount" htmlFor="pnb-total" required
               error={breakdownOff ? `Net + PPn + PBBKB + PPh = ${formatRupiah(breakdownSum)}` : undefined}>
-              <TextInput id="pnb-total" type="number" min={0} mono value={totalDebit} onChange={(e) => setTotalDebit(e.target.value)} />
+              <NumberInput id="pnb-total" placeholder="0" value={amountOf(totalDebit) ?? 0} onValueChange={(value) => setTotalDebit(value ? String(value) : "")} />
             </Field>
           </div>
 
@@ -218,8 +219,8 @@ export function RecordRedemptionDialog({ open, saNumber: initialSA, onClose, onS
                           onChange={(e) => update(r.key, { deliveryDate: e.target.value })} />
                       </td>
                       <td className="w-28 py-1.5 pr-2">
-                        <TextInput aria-label={`Jumlah baris ${i + 1}`} type="number" min={1} mono value={r.quantity || ""}
-                          onChange={(e) => update(r.key, { quantity: Number(e.target.value) })} />
+                        <NumberInput decimals={0} placeholder="0" aria-label={`Jumlah baris ${i + 1}`} value={r.quantity}
+                          onValueChange={(value) => update(r.key, { quantity: value })} />
                       </td>
                       <td className="w-36 py-1.5 pr-2">
                         <TextInput aria-label={`Delivery number baris ${i + 1}`} mono maxLength={100} value={r.deliveryNumber}
@@ -246,7 +247,7 @@ export function RecordRedemptionDialog({ open, saNumber: initialSA, onClose, onS
                 <Plus className="h-3.5 w-3.5" /> Baris
               </Button>
               <p className="text-xs text-ink-muted">
-                {totalQty.toLocaleString("id-ID")} tabung
+                {formatNumber(totalQty)} tabung
                 {totalQty > 0 && total > 0 && <> · {formatRupiah(total / totalQty)} per tabung</>}
                 {" "}· nilai dibagi menurut jumlah tabung, sampai rupiah
               </p>

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { MatrixDayCell, MatrixSection } from "../api/contract";
+import { formatNumber } from "@/lib/format";
 
 /**
  * The pangkalan x day distribution grid, reflecting SIM3LON's own layout:
@@ -54,7 +55,7 @@ export function PenyaluranMatrix({ section }: { section: MatrixSection }) {
                 <div className="data text-2xs text-ink-muted">{row.idRegistrasi}</div>
               </td>
               <td className="data px-2 py-1.5 text-right text-ink-muted">
-                {row.alokasi.toLocaleString("id-ID")}
+                {formatNumber(row.alokasi)}
               </td>
               {row.days.map((cell) => (
                 <td
@@ -65,10 +66,10 @@ export function PenyaluranMatrix({ section }: { section: MatrixSection }) {
                 </td>
               ))}
               <td className="data px-2 py-1.5 text-right font-semibold text-ink">
-                {row.grandTotal.toLocaleString("id-ID")}
+                {formatNumber(row.grandTotal)}
               </td>
               <td className="data px-2 py-1.5 text-right text-ink-muted">
-                {row.sisaAlokasi.toLocaleString("id-ID")}
+                {formatNumber(row.sisaAlokasi)}
               </td>
             </tr>
           ))}

@@ -99,7 +99,7 @@ describe("branch quota strip", () => {
     const today = screen.getByLabelText(/9 November 2026/);
     expect(today.querySelector("[data-kind]")?.getAttribute("data-kind")).toBe("distributed");
     expect(screen.getByText("Tersalurkan").parentElement?.textContent).toContain("560");
-    expect(screen.getByText("Sisa alokasi").parentElement?.textContent).toContain("19.890");
+    expect(screen.getByText("Sisa alokasi").parentElement?.textContent).toContain("19,890");
   });
 });
 
@@ -107,13 +107,13 @@ describe("branch quota against the Acuan Base SA", () => {
   it("leads with the PDF's target and keeps the SIM3LON allocation beneath", async () => {
     await renderPanel(withReference);
 
-    expect(screen.getByText("Target Acuan SA").parentElement?.textContent).toContain("11.200");
-    expect(screen.getByText("Sisa target").parentElement?.textContent).toContain("4.400");
-    expect(screen.getByText("Tersalurkan").parentElement?.textContent).toContain("6.800");
+    expect(screen.getByText("Target Acuan SA").parentElement?.textContent).toContain("11,200");
+    expect(screen.getByText("Sisa target").parentElement?.textContent).toContain("4,400");
+    expect(screen.getByText("Tersalurkan").parentElement?.textContent).toContain("6,800");
     expect(screen.queryByText("Sisa alokasi")).toBeNull();
     const allocation = screen.getByText(/Alokasi SIM3LON/);
-    expect(allocation.textContent).toContain("20.450");
-    expect(allocation.textContent).toContain("13.650");
+    expect(allocation.textContent).toContain("20,450");
+    expect(allocation.textContent).toContain("13,650");
   });
 
   // 19 Nov: SIM3LON scheduled 310 against the PDF's 360, and nothing on the

@@ -34,6 +34,7 @@ import { PERMISSIONS } from "@/features/rbac/permissions";
 import { getSourcePlanReview } from "../api/sourcePlanReview";
 import { sourcePlanMessage } from "../api/sourcePlanReview.contract";
 import { sourceRowsForEmptyDraft } from "../api/fillSourcePlan";
+import { formatNumber } from "@/lib/format";
 
 export function useDistributionPlan() {
   const queryClient = useQueryClient();
@@ -238,7 +239,7 @@ export function useDistributionPlan() {
     // the demo could fill.
     success: (plan) => ({
       title: `Rencana ${plan.kode} dikonfirmasi`,
-      description: `${plan.jumlahOutlet} ${outletLabel()} · ${plan.totalUnit.toLocaleString("id-ID")} ${unitLabel()} terikat pada kuota SA. Pantau di Monitoring Distribusi.`,
+      description: `${plan.jumlahOutlet} ${outletLabel()} · ${formatNumber(plan.totalUnit)} ${unitLabel()} terikat pada kuota SA. Pantau di Monitoring Distribusi.`,
     }),
   });
 

@@ -39,9 +39,9 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { ReasonDialog } from "@/components/common/ReasonDialog";
 import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { getStatusVariant, spineFor } from "@/lib/status";
-import { formatDateId, formatRupiah } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { formatDateId, formatRupiah, formatNumber } from "@/lib/format";
 
 export function ExpensePage() {
   // Kategori lived in Pengaturan until accounting parity P6; it belongs beside the expenses that use it.
@@ -202,7 +202,7 @@ export function ExpensePage() {
           title="Daftar pengeluaran"
           hint={
             list.data?.totalItems !== undefined
-              ? `${list.data.totalItems.toLocaleString("id-ID")}${list.data.totalIsFloor ? "+" : ""} baris`
+              ? `${formatNumber(list.data.totalItems)}${list.data.totalIsFloor ? "+" : ""} baris`
               : undefined
           }
           actions={

@@ -29,6 +29,7 @@ import {
 } from "@/features/cashvouchers/api/cashVoucherApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Field, SegmentedControl, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -223,7 +224,7 @@ export function CashVoucherDialog({ open, onClose, voucher, template, onSaved }:
                 </SelectInput>
               </Field>
               <Field label="Nilai" htmlFor="cv-amount" required>
-                <TextInput id="cv-amount" type="number" min={1} mono value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
+                <NumberInput id="cv-amount" value={amount} onValueChange={(value) => setAmount(value)} />
               </Field>
             </div>
           ) : (
@@ -245,11 +246,10 @@ export function CashVoucherDialog({ open, onClose, voucher, template, onSaved }:
                     </SelectInput>
                   </Field>
                   <Field label={i === 0 ? "Nilai" : undefined} htmlFor={`cv-line-amount-${line.key}`} className="w-40">
-                    <TextInput
+                    <NumberInput
                       id={`cv-line-amount-${line.key}`}
-                      type="number" min={1} mono
                       value={line.amount}
-                      onChange={(e) => setLines(lines.map((l) => (l.key === line.key ? { ...l, amount: Number(e.target.value) } : l)))}
+                      onValueChange={(value) => setLines(lines.map((l) => (l.key === line.key ? { ...l, amount: value } : l)))}
                     />
                   </Field>
                   <Button

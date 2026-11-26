@@ -135,6 +135,41 @@ describe("recordGeneralPurchase", () => {
   });
 });
 
+describe("Keterangan and bulk entry", () => {
+  it("sends a product line's Keterangan and a four-place unit cost", async () => {
+    send.mockResolvedValue(wire());
+    await purchaseApiHttp.recordGeneralPurchase({
+      supplierId: SUPPLIER_ID, date: "2026-11-16", branchId: BRANCH_ID,
+      lines: [{ productId: PRODUCT_ID, description: " Terima 560 DN 23448709 ", quantity: 560, unitCost: 11584.4594 }],
+    });
+    expect(send.mock.calls[0][2].lines).toEqual([
+      { product_id: PRODUCT_ID, account_id: undefined, description: "Terima 560 DN 23448709", quantity: 560, unit_cost: 11584.4594 },
+    ]);
+  });
+
+  it("posts every row of the table in one request and reads back each bill", async () => {
+    send.mockResolvedValue([wire({ id: "a" }), wire({ id: "b" })]);
+    const bills = await purchaseApiHttp.recordBulkPurchases({
+      branchId: BRANCH_ID, confirmOldDate: true,
+      rows: [
+        { date: "2026-11-16", supplierId: SUPPLIER_ID, productId: PRODUCT_ID, quantity: 560, unitCost: 11584, description: "560 tabung" },
+        { date: "2026-11-17", supplierId: SUPPLIER_ID, vendorInvoiceNumber: " INV-9 ", accountId: "acc-1", quantity: 1, unitCost: 250_000, description: "BBM" },
+      ],
+    });
+    expect(send).toHaveBeenCalledWith("post", "/purchases/bulk", {
+      branch_id: BRANCH_ID,
+      confirm_old_date: true,
+      rows: [
+        { date: "2026-11-16", supplier_id: SUPPLIER_ID, vendor_invoice_number: undefined,
+          product_id: PRODUCT_ID, account_id: undefined, description: "560 tabung", quantity: 560, unit_cost: 11584 },
+        { date: "2026-11-17", supplier_id: SUPPLIER_ID, vendor_invoice_number: "INV-9",
+          product_id: undefined, account_id: "acc-1", description: "BBM", quantity: 1, unit_cost: 250_000 },
+      ],
+    });
+    expect(bills.map((b) => b.id)).toEqual(["a", "b"]);
+  });
+});
+
 describe("bill payments and voids", () => {
   it("reads what is paid, what is left and each instalment", async () => {
     getList.mockResolvedValue({ items: [wire({

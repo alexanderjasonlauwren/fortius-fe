@@ -12,6 +12,7 @@ import {
 } from "../api/saApi";
 import type { SAFilterParams, UploadSAPayload } from "../types";
 import { unitLabel } from "@/lib/lexicon";
+import { formatNumber } from "@/lib/format";
 
 export function useScheduleAgreement() {
   const [filters, setFilters] = useState<SAFilterParams>({});
@@ -31,7 +32,7 @@ export function useScheduleAgreement() {
     errorTitle: "Unggah SA gagal",
     success: (sa) => ({
       title: `${sa.nomorSA} diunggah`,
-      description: `${sa.totalKuota.toLocaleString("id-ID")} ${unitLabel()} tercatat sebagai draf. Aktifkan agar bisa dipakai untuk perencanaan.`,
+      description: `${formatNumber(sa.totalKuota)} ${unitLabel()} tercatat sebagai draf. Aktifkan agar bisa dipakai untuk perencanaan.`,
     }),
   });
 

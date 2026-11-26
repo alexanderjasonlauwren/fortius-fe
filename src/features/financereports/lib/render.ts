@@ -1,6 +1,6 @@
 import { escapeHtml } from "@/lib/export";
-import { formatDateId, formatNumber, formatRupiah } from "@/lib/format";
 import type { Report, ReportColumnKind } from "../api/contract";
+import { formatDateId, formatNumber, formatRupiah, NUMBER_LOCALE } from "@/lib/format";
 
 /**
  * One cell as the screen and the printout show it: money with negatives in
@@ -18,7 +18,7 @@ export function formatReportCell(kind: ReportColumnKind, value: string | number 
     case "number":
       return formatNumber(Number(value));
     case "percent":
-      return `${(Number(value) * 100).toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`;
+      return `${(Number(value) * 100).toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: 1 })}%`;
     case "date":
       return formatDateId(String(value));
     default:

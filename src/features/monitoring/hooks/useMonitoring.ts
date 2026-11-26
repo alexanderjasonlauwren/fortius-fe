@@ -11,7 +11,7 @@ import {
   setDeliveryStatus,
 } from "../api/monitoringApi";
 import { unitLabel } from "@/lib/lexicon";
-import { formatDateId } from "@/lib/format";
+import { formatDateId, formatNumber } from "@/lib/format";
 
 function todayStr() {
   const d = new Date();
@@ -46,7 +46,7 @@ export function useMonitoring() {
       title: `${delivery.kode} → ${delivery.status}`,
       description:
         delivery.status === "Selesai"
-          ? `Realisasi ${delivery.realisasi.toLocaleString("id-ID")} ${unitLabel()} tercatat.`
+          ? `Realisasi ${formatNumber(delivery.realisasi)} ${unitLabel()} tercatat.`
           : undefined,
     }),
   });
@@ -79,7 +79,7 @@ export function useMonitoring() {
     mutationFn: redeliver,
     errorTitle: "Kirim ulang gagal",
     success: (result) => ({
-      title: `${result.jumlah.toLocaleString("id-ID")} ${unitLabel()} dijadwalkan ulang`,
+      title: `${formatNumber(result.jumlah)} ${unitLabel()} dijadwalkan ulang`,
       description: `${result.rencanaBaru ? "Rencana baru" : "Masuk ke rencana"} ${result.rencana}, ${formatDateId(result.tanggal)}. Konfirmasi rencananya agar dapat dikirim.`,
     }),
   });

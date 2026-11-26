@@ -33,7 +33,7 @@ describe("invoiceHtml", () => {
       "SP - 001/PND700000/2025-S0",
       "03 Januari 2025",
       "08002600419112271",
-      "12.298.915",
+      "12,298,915",
       "PPN 12%",
       "0,-",
       "*DUA BELAS JUTA DUA RATUS SEMBILAN PULUH DELAPAN RIBU SEMBILAN RATUS LIMA BELAS RUPIAH*",
@@ -56,7 +56,7 @@ describe("invoiceHtml", () => {
 
   it("prints a PPN that was charged and totals it into the words", () => {
     const html = invoiceHtml({ ...september, amount: 1_000_000, vatAmount: 110_000, total: 1_110_000 });
-    expect(html).toContain(">110.000<");
+    expect(html).toContain(">110,000<");
     expect(html).toContain("SATU JUTA SERATUS SEPULUH RIBU RUPIAH");
   });
 });

@@ -16,6 +16,7 @@ import { useScope } from "@/features/tenancy/useScope";
 import { todayIso } from "@/lib/date";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Field, SelectInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -137,15 +138,15 @@ export function ManualJournalDialog({ open, onClose, onPosted, template }: Manua
                     <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
                   ))}
                 </SelectInput>
-                <TextInput
-                  aria-label="Debit" type="number" min={0} mono
-                  value={row.debit || ""}
-                  onChange={(e) => setSide(row.key, "debit", Number(e.target.value))}
+                <NumberInput
+                  aria-label="Debit" placeholder="0"
+                  value={row.debit}
+                  onValueChange={(value) => setSide(row.key, "debit", value)}
                 />
-                <TextInput
-                  aria-label="Kredit" type="number" min={0} mono
-                  value={row.kredit || ""}
-                  onChange={(e) => setSide(row.key, "kredit", Number(e.target.value))}
+                <NumberInput
+                  aria-label="Kredit" placeholder="0"
+                  value={row.kredit}
+                  onValueChange={(value) => setSide(row.key, "kredit", value)}
                 />
                 <Button
                   type="button" variant="ghost" size="icon-xs" aria-label="Hapus baris"

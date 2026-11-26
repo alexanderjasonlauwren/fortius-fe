@@ -1,4 +1,5 @@
 import { unitLabel } from "@/lib/lexicon";
+import { NUMBER_LOCALE } from "@/lib/format";
 
 /**
  * A transport-fee tariff is priced per kg -- the BA LO Pertamina pays on,
@@ -13,7 +14,7 @@ export function rateBasisLabel(basis: RateBasis): string {
 
 /** Rupiah to the sen when a rate has them: a per-kg rate is 354,64, not 355. */
 export function formatRate(rate: number): string {
-  return `Rp ${rate.toLocaleString("id-ID", { minimumFractionDigits: Number.isInteger(rate) ? 0 : 2, maximumFractionDigits: 2 })}`;
+  return `Rp ${rate.toLocaleString(NUMBER_LOCALE, { minimumFractionDigits: Number.isInteger(rate) ? 0 : 2, maximumFractionDigits: 2 })}`;
 }
 
 /** "Rp 1.050/tabung", "Rp 354,64/kg". */

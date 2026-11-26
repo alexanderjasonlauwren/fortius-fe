@@ -17,6 +17,7 @@ import {
 } from "@/features/registrationpackages/api/registrationPackageApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Field, SegmentedControl, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -211,7 +212,7 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
                 </SelectInput>
               </Field>
               <Field label="Nilai pendaftaran" htmlFor="mi-fee" required>
-                <TextInput id="mi-fee" type="number" min={1} mono value={feeAmount} onChange={(e) => setFeeAmount(Number(e.target.value))} />
+                <NumberInput id="mi-fee" value={feeAmount} onValueChange={(value) => setFeeAmount(value)} />
               </Field>
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-ink-muted">Item kit (opsional)</p>
@@ -230,10 +231,10 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
                       </SelectInput>
                     </Field>
                     <Field label={i === 0 ? "Qty" : undefined} htmlFor={`mi-kit-qty-${row.key}`} className="w-24">
-                      <TextInput
-                        id={`mi-kit-qty-${row.key}`} type="number" min={1} mono
+                      <NumberInput decimals={0}
+                        id={`mi-kit-qty-${row.key}`}
                         value={row.qty}
-                        onChange={(e) => setKitRows(kitRows.map((k) => (k.key === row.key ? { ...k, qty: Number(e.target.value) } : k)))}
+                        onValueChange={(value) => setKitRows(kitRows.map((k) => (k.key === row.key ? { ...k, qty: value } : k)))}
                       />
                     </Field>
                     <Button type="button" variant="ghost" size="icon-xs" aria-label="Hapus item" onClick={() => setKitRows(kitRows.filter((k) => k.key !== row.key))}>
@@ -273,10 +274,10 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
                       </SelectInput>
                     </Field>
                     <Field label={i === 0 ? "Nilai" : undefined} htmlFor={`mi-line-amount-${row.key}`} className="w-40">
-                      <TextInput
-                        id={`mi-line-amount-${row.key}`} type="number" min={1} mono
+                      <NumberInput
+                        id={`mi-line-amount-${row.key}`}
                         value={row.amount}
-                        onChange={(e) => setLineRows(lineRows.map((l) => (l.key === row.key ? { ...l, amount: Number(e.target.value) } : l)))}
+                        onValueChange={(value) => setLineRows(lineRows.map((l) => (l.key === row.key ? { ...l, amount: value } : l)))}
                       />
                     </Field>
                     <Button

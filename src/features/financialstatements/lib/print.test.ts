@@ -36,7 +36,7 @@ describe("statementPrintHtml", () => {
     expect(html).toContain("Format Laba Rugi");
     // Indented by level, negatives in parentheses, the note number shown.
     expect(html).toMatch(/padding-left:22px">Penjualan/);
-    expect(html).toMatch(/\(4\) Rugi selisih[\s\S]*\(Rp\s?250\.000\)/);
+    expect(html).toMatch(/\(4\) Rugi selisih[\s\S]*\(Rp\s?250,000\)/);
     expect(html).toContain("83%");
   });
 

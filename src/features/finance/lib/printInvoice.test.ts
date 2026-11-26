@@ -20,7 +20,7 @@ describe("printed invoice", () => {
     expect(html).toContain("INV-SLT-0001");
     expect(html).toContain("LPG 3 Kg");
     expect(html).toContain("SJ-0001");
-    expect(html).toContain("1.200.000");
+    expect(html).toContain("1,200,000");
     // Nothing settled yet: no remaining-balance line to confuse the reader.
     expect(html).not.toContain("Sisa tagihan");
   });

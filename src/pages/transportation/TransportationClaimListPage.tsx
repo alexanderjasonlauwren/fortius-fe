@@ -34,8 +34,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { formatNumber, formatRupiah } from "@/lib/format";
 import type { ClaimStatus } from "@/types/domain";
+import { formatNumber, formatRupiah } from "@/lib/format";
 
 interface FormState {
   id?: string;
@@ -220,7 +220,7 @@ export function TransportationClaimListPage() {
       key: "totalQty",
       header: "Tabung",
       align: "right",
-      render: (row) => <span className="data text-xs text-ink">{row.totalQty.toLocaleString("id-ID")}</span>,
+      render: (row) => <span className="data text-xs text-ink">{formatNumber(row.totalQty)}</span>,
       sortValue: (row) => row.totalQty,
     },
     {

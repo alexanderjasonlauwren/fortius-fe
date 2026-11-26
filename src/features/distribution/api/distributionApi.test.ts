@@ -941,7 +941,7 @@ describe("the suggestion", () => {
     expect(suggestion.trips[0].stops.map((s) => s.urutan)).toEqual([1, 2]);
     expect(suggestion.trips[0].muatanBerisiko).toBe(20);
     expect(suggestion.unroutable[0].alasan).toBe("Di luar jangkauan");
-    expect(suggestion.dasar).toMatch(/12,5 km/);
+    expect(suggestion.dasar).toMatch(/12.5 km/);
   });
 
   /**

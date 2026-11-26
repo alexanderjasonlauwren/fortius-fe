@@ -18,6 +18,7 @@ import {
   GridTableSection,
   SectionError,
 } from "@/features/sim3lonlive/components/SectionTable";
+import { formatNumber } from "@/lib/format";
 
 function renderSection(section: Section) {
   if (isErrorSection(section)) return <SectionError message={section.error} />;
@@ -144,7 +145,7 @@ export function SIM3LONIntegrationPage() {
                   hint={
                     isErrorSection(section)
                       ? "Gagal dimuat"
-                      : `${sectionCount(section)?.toLocaleString("id-ID")} baris`
+                      : `${formatNumber(sectionCount(section) ?? 0)} baris`
                   }
                 />
                 {renderSection(section)}

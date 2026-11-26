@@ -12,6 +12,7 @@ import type {
   SIM3LONPreview,
   SIM3LONReconciliationPreview,
 } from "../types";
+import { formatNumber } from "@/lib/format";
 
 const RELOAD_CODES = new Set(["REVIEW_REQUIRED", "SOURCE_CHANGED", "STALE_VERSION"]);
 type ReconciliationScope = readonly [string, string];
@@ -136,7 +137,7 @@ export function useSIM3LONImport() {
     errorTitle: "Impor SIM3LON gagal diterapkan",
     success: ({ result }) => ({
       title: "Rencana bulanan SIM3LON diterapkan",
-      description: `${result.outletTargetsWritten.toLocaleString("id-ID")} alokasi pangkalan dan ${result.dailyTargetsWritten.toLocaleString("id-ID")} target harian diperbarui.`,
+      description: `${formatNumber(result.outletTargetsWritten)} alokasi pangkalan dan ${formatNumber(result.dailyTargetsWritten)} target harian diperbarui.`,
     }),
     onDone: ({ originScope }) => {
       if (!sameScope(scopeKey(), originScope)) return;

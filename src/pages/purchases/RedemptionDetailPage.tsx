@@ -19,8 +19,8 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { todayIso } from "@/lib/date";
-import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
+import { formatDateId, formatRupiah, formatNumber } from "@/lib/format";
 
 const DELIVERY_LABEL = { scheduled: "Dijadwalkan", received: "Diterima", void: "Batal" } as const;
 const DELIVERY_VARIANT = { scheduled: "warning", received: "success", void: "draft" } as const;
@@ -38,7 +38,7 @@ export function RedemptionDetailPage() {
     mutationFn: () => receiveDeliveries(id),
     success: (row) => ({
       title: "Barang diterima",
-      description: `${row.receivedQuantity.toLocaleString("id-ID")} dari ${row.totalQuantity.toLocaleString("id-ID")} tabung sudah masuk persediaan.`,
+      description: `${formatNumber(row.receivedQuantity)} dari ${formatNumber(row.totalQuantity)} tabung sudah masuk persediaan.`,
     }),
     errorTitle: "Penerimaan gagal",
     onDone: refresh,
@@ -105,7 +105,7 @@ export function RedemptionDetailPage() {
                 <Meta label="Dibayar" value={formatDateId(r.paidOn)} />
                 <Meta label="Rekening" value={r.bankAccountName ?? "Rekening utama"} />
                 <Meta label="Depot" value={r.depot ?? "—"} />
-                <Meta label="Tabung" value={`${r.receivedQuantity.toLocaleString("id-ID")} / ${r.totalQuantity.toLocaleString("id-ID")}`} mono />
+                <Meta label="Tabung" value={`${formatNumber(r.receivedQuantity)} / ${formatNumber(r.totalQuantity)}`} mono />
               </dl>
               <dl className="ml-auto max-w-xs space-y-1.5 text-sm">
                 {r.netPrice !== undefined && <Row label="Net Price" value={r.netPrice} />}
@@ -137,7 +137,7 @@ export function RedemptionDetailPage() {
                     <tr key={d.id} className="border-b border-line">
                       <td className="data px-5 py-2 text-xs">{formatDateId(d.deliveryDate)}</td>
                       <td className="px-3 py-2 text-sm text-ink">{d.description ?? d.productName}</td>
-                      <td className="data px-3 py-2 text-right text-sm">{d.quantity.toLocaleString("id-ID")}</td>
+                      <td className="data px-3 py-2 text-right text-sm">{formatNumber(d.quantity)}</td>
                       <td className="data px-3 py-2 text-right text-sm">{formatRupiah(d.amount)}</td>
                       <td className="px-5 py-2"><StatusBadge label={DELIVERY_LABEL[d.status]} variant={DELIVERY_VARIANT[d.status]} /></td>
                     </tr>

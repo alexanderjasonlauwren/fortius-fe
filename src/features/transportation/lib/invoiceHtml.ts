@@ -1,6 +1,7 @@
 import { escapeHtml } from "@/lib/export";
 import { terbilang } from "@/lib/terbilang";
 import type { TransportInvoice } from "../api/contract";
+import { formatNumber } from "@/lib/format";
 
 /** "12 Oktober 2026": the invoice writes the month out in full. */
 function longDate(iso?: string): string {
@@ -9,7 +10,7 @@ function longDate(iso?: string): string {
 }
 
 function rupiah(amount: number): string {
-  return Math.round(amount).toLocaleString("id-ID");
+  return formatNumber(Math.round(amount));
 }
 
 /**

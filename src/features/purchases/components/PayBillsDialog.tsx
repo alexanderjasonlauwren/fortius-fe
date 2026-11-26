@@ -13,6 +13,7 @@ import { payBillsInTurn } from "@/features/purchases/lib/payBills";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { useResettableState } from "@/hooks/useResettableState";
 import { Field, SelectInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -95,8 +96,8 @@ export function PayBillsDialog({ open, onClose, onPaid }: PayBillsDialogProps) {
             </SelectInput>
           </Field>
           <Field label="Jumlah transfer" htmlFor="pay-bills-total">
-            <TextInput id="pay-bills-total" type="number" mono min={0} value={total}
-              onChange={(e) => setTotal(Number(e.target.value))} />
+            <NumberInput id="pay-bills-total" value={total}
+              onValueChange={(value) => setTotal(value)} />
           </Field>
           <Field label="Tanggal bayar" htmlFor="pay-bills-date" required>
             <TextInput id="pay-bills-date" type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
@@ -141,11 +142,11 @@ export function PayBillsDialog({ open, onClose, onPaid }: PayBillsDialogProps) {
                         </td>
                         <td className="data px-3 py-1.5 text-right text-xs text-ink">{formatRupiah(b.outstanding)}</td>
                         <td className="px-3 py-1.5 text-right">
-                          <TextInput type="number" mono min={0} max={b.outstanding}
+                          <NumberInput
                             aria-label={`Bayar untuk ${b.purchaseNumber}`}
                             className="w-28 py-1 text-right text-xs"
-                            value={amounts[b.id] ?? ""}
-                            onChange={(e) => setAmounts({ ...amounts, [b.id]: Number(e.target.value) })} />
+                            placeholder="0" value={amounts[b.id] ?? 0}
+                            onValueChange={(value) => setAmounts({ ...amounts, [b.id]: value })} />
                         </td>
                       </tr>
                     ))}

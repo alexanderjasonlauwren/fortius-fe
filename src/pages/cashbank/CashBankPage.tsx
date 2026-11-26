@@ -38,9 +38,9 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { getStatusVariant, spineFor } from "@/lib/status";
-import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
 import { useResettableState } from "@/hooks/useResettableState";
+import { formatDateId, formatRupiah, formatNumber } from "@/lib/format";
 
 type Tab = "transaksi" | "rekening-koran" | "rekonsiliasi" | "rekening";
 
@@ -186,7 +186,7 @@ export function CashBankPage() {
             title="Voucher kas & bank"
             hint={
               vouchers.data?.totalItems !== undefined
-                ? `${vouchers.data.totalItems.toLocaleString("id-ID")}${vouchers.data.totalIsFloor ? "+" : ""} voucher`
+                ? `${formatNumber(vouchers.data.totalItems)}${vouchers.data.totalIsFloor ? "+" : ""} voucher`
                 : undefined
             }
             actions={

@@ -2,6 +2,7 @@ import { purchaseApiHttp } from "./purchaseApi.http";
 import type { PurchaseApi } from "./contract";
 
 export type {
+  BulkPurchaseRowInput,
   GeneralPurchaseLineInput,
   PayPurchaseInput,
   PurchaseApi,
@@ -10,6 +11,7 @@ export type {
   PurchasePaymentStatus,
   PurchasePaymentView,
   PurchaseView,
+  RecordBulkPurchasesInput,
   RecordGeneralPurchaseInput,
   RecordPurchasePaymentInput,
 } from "./contract";
@@ -19,6 +21,7 @@ const api: PurchaseApi = purchaseApiHttp;
 export const getPurchases = api.getPurchases.bind(api);
 export const getOpenPurchases = api.getOpenPurchases.bind(api);
 export const recordGeneralPurchase = api.recordGeneralPurchase.bind(api);
+export const recordBulkPurchases = api.recordBulkPurchases.bind(api);
 export const payPurchase = api.payPurchase.bind(api);
 export const getPurchase = api.getPurchase.bind(api);
 export const recordPurchasePayment = api.recordPurchasePayment.bind(api);

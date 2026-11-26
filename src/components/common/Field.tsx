@@ -3,6 +3,7 @@ import { FileText, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CONTROL } from "./controlStyles";
 import { DateInput, MonthInput } from "./DateInput";
+import { NUMBER_LOCALE } from "@/lib/format";
 
 export { SelectInput } from "./SelectInput";
 
@@ -195,7 +196,7 @@ export function FileDrop({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">{file.name}</p>
           <p className="data text-2xs text-ink-muted">
-            {(file.size / 1024).toLocaleString("id-ID", { maximumFractionDigits: 0 })} KB
+            {(file.size / 1024).toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: 0 })} KB
           </p>
         </div>
         <button

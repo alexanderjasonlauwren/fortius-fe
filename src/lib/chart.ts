@@ -1,3 +1,4 @@
+import { NUMBER_LOCALE, formatNumber } from "@/lib/format";
 /**
  * Chart parameters for the console.
  *
@@ -94,10 +95,10 @@ export function axisProps(isDark: boolean) {
 export function compactUnit(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1_000_000)
-    return `${(value / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
+    return `${(value / 1_000_000).toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: 1 })} jt`;
   // Under 10 rb the abbreviation would round neighbouring ticks to the same
   // label ("2 rb, 2 rb, 3 rb"), so show the full figure instead.
   if (abs >= 10_000)
-    return `${(value / 1_000).toLocaleString("id-ID", { maximumFractionDigits: 0 })} rb`;
-  return value.toLocaleString("id-ID");
+    return `${(value / 1_000).toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: 0 })} rb`;
+  return formatNumber(value);
 }

@@ -64,6 +64,7 @@ import type {
   RunDocument,
   RunSummary,
 } from "../types";
+import { formatNumber } from "@/lib/format";
 
 /** Mirrors the backend's BoardDelivery. */
 interface BoardDeliveryWire {
@@ -562,7 +563,7 @@ async function printSuratJalan(rowId: string): Promise<void> {
     throw new Error("Baris ini belum dimuat. Muat ulang papan monitoring.");
   }
   const settings = await getSettings();
-  const fmt = (n: number) => n.toLocaleString("id-ID");
+  const fmt = (n: number) => formatNumber(n);
   const kode = stop.deliveries.map((d) => d.delivery_number).join(", ");
   const target = stop.deliveries.reduce((s, d) => s + d.dispatched_qty, 0);
   const realisasi = stop.deliveries.reduce((s, d) => s + d.delivered_qty, 0);

@@ -60,6 +60,7 @@ import type {
   TripAssignment,
   PlanHistoryEvent,
 } from "./contract";
+import { formatNumber, NUMBER_LOCALE } from "@/lib/format";
 
 /* ── wire shapes, mirroring the backend exactly ────────────────────────── */
 
@@ -943,7 +944,7 @@ async function getActiveSaOptions(): Promise<PlanOption[]> {
     return {
       id: sa.id,
       label: sa.sa_number,
-      sublabel: `${sa.supplier_name ?? "—"} · sisa ${sisa.toLocaleString("id-ID")}`,
+      sublabel: `${sa.supplier_name ?? "—"} · sisa ${formatNumber(sisa)}`,
       disabled: sisa <= 0,
     };
   });
@@ -991,7 +992,7 @@ async function suggestAssignment(planId: string): Promise<AssignmentSuggestion> 
     alasan: stop.reason,
   }));
 
-  const km = (board.summary.distance_m / 1000).toLocaleString("id-ID", {
+  const km = (board.summary.distance_m / 1000).toLocaleString(NUMBER_LOCALE, {
     maximumFractionDigits: 1,
   });
   const selesai = board.summary.finish_eta ? `, selesai ± ${board.summary.finish_eta}` : "";
@@ -1029,7 +1030,7 @@ export async function printRouteSheet(planId: string): Promise<void> {
   ]);
   const outletById = new Map(outlets.map((o) => [o.id, o]));
   const total = rows.reduce((s, r) => s + r.jumlahUnit, 0);
-  const fmt = (n: number) => n.toLocaleString("id-ID");
+  const fmt = (n: number) => formatNumber(n);
   // By run and stop position -- the order a driver actually drives it in, not
   // merely grouped by trip number with whatever order the rows arrived in.
   const ordered = [...rows].sort(compareStops);
