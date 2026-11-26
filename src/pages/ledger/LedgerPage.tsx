@@ -13,7 +13,8 @@ import {
   getTrialBalance,
   type JournalView,
 } from "@/features/finance/api/financeApi";
-import { JOURNAL_SOURCE_LABEL, journalSourceHref } from "@/features/finance/lib/journalSource";
+import { JOURNAL_SOURCE_FILTER, JOURNAL_SOURCE_LABEL, journalSourceHref } from "@/features/finance/lib/journalSource";
+import type { JournalSourceType } from "@/types/domain";
 import { ManualJournalDialog } from "@/features/finance/components/ManualJournalDialog";
 import { InventoryAdjustmentDialog } from "@/features/finance/components/InventoryAdjustmentDialog";
 import { ReverseJournalDialog } from "@/features/finance/components/ReverseJournalDialog";
@@ -112,10 +113,11 @@ export function LedgerPage() {
 function JournalSection({ range }: { range: { from: string; to: string } }) {
   const [search, setSearch] = useState("");
   const [accountId, setAccountId] = useState("");
-  const [page, setPage] = useResettableState([range, search, accountId], () => 1);
+  const [sourceType, setSourceType] = useState<JournalSourceType | "">("");
+  const [page, setPage] = useResettableState([range, search, accountId, sourceType], () => 1);
   const journals = useQuery({
-    queryKey: [...scopeKey(), "journals", range, search, accountId, page],
-    queryFn: () => getJournals(range, { search, accountId: accountId || undefined }, page),
+    queryKey: [...scopeKey(), "journals", range, search, accountId, sourceType, page],
+    queryFn: () => getJournals(range, { search, accountId: accountId || undefined, sourceType: sourceType || undefined }, page),
     placeholderData: keepPreviousData,
   });
   const accounts = useQuery({ queryKey: [...scopeKey(), "manual-journal", "accounts"], queryFn: getChartOfAccounts });
@@ -126,7 +128,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
 
   const rows = journals.data?.items ?? [];
   const total = journals.data?.totalItems;
-  const filtered = !!search || !!accountId;
+  const filtered = !!search || !!accountId || !!sourceType;
 
   return (
     <Panel>
@@ -140,6 +142,13 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
               <option value="">Semua akun</option>
               {leafAccounts(accounts.data ?? []).map((a) => (
                 <option key={a.akun.id} value={a.akun.id}>{a.akun.kode} · {a.akun.nama}</option>
+              ))}
+            </SelectInput>
+            <SelectInput aria-label="Sumber" value={sourceType}
+              onChange={(e) => setSourceType(e.target.value as JournalSourceType | "")} className="w-48">
+              <option value="">Semua sumber</option>
+              {JOURNAL_SOURCE_FILTER.map((type) => (
+                <option key={type} value={type}>{JOURNAL_SOURCE_LABEL[type]}</option>
               ))}
             </SelectInput>
             <CanAccess permission={PERMISSIONS.JOURNALS_CREATE}>
@@ -160,7 +169,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
         <EmptyState
           icon={BookOpen}
           title={filtered ? "Tidak ada jurnal yang cocok" : "Belum ada jurnal pada periode ini"}
-          description={filtered ? "Ubah pencarian atau akun." : "Jurnal terbentuk otomatis saat tagihan terbit, kas diterima, atau nota kredit diterbitkan."}
+          description={filtered ? "Ubah pencarian, akun, atau sumber." : "Jurnal terbentuk otomatis saat tagihan terbit, kas diterima, atau nota kredit diterbitkan."}
         />
       ) : (
         <ul className="divide-y divide-line">

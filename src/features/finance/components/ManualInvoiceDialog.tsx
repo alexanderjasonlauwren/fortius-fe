@@ -89,7 +89,8 @@ export function ManualInvoiceDialog({ open, onClose, onCreated }: ManualInvoiceD
   // for the sibling pick in ManualJournalDialog -- the same chart, the
   // same real restriction, so this picker excludes parents too.
   const revenueAccounts = leafAccounts((accounts.data ?? []).filter((a) => a.akun.tipe === "Pendapatan"));
-  const accessoryProducts = (kitProducts.data ?? []).filter((p) => p.productKind === "accessory");
+  // Kit items: accessories and empty cylinders (partner doc C7).
+  const accessoryProducts = (kitProducts.data ?? []).filter((p) => p.productKind === "accessory" || p.productKind === "container");
 
   function reset() {
     setJenis("registration");

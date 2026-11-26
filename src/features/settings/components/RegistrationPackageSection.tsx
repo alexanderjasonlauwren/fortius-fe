@@ -56,7 +56,9 @@ const EMPTY_FORM: PackageForm = {
 export function RegistrationPackageSection() {
   const list = useQuery({ queryKey: [...scopeKey(), "registration-packages"], queryFn: listPackages });
   const products = useQuery({ queryKey: [...scopeKey(), "registration-packages", "products"], queryFn: () => getProducts({ onlyActive: true }) });
-  const accessoryProducts = (products.data ?? []).filter((p) => p.productKind === "accessory");
+  // Kit items: papan, timbangan, APAR, and the empty cylinders a new
+  // pangkalan buys (partner doc C7).
+  const accessoryProducts = (products.data ?? []).filter((p) => p.productKind === "accessory" || p.productKind === "container");
   const [editing, setEditing] = useState<PackageForm | null>(null);
 
   const saveMutation = useDeskMutation({

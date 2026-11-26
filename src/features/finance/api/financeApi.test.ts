@@ -34,6 +34,7 @@ vi.mock("@/features/outlet/api/outletApi", () => ({
 }));
 
 const { financeApiHttp } = await import("./financeApi.http");
+const { journalSourceHref } = await import("@/features/finance/lib/journalSource");
 
 const OUTLET_ID = "11111111-1111-4111-8111-111111111111";
 const INVOICE_ID = "22222222-2222-4222-8222-222222222222";
@@ -596,6 +597,27 @@ describe("journals", () => {
     // Read as "manual" these were offered the reverse action, which the
     // backend then refused.
     expect(journals.map((j) => j.sourceType)).toEqual(["expense", "transportationClaim", "assetAcquisition", "assetDisposal"]);
+  });
+
+  // Partner doc C7: stock movements' journals showed as manual entries,
+  // unlabelled and offered the reverse action.
+  it("names every stock movement's journal and filters the list by it", async () => {
+    getList.mockResolvedValueOnce({
+      items: [
+        journalWire({ id: "j-1", source_type: "stock_count" }),
+        journalWire({ id: "j-2", source_type: "sa_redemption" }),
+        journalWire({ id: "j-3", source_type: "sa_redemption_receipt", source_id: "r-1", source_number: "PNB-0001" }),
+        journalWire({ id: "j-4", source_type: "inventory_revaluation" }),
+        journalWire({ id: "j-5", source_type: "import" }),
+      ],
+      pagination: { page: 1, page_size: 100, has_next: false, has_prev: false },
+    });
+    const { items: journals } = await financeApiHttp.getJournals(undefined, { sourceType: "saRedemptionReceipt" });
+    expect(journals.map((j) => j.sourceType)).toEqual([
+      "stockCount", "saRedemption", "saRedemptionReceipt", "inventoryRevaluation", "import",
+    ]);
+    expect(journalSourceHref("saRedemptionReceipt", "r-1")).toBe("/purchases/penebusan/r-1");
+    expect(getList.mock.calls[0][1].filters).toContainEqual({ field: "source_type", operator: "eq", value: "sa_redemption_receipt" });
   });
 
   it("narrows the list by account and search, and names each journal's branch", async () => {

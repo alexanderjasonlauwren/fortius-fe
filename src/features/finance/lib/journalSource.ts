@@ -19,7 +19,23 @@ export const JOURNAL_SOURCE_LABEL: Record<JournalSourceType, string> = {
   assetAcquisition: "Perolehan aset",
   assetDisposal: "Pelepasan aset",
   paymentRefund: "Pengembalian dana",
+  stockCount: "Stok opname",
+  saRedemption: "Penebusan SA (bayar)",
+  saRedemptionReceipt: "Penebusan SA (terima)",
+  inventoryRevaluation: "Revaluasi HPP",
+  import: "Impor buku besar",
 };
+
+/**
+ * The Sumber filter on Jurnal Umum, stock movements first (partner doc C7:
+ * pembelian / penjualan / penyesuaian), then the rest.
+ */
+export const JOURNAL_SOURCE_FILTER: JournalSourceType[] = [
+  "purchase", "saRedemption", "saRedemptionReceipt", "invoice", "creditNote", "stockCount",
+  "inventoryRevaluation", "payment", "purchasePayment", "expense", "cashVoucher", "transportationClaim",
+  "depreciation", "assetAcquisition", "assetDisposal", "paymentRefund", "manual", "openingBalance",
+  "closing", "import",
+];
 
 /**
  * Where the document behind a journal is worked on, or undefined when the
@@ -41,6 +57,13 @@ export function journalSourceHref(type: JournalSourceType, sourceId?: string): s
     case "purchase":
     case "purchasePayment":
       return sourceId ? `/purchases/${sourceId}` : "/purchases";
+    case "saRedemption":
+    case "saRedemptionReceipt":
+      return sourceId ? `/purchases/penebusan/${sourceId}` : "/purchases?tab=penebusan";
+    case "inventoryRevaluation":
+      return sourceId ? `/receivables/${sourceId}` : "/receivables";
+    case "stockCount":
+      return "/inventory";
     case "expense":
       return "/expenses";
     case "transportationClaim":

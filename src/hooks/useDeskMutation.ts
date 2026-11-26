@@ -199,7 +199,8 @@ const FRIENDLY: Record<string, string> = {
   PAYMENT_NOT_VERIFIED: "Hanya penerimaan yang sudah diverifikasi yang bisa dikembalikan.",
   PAYMENT_REFUNDED:
     "Penerimaan ini punya pengembalian dana yang diajukan atau disetujui. Selesaikan pengembalian itu dulu.",
-  CONTAINER_NOT_TRADED: "Tabung kosong hanya dihitung jumlahnya; tidak dibeli atau dijual.",
+  CONTAINER_ACCOUNT_MISSING:
+    "Produk tabung kosong ini belum punya akun persediaan. Atur Persediaan Tabung Kosong (113.01) di halaman produk.",
   FILE_INFECTED: "Berkas ini terdeteksi mengandung malware dan tidak bisa dibuka. Hubungi operator.",
   FILE_NOT_SCANNED: "Berkas ini belum selesai dipindai keamanannya. Coba lagi beberapa menit lagi.",
   CURRENT_PASSWORD_INCORRECT: "Kata sandi saat ini salah. Periksa lalu coba lagi.",
