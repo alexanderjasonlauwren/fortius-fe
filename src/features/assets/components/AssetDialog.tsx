@@ -22,6 +22,7 @@ import {
 } from "@/features/assets/api/assetApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Field, SelectInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -153,13 +154,13 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
 
           <div className="grid grid-cols-3 gap-4">
             <Field label="Harga perolehan" htmlFor="ast-cost" required>
-              <TextInput id="ast-cost" type="number" min={1} mono value={cost} disabled={editing} onChange={(e) => setCost(Number(e.target.value))} />
+              <NumberInput id="ast-cost" value={cost} disabled={editing} onValueChange={setCost} />
             </Field>
             <Field label="Nilai residu" htmlFor="ast-residual" required>
-              <TextInput id="ast-residual" type="number" min={0} mono value={residualValue} onChange={(e) => setResidualValue(Number(e.target.value))} />
+              <NumberInput id="ast-residual" value={residualValue} onValueChange={setResidualValue} />
             </Field>
             <Field label="Umur manfaat (bulan)" htmlFor="ast-life" required>
-              <TextInput id="ast-life" type="number" min={1} mono value={usefulLifeMonths} onChange={(e) => setUsefulLifeMonths(Number(e.target.value))} />
+              <NumberInput id="ast-life" decimals={0} value={usefulLifeMonths} onValueChange={setUsefulLifeMonths} />
             </Field>
           </div>
 
@@ -167,7 +168,7 @@ export function AssetDialog({ open, asset, onClose, onSaved }: AssetDialogProps)
             <>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Akumulasi awal" htmlFor="ast-opening" hint="Opsional: penyusutan yang sudah terjadi sebelum aset dicatat di sini.">
-                  <TextInput id="ast-opening" type="number" min={0} mono value={openingAccumulated} onChange={(e) => setOpeningAccumulated(Number(e.target.value))} />
+                  <NumberInput id="ast-opening" value={openingAccumulated} onValueChange={setOpeningAccumulated} />
                 </Field>
                 <Field label="Per tanggal" htmlFor="ast-opening-asof" required={openingAccumulated > 0}>
                   <TextInput id="ast-opening-asof" type="date" value={openingAsOf} onChange={(e) => setOpeningAsOf(e.target.value)} />

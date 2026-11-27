@@ -17,6 +17,10 @@ export interface OpeningBalancePreview {
   asOf: string;
   balanced: boolean;
   errors: OpeningBalanceValidationError[];
+  /** Figures worth a second look that do not stop a commit (a cash account
+   *  on the credit side, prepaid rent nothing amortises, an asset's opening
+   *  depreciation far from its schedule). */
+  warnings: OpeningBalanceValidationError[];
   trialBalanceRows: number;
   totalDebit: number;
   totalCredit: number;
