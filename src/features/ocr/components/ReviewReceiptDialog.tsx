@@ -17,6 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, FileSearch, Wallet } from "lucide-react";
 import { Link } from "react-router-dom";
 import { reviewReceipt, type ReceiptExtraction } from "@/features/ocr/api/ocrApi";
+import { reviewSecondsSince, reviewStartedNow } from "@/features/ocr/lib/reviewTime";
 import type { Confidence, ReviewReceiptInput } from "@/features/ocr/api/contract";
 import { useOpenReceipt } from "@/features/ocr/hooks/useOpenReceipt";
 import { CONFIDENCE_LABEL, CONFIDENCE_VARIANT, isPangkalanPayment } from "@/features/ocr/lib/status";
@@ -91,9 +92,11 @@ interface Props {
 export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
   const [form, setForm] = useState<FormState | null>(null);
   const [seenFor, setSeenFor] = useState<string | undefined>();
+  const [openedAt, setOpenedAt] = useState<number | undefined>();
   if (receipt && seenFor !== receipt.id) {
     setSeenFor(receipt.id);
     setForm(initial(receipt));
+    setOpenedAt(reviewStartedNow());
   }
   const { open: openFile, opening, dialog: previewDialog } = useOpenReceipt();
 
@@ -123,6 +126,7 @@ export function ReviewReceiptDialog({ receipt, onClose, onReviewed }: Props) {
         incurredAt: f.incurredAt,
         description: f.description,
       } : undefined,
+      reviewSeconds: reviewSecondsSince(openedAt),
     }),
     success: (result, f) => {
       if (result.expenseError) return { title: "Bukti diarsipkan, pengeluaran gagal dibuat", description: result.expenseError, tone: "warning" as const };

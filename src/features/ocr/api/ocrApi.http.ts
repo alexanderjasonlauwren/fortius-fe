@@ -176,6 +176,7 @@ async function reviewReceipt(input: ReviewReceiptInput): Promise<ReviewReceiptRe
       incurred_at: input.expense.incurredAt,
       description: input.expense.description || undefined,
     } : undefined,
+    review_seconds: input.reviewSeconds,
   });
   return {
     extractionId: result.extraction_id,

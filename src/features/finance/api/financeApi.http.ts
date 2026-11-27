@@ -518,6 +518,7 @@ async function submitPayment(input: RecordPaymentInput): Promise<PaymentView> {
     notes: input.keterangan,
     destination_bank_account_id: input.rekeningTujuanId || undefined,
     ocr_extraction_id: input.buktiTransfer || undefined,
+    proof_review_seconds: input.buktiTransfer ? input.buktiReviewSeconds : undefined,
   });
   const lines = (input.alokasi ?? []).filter((a) => a.jumlah > 0);
   if (lines.length === 0) return toPaymentView(created, outlets);
