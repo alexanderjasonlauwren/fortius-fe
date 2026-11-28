@@ -1,3 +1,4 @@
+import { NUMBER_LOCALE } from "@/lib/format";
 /**
  * Where the sopir was when they filed something.
  *
@@ -152,5 +153,5 @@ export function geoVerdict(
 /** "180 m" / "4,2 km" */
 export function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} km`;
+  return `${(meters / 1000).toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: 1 })} km`;
 }

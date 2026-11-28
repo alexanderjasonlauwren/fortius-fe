@@ -28,7 +28,7 @@ import { DataTable, type Column } from "@/components/common/DataTable";
 import { SearchInput, SegmentedControl, SelectInput } from "@/components/common/Field";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { formatDateId, formatRupiah, formatRupiahShort } from "@/lib/format";
+import { formatDateId, formatRupiah, formatRupiahShort, formatNumber } from "@/lib/format";
 
 type StatusFilter = NonNullable<PurchaseFilters["paymentStatus"]>;
 
@@ -189,7 +189,7 @@ export function PurchasesPage() {
           title="Daftar tagihan vendor"
           hint={
             list.data?.totalItems !== undefined
-              ? `${list.data.totalItems.toLocaleString("id-ID")}${list.data.totalIsFloor ? "+" : ""} baris`
+              ? `${formatNumber(list.data.totalItems)}${list.data.totalIsFloor ? "+" : ""} baris`
               : undefined
           }
           actions={

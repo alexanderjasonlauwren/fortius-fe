@@ -12,13 +12,13 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { getStatusVariant } from "@/lib/status";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
-import { formatDateId, formatRupiah } from "@/lib/format";
 import { printDocument } from "@/lib/export";
 import type { BeritaAcaraGroup, BeritaAcaraLine, LoadingOrderLine } from "@/features/transportation/api/contract";
 import { formatRate, formatTariff } from "@/features/transportation/lib/rate";
 import { downloadBeritaAcaraPdf, periodMonth } from "@/features/transportation/lib/beritaAcaraPdf";
 import { ActionTooltip } from "@/components/common/ActionTooltip";
 import { useToast } from "@/hooks/useToast";
+import { formatDateId, formatRupiah, formatNumber } from "@/lib/format";
 
 const groupColumns: Column<BeritaAcaraGroup>[] = [
   {
@@ -47,13 +47,13 @@ const groupColumns: Column<BeritaAcaraGroup>[] = [
     key: "qty",
     header: "Tabung",
     align: "right",
-    render: (row) => <span className="data text-xs text-ink">{row.qty.toLocaleString("id-ID")}</span>,
+    render: (row) => <span className="data text-xs text-ink">{formatNumber(row.qty)}</span>,
   },
   {
     key: "kg",
     header: "Kg",
     align: "right",
-    render: (row) => <span className="data text-xs text-ink">{row.weightKg.toLocaleString("id-ID")}</span>,
+    render: (row) => <span className="data text-xs text-ink">{formatNumber(row.weightKg)}</span>,
   },
   {
     key: "rate",
@@ -97,7 +97,7 @@ const lineColumns: Column<BeritaAcaraLine>[] = [
     align: "right",
     render: (row) => (
       <span className="data text-xs text-ink">
-        {row.qty.toLocaleString("id-ID")}
+        {formatNumber(row.qty)}
         {row.hasDrift && (
           <span
             className="ml-1 inline-flex items-center text-rust"
@@ -131,13 +131,13 @@ const loColumns: Column<LoadingOrderLine>[] = [
     key: "qty",
     header: "Tabung",
     align: "right",
-    render: (row) => <span className="data text-xs text-ink">{row.qtyPcs.toLocaleString("id-ID")}</span>,
+    render: (row) => <span className="data text-xs text-ink">{formatNumber(row.qtyPcs)}</span>,
   },
   {
     key: "kg",
     header: "Kg",
     align: "right",
-    render: (row) => <span className="data text-xs text-ink">{row.qtyKg.toLocaleString("id-ID")}</span>,
+    render: (row) => <span className="data text-xs text-ink">{formatNumber(row.qtyKg)}</span>,
   },
   {
     key: "rate",
@@ -181,7 +181,7 @@ function baLoHtml(doc: BeritaAcaraDocument): string {
           .map(
             (l) => `<tr>
               <td>${l.no}</td><td>${l.date}</td><td class="code">${l.loNumber}</td>
-              <td class="num">${l.qtyPcs.toLocaleString("id-ID")}</td><td class="num">${l.qtyKg.toLocaleString("id-ID")}</td>
+              <td class="num">${formatNumber(l.qtyPcs)}</td><td class="num">${formatNumber(l.qtyKg)}</td>
               <td class="num">${formatRate(l.ratePerKg)}</td><td class="num">${formatRupiah(l.amount)}</td>
             </tr>`,
           )
@@ -190,8 +190,8 @@ function baLoHtml(doc: BeritaAcaraDocument): string {
       <tfoot>
         <tr>
           <td colspan="3">Total</td>
-          <td class="num">${footer.totalQty.toLocaleString("id-ID")}</td>
-          <td class="num">${footer.totalWeightKg.toLocaleString("id-ID")}</td>
+          <td class="num">${formatNumber(footer.totalQty)}</td>
+          <td class="num">${formatNumber(footer.totalWeightKg)}</td>
           <td class="num">${rates}</td>
           <td class="num">${formatRupiah(footer.amount)}</td>
         </tr>
@@ -230,7 +230,7 @@ function documentHtml(doc: BeritaAcaraDocument): string {
           .map(
             (l) => `<tr>
               <td>${l.no}</td><td>${formatDateId(l.deliveryDate)}</td><td class="code">${l.deliveryNumber}</td>
-              <td class="num">${l.qty.toLocaleString("id-ID")}</td><td class="num">${l.weightKg.toLocaleString("id-ID")}</td>
+              <td class="num">${formatNumber(l.qty)}</td><td class="num">${formatNumber(l.weightKg)}</td>
               <td class="num">${formatTariff(l.rate, l.rateBasis)}</td><td class="num">${formatRupiah(l.amount)}</td>
             </tr>`,
           )
@@ -239,8 +239,8 @@ function documentHtml(doc: BeritaAcaraDocument): string {
       <tfoot>
         <tr>
           <td colspan="3">Total</td>
-          <td class="num">${footer.totalQty.toLocaleString("id-ID")}</td>
-          <td class="num">${footer.totalWeightKg.toLocaleString("id-ID")}</td>
+          <td class="num">${formatNumber(footer.totalQty)}</td>
+          <td class="num">${formatNumber(footer.totalWeightKg)}</td>
           <td></td>
           <td class="num">${formatRupiah(footer.amount)}</td>
         </tr>
@@ -352,8 +352,8 @@ export function TransportationClaimDocumentPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Total tabung" value={footer.totalQty.toLocaleString("id-ID")} />
-        <Stat label="Total kilogram" value={footer.totalWeightKg.toLocaleString("id-ID")} unit="kg" />
+        <Stat label="Total tabung" value={formatNumber(footer.totalQty)} />
+        <Stat label="Total kilogram" value={formatNumber(footer.totalWeightKg)} unit="kg" />
         <Stat label="Nilai klaim" value={formatRupiah(footer.amount)} />
         <Stat
           label={doc.kind === "lo" ? "Jumlah LO" : "Jumlah lini"}

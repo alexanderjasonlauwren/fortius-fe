@@ -121,9 +121,9 @@ describe("report rows", () => {
   });
 
   it("print money as the statements do and a share as a percentage", () => {
-    expect(formatReportCell("money", -200000)).toBe("(Rp 200.000)");
+    expect(formatReportCell("money", -200000)).toBe("(Rp 200,000)");
     expect(formatReportCell("money", 0)).toBe("—");
-    expect(formatReportCell("percent", 0.4567)).toBe("45,7%");
+    expect(formatReportCell("percent", 0.4567)).toBe("45.7%");
     expect(formatReportCell("text", undefined)).toBe("");
   });
 

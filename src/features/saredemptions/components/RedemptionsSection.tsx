@@ -17,8 +17,8 @@ import { DataTable, type Column } from "@/components/common/DataTable";
 import { SearchInput } from "@/components/common/Field";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { formatDateId, formatRupiah } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
+import { formatDateId, formatRupiah, formatNumber } from "@/lib/format";
 
 function arrival(row: RedemptionView): { label: string; variant: "success" | "warning" | "draft" } {
   if (row.status === "void") return { label: "Batal", variant: "draft" };
@@ -67,7 +67,7 @@ export function RedemptionsSection({ prefillSA }: { prefillSA?: string }) {
       align: "right",
       render: (row) => (
         <span className="data block text-xs">
-          {row.receivedQuantity.toLocaleString("id-ID")} / {row.totalQuantity.toLocaleString("id-ID")}
+          {formatNumber(row.receivedQuantity)} / {formatNumber(row.totalQuantity)}
         </span>
       ),
     },

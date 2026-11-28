@@ -11,8 +11,8 @@ import { DataTable, type Column } from "@/components/common/DataTable";
 import { Field, SelectInput, TextInput } from "@/components/common/Field";
 import { Button } from "@/components/ui/button";
 import { ActionTooltip } from "@/components/common/ActionTooltip";
-import { formatRupiah } from "@/lib/format";
 import { exportExcel, printDocument } from "@/lib/export";
+import { formatRupiah, formatNumber } from "@/lib/format";
 
 function monthLabel(month: string): string {
   const d = new Date(`${month}-01`);
@@ -48,13 +48,13 @@ const columns: Column<RecapRow>[] = [
     key: "qty",
     header: "Tabung",
     align: "right",
-    render: (row) => <span className="data text-xs text-ink">{row.totalQty.toLocaleString("id-ID")}</span>,
+    render: (row) => <span className="data text-xs text-ink">{formatNumber(row.totalQty)}</span>,
   },
   {
     key: "kg",
     header: "Kilogram",
     align: "right",
-    render: (row) => <span className="data text-xs text-ink">{row.totalWeightKg.toLocaleString("id-ID")}</span>,
+    render: (row) => <span className="data text-xs text-ink">{formatNumber(row.totalWeightKg)}</span>,
   },
   {
     key: "claimed",
@@ -126,10 +126,10 @@ export function TransportationRecapPage() {
       <td className="px-3 py-2 text-xs font-semibold text-ink">Total</td>
       <td className="px-3 py-2 text-right text-xs font-semibold text-ink">{totals.claimCount}</td>
       <td className="px-3 py-2 text-right text-xs font-semibold text-ink">
-        {totals.totalQty.toLocaleString("id-ID")}
+        {formatNumber(totals.totalQty)}
       </td>
       <td className="px-3 py-2 text-right text-xs font-semibold text-ink">
-        {totals.totalWeightKg.toLocaleString("id-ID")}
+        {formatNumber(totals.totalWeightKg)}
       </td>
       <td className="px-3 py-2 text-right text-xs font-semibold text-ink">
         {formatRupiah(totals.claimedAmount)}
@@ -184,8 +184,8 @@ export function TransportationRecapPage() {
             .map(
               (r) => `<tr>
                 <td>${monthLabel(r.month)}</td><td class="num">${r.claimCount}</td>
-                <td class="num">${r.totalQty.toLocaleString("id-ID")}</td>
-                <td class="num">${r.totalWeightKg.toLocaleString("id-ID")}</td>
+                <td class="num">${formatNumber(r.totalQty)}</td>
+                <td class="num">${formatNumber(r.totalWeightKg)}</td>
                 <td class="num">${formatRupiah(r.claimedAmount)}</td>
                 <td class="num">${formatRupiah(r.paidAmount)}</td>
                 <td class="num">${formatRupiah(r.outstandingAmount)}</td>
@@ -196,8 +196,8 @@ export function TransportationRecapPage() {
         <tfoot>
           <tr>
             <td>Total</td><td class="num">${totals.claimCount}</td>
-            <td class="num">${totals.totalQty.toLocaleString("id-ID")}</td>
-            <td class="num">${totals.totalWeightKg.toLocaleString("id-ID")}</td>
+            <td class="num">${formatNumber(totals.totalQty)}</td>
+            <td class="num">${formatNumber(totals.totalWeightKg)}</td>
             <td class="num">${formatRupiah(totals.claimedAmount)}</td>
             <td class="num">${formatRupiah(totals.paidAmount)}</td>
             <td class="num">${formatRupiah(totals.outstandingAmount)}</td>

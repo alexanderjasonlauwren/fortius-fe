@@ -2,6 +2,7 @@ import { printDocument } from "@/lib/export";
 import { supplierLabelTitle, unitLabelTitle } from "@/lib/lexicon";
 import { saApiHttp } from "./saApi.http";
 import type { ScheduleAgreementApi } from "./contract";
+import { formatNumber } from "@/lib/format";
 
 const api: ScheduleAgreementApi = saApiHttp;
 
@@ -40,7 +41,7 @@ export const setSIM3LONDefaultProduct = api.setSIM3LONDefaultProduct.bind(api);
  */
 export async function printSA(id: string): Promise<void> {
   const sa = await getSADetail(id);
-  const fmt = (n: number) => n.toLocaleString("id-ID");
+  const fmt = (n: number) => formatNumber(n);
   const tanggal = (iso: string) =>
     new Date(iso).toLocaleDateString("id-ID", {
       day: "2-digit",

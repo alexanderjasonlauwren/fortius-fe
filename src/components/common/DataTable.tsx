@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsUpDown } from "l
 import { EmptyState } from "./EmptyState";
 import { Skeleton } from "./Panel";
 import { cn } from "@/lib/utils";
+import { formatNumber } from "@/lib/format";
 
 export interface Column<T> {
   key: string;
@@ -314,7 +315,7 @@ export function ServerPager({ paging, shown }: { paging: ServerPaging; shown: nu
   const total =
     paging.totalItems === undefined
       ? null
-      : `${paging.totalItems.toLocaleString("id-ID")}${paging.totalIsFloor ? "+" : ""}`;
+      : `${formatNumber(paging.totalItems)}${paging.totalIsFloor ? "+" : ""}`;
   return (
     <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-2.5">
       <p className="text-xs text-ink-muted">

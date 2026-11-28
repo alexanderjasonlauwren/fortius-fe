@@ -83,9 +83,26 @@ export interface GeneralPurchaseLineInput {
   /** Exactly one of productId and accountId. */
   productId?: string;
   accountId?: string;
+  /** The line's Keterangan; it becomes its journal line's memo. Required on an account line. */
   description?: string;
   quantity: number;
+  /** Up to four decimals (11,584.4594). */
   unitCost: number;
+}
+
+/** One row of the bulk table: a line and the bill it belongs to. */
+export interface BulkPurchaseRowInput extends GeneralPurchaseLineInput {
+  date: string;
+  supplierId: string;
+  vendorInvoiceNumber?: string;
+}
+
+export interface RecordBulkPurchasesInput {
+  /** The branch in scope; omitted resolves the tenant's default. */
+  branchId?: string;
+  rows: BulkPurchaseRowInput[];
+  /** A row dated more than 31 days back is meant. */
+  confirmOldDate?: boolean;
 }
 
 export interface RecordGeneralPurchaseInput {
@@ -123,6 +140,12 @@ export interface PurchaseApi {
   getOpenPurchases(supplierId?: string): Promise<PurchaseView[]>;
   getPurchase(id: string): Promise<PurchaseView>;
   recordGeneralPurchase(input: RecordGeneralPurchaseInput): Promise<PurchaseView>;
+  /**
+   * Many bills from one table: rows sharing date, vendor and vendor invoice
+   * number make one bill. All are written or none; a refusal names each bad
+   * row as `rows[i].field`.
+   */
+  recordBulkPurchases(input: RecordBulkPurchasesInput): Promise<PurchaseView[]>;
   /** Pays part or all of one bill. */
   recordPurchasePayment(input: RecordPurchasePaymentInput): Promise<PurchaseView>;
   payPurchase(input: PayPurchaseInput): Promise<PurchaseView>;

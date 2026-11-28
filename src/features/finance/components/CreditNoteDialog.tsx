@@ -12,6 +12,7 @@ import {
 } from "@/features/finance/api/financeApi";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Field, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -74,10 +75,10 @@ export function CreditNoteDialog({ invoice, onClose, onIssued }: CreditNoteDialo
           <div className="grid grid-cols-2 gap-4">
             <Field label="Nilai nota kredit" htmlFor="nk-jumlah" required
               error={tooMuch ? "Melebihi sisa tagihan" : undefined}>
-              <TextInput
-                id="nk-jumlah" type="number" mono min={1} max={invoice?.sisa}
+              <NumberInput
+                id="nk-jumlah"
                 value={form.jumlah}
-                onChange={(e) => setForm({ ...form, jumlah: Number(e.target.value) })}
+                onValueChange={(value) => setForm({ ...form, jumlah: value })}
               />
             </Field>
             <Field label="Tanggal" htmlFor="nk-tanggal" required>

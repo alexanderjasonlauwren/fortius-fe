@@ -11,6 +11,7 @@ import type { PurchaseView } from "@/features/purchases/api/contract";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { useResettableState } from "@/hooks/useResettableState";
 import { Field, SelectInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -78,8 +79,8 @@ export function PayBillDialog({ bill, onClose, onPaid }: PayBillDialogProps) {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Jumlah dibayar" htmlFor="pay-bill-amount" required error={tooMuch ? "Melebihi sisa tagihan" : undefined}>
-            <TextInput id="pay-bill-amount" type="number" mono min={1} max={bill?.outstanding} value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} />
+            <NumberInput id="pay-bill-amount" value={form.amount}
+              onValueChange={(value) => setForm({ ...form, amount: value })} />
           </Field>
           <Field label="Tanggal bayar" htmlFor="pay-bill-date" required>
             <TextInput id="pay-bill-date" type="date" value={form.paidOn}

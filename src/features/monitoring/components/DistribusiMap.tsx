@@ -20,6 +20,7 @@ import type { DriverCard, MonitoringAssignment, MonitoringRow } from "../types";
 import { buildRoundSequence, type StopState } from "../lib/roundSequence";
 import { snapToRoads } from "../lib/snapToRoads";
 import { unitLabel } from "@/lib/lexicon";
+import { formatNumber } from "@/lib/format";
 
 // Fix default marker icons broken by bundlers — bundled from the installed
 // package rather than fetched from unpkg, which this console never talks to
@@ -461,8 +462,8 @@ export function DistribusiMap({
                   <p className="text-ink-muted">{p.alamat}</p>
                   <p className="text-ink-muted">Status: {p.status}</p>
                   <p className="text-ink-muted">
-                    Realisasi: {p.realisasi.toLocaleString("id-ID")} /{" "}
-                    {p.target.toLocaleString("id-ID")} {unitLabel()}
+                    Realisasi: {formatNumber(p.realisasi)} /{" "}
+                    {formatNumber(p.target)} {unitLabel()}
                   </p>
                 </div>
               </Popup>

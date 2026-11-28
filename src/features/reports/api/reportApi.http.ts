@@ -57,6 +57,7 @@ import {
 } from "./contract";
 import { holds } from "@/features/rbac/holds";
 import { PERMISSIONS } from "@/features/rbac/permissions";
+import { formatNumber } from "@/lib/format";
 
 /** Mirrors the fields of delivery's own DeliveryResponse this adapter needs. */
 interface DeliveryResponse {
@@ -356,7 +357,7 @@ async function printReport(range: ReportRange): Promise<void> {
     getTopOutlet(range, 10),
     getSettings(),
   ]);
-  const fmt = (n: number) => n.toLocaleString("id-ID");
+  const fmt = (n: number) => formatNumber(n);
   const rupiah = (n: number) => `Rp ${fmt(n)}`;
   const tanggal = (iso: string) =>
     new Date(iso).toLocaleDateString("id-ID", {

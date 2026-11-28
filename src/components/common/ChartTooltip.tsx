@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { unitLabel } from "@/lib/lexicon";
+import { formatNumber } from "@/lib/format";
 
 interface Entry {
   name?: string;
@@ -59,7 +60,7 @@ export function ChartTooltip({
               <span className="data shrink-0 font-semibold text-ink">
                 {formatValue
                   ? formatValue(numeric, entry)
-                  : `${numeric.toLocaleString("id-ID")}${unit ? ` ${unit}` : ""}`}
+                  : `${formatNumber(numeric)}${unit ? ` ${unit}` : ""}`}
               </span>
             </li>
           );

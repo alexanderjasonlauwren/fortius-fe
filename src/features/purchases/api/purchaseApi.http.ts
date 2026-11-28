@@ -13,6 +13,8 @@ import type {
   PurchaseFilters,
   PurchasePaymentStatus,
   PurchaseView,
+  GeneralPurchaseLineInput,
+  RecordBulkPurchasesInput,
   RecordGeneralPurchaseInput,
   RecordPurchasePaymentInput,
 } from "./contract";
@@ -190,16 +192,35 @@ async function recordGeneralPurchase(input: RecordGeneralPurchaseInput): Promise
     date: input.date,
     due_date: input.dueDate || undefined,
     vendor_invoice_number: input.vendorInvoiceNumber?.trim() || undefined,
-    lines: input.lines.map((l) => ({
-      product_id: l.productId || undefined,
-      account_id: l.accountId || undefined,
-      description: l.accountId ? l.description : undefined,
-      quantity: l.quantity,
-      unit_cost: l.unitCost,
-    })),
+    lines: input.lines.map(lineWire),
     notes: input.notes || undefined,
   });
   return toView(row);
+}
+
+function lineWire(l: GeneralPurchaseLineInput) {
+  return {
+    product_id: l.productId || undefined,
+    account_id: l.accountId || undefined,
+    description: l.description?.trim() || undefined,
+    quantity: l.quantity,
+    unit_cost: l.unitCost,
+  };
+}
+
+async function recordBulkPurchases(input: RecordBulkPurchasesInput): Promise<PurchaseView[]> {
+  const branchId = input.branchId || (await defaultBranchID());
+  const rows = await send<PurchaseResponse[]>("post", "/purchases/bulk", {
+    branch_id: branchId,
+    confirm_old_date: input.confirmOldDate || undefined,
+    rows: input.rows.map((r) => ({
+      date: r.date,
+      supplier_id: r.supplierId,
+      vendor_invoice_number: r.vendorInvoiceNumber?.trim() || undefined,
+      ...lineWire(r),
+    })),
+  });
+  return rows.map(toView);
 }
 
 async function recordPurchasePayment(input: RecordPurchasePaymentInput): Promise<PurchaseView> {
@@ -223,7 +244,7 @@ async function payPurchase(input: PayPurchaseInput): Promise<PurchaseView> {
 }
 
 export const purchaseApiHttp: PurchaseApi = {
-  getPurchases, getOpenPurchases, getPurchase, recordGeneralPurchase,
+  getPurchases, getOpenPurchases, getPurchase, recordGeneralPurchase, recordBulkPurchases,
   recordPurchasePayment,
   payPurchase,
 };

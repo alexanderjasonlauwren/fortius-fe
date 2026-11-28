@@ -32,7 +32,7 @@ import { Field, SearchInput, SegmentedControl, SelectInput, TextInput } from "@/
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatDateId, formatRupiah, formatRupiahShort } from "@/lib/format";
+import { formatDateId, formatRupiah, formatRupiahShort, formatNumber } from "@/lib/format";
 
 type Tab = "jurnal" | "neraca-saldo";
 
@@ -132,7 +132,7 @@ function JournalSection({ range }: { range: { from: string; to: string } }) {
     <Panel>
       <PanelHeader
         title="Jurnal umum"
-        hint={`${total !== undefined ? `${total.toLocaleString("id-ID")}${journals.data?.totalIsFloor ? "+" : ""} entri pada periode ini · ` : ""}entri yang sudah diposting tidak dapat diubah, hanya dibalik`}
+        hint={`${total !== undefined ? `${formatNumber(total)}${journals.data?.totalIsFloor ? "+" : ""} entri pada periode ini · ` : ""}entri yang sudah diposting tidak dapat diubah, hanya dibalik`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput value={search} onChange={setSearch} placeholder="Nomor atau keterangan" className="w-48" />

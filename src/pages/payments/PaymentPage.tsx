@@ -41,6 +41,7 @@ import {
   TextInput,
   TextareaInput,
 } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import {
   Dialog,
   DialogContent,
@@ -578,16 +579,12 @@ function AllocateDialog({
                       {formatRupiah(inv.sisa)}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <TextInput
-                        type="number"
-                        mono
-                        min={0}
-                        max={inv.sisa}
+                      <NumberInput
                         aria-label={`Alokasi untuk ${inv.nomor}`}
                         className="w-24 py-1 text-right text-xs sm:w-32"
                         value={rows[inv.id] ?? ""}
-                        onChange={(e) =>
-                          setRows({ ...rows, [inv.id]: Number(e.target.value) })
+                        onValueChange={(value) =>
+                          setRows({ ...rows, [inv.id]: value })
                         }
                       />
                     </td>
@@ -811,13 +808,10 @@ function RecordPaymentDialog({
             </SelectInput>
           </Field>
           <Field label="Jumlah diterima" htmlFor="p-jml" required>
-            <TextInput
+            <NumberInput
               id="p-jml"
-              type="number"
-              mono
-              min={1}
               value={form.jumlah}
-              onChange={(e) => setForm({ ...form, jumlah: Number(e.target.value) })}
+              onValueChange={(value) => setForm({ ...form, jumlah: value })}
             />
           </Field>
           <Field label="Tanggal" htmlFor="p-tgl" required>
@@ -931,15 +925,11 @@ function RecordPaymentDialog({
                           {formatRupiah(inv.sisa)}
                         </td>
                         <td className="px-3 py-1.5 text-right">
-                          <TextInput
-                            type="number"
-                            mono
-                            min={0}
-                            max={inv.sisa}
+                          <NumberInput
                             aria-label={`Alokasi untuk ${inv.nomor}`}
                             className="w-28 py-1 text-right text-xs"
                             value={alokasi[inv.id] ?? ""}
-                            onChange={(e) => setAlokasi({ ...alokasi, [inv.id]: Number(e.target.value) })}
+                            onValueChange={(value) => setAlokasi({ ...alokasi, [inv.id]: value })}
                           />
                         </td>
                       </tr>

@@ -1,10 +1,16 @@
 /**
  * Display formatting.
  *
- * The console is Indonesian and number-heavy, so everything here produces
- * id-ID output and, where it is a figure you read digit by digit, is meant to
- * be rendered in the mono face (`className="data"`).
+ * The console is Indonesian and number-heavy. Words and dates are id-ID;
+ * numbers are not: the client's books (and their consultant's Excel) write
+ * `1,000` and `11,584.46` -- comma per three digits, dot for decimals
+ * (partner doc C9) -- so every figure goes through NUMBER_LOCALE. A figure
+ * you read digit by digit is meant to be rendered in the mono face
+ * (`className="data"`).
  */
+
+/** The locale every number is shown in: comma thousands, dot decimals. */
+export const NUMBER_LOCALE = "en-US";
 
 const MONTH_SHORT = [
   "Jan",
@@ -21,23 +27,24 @@ const MONTH_SHORT = [
   "Des",
 ];
 
-export function formatNumber(value: number): string {
-  return value.toLocaleString("id-ID");
+/** `6487297` → `6,487,297`; `11584.4594` → `11,584.46`. */
+export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
+  return value.toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: 2, ...options });
 }
 
 export function formatRupiah(value: number): string {
   return `Rp ${formatNumber(Math.round(value))}`;
 }
 
-/** Compact money for tight spaces: Rp 1,8 jt / Rp 240 rb. */
+/** Compact money for tight spaces: Rp 1.8 jt / Rp 240 rb. */
 export function formatRupiahShort(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1_000_000_000)
-    return `Rp ${(value / 1_000_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} M`;
+    return `Rp ${(value / 1_000_000_000).toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: 1 })} M`;
   if (abs >= 1_000_000)
-    return `Rp ${(value / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
+    return `Rp ${(value / 1_000_000).toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: 1 })} jt`;
   if (abs >= 1_000)
-    return `Rp ${(value / 1_000).toLocaleString("id-ID", { maximumFractionDigits: 0 })} rb`;
+    return `Rp ${(value / 1_000).toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: 0 })} rb`;
   return formatRupiah(value);
 }
 
@@ -100,7 +107,7 @@ export function minutesToClock(minutes: number): string {
 }
 
 export function formatPercentId(value: number, digits = 0): string {
-  return `${value.toLocaleString("id-ID", {
+  return `${value.toLocaleString(NUMBER_LOCALE, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })}%`;
@@ -118,7 +125,7 @@ export function formatDelta(current: number, previous: number): {
   const pct = ((current - previous) / previous) * 100;
   if (Math.abs(pct) < 0.5) return { label: "sama dengan kemarin", tone: "flat" };
   return {
-    label: `${pct > 0 ? "+" : "−"}${Math.abs(pct).toLocaleString("id-ID", {
+    label: `${pct > 0 ? "+" : "−"}${Math.abs(pct).toLocaleString(NUMBER_LOCALE, {
       maximumFractionDigits: 0,
     })}% vs kemarin`,
     tone: pct > 0 ? "up" : "down",

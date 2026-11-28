@@ -23,6 +23,7 @@ import { laterAsBill, type ExpenseFormState as FormState, type ExpenseLineRow as
 import { useScope } from "@/features/tenancy/useScope";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Field, SegmentedControl, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -210,8 +211,8 @@ export function ExpenseFormDialog({ open, editing, onClose }: ExpenseFormDialogP
                     onChange={(e) => setLine(line.key, { description: e.target.value })} />
                 </Field>
                 <Field label={i === 0 ? "Nilai" : undefined} htmlFor={`exp-amt-${line.key}`} className="w-36">
-                  <TextInput id={`exp-amt-${line.key}`} type="number" min={1} mono value={line.amount}
-                    onChange={(e) => setLine(line.key, { amount: Number(e.target.value) })} />
+                  <NumberInput id={`exp-amt-${line.key}`} value={line.amount}
+                    onValueChange={(value) => setLine(line.key, { amount: value })} />
                 </Field>
                 <Button type="button" variant="ghost" size="icon-xs" aria-label="Hapus baris" disabled={form.lines.length <= 1}
                   onClick={() => set({ lines: form.lines.filter((l) => l.key !== line.key) })}>

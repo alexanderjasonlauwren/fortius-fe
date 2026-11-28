@@ -44,8 +44,8 @@ describe("Berita Acara PDF", () => {
       "PERIODE BULAN OKTOBER 2026",
       "8144838990",
       "8144838992",
-      "2.760",
-      "Rp 978.806",
+      "2,760",
+      "Rp 978,806",
       "Bimbo Adhi Nugroho",
       "Halaman 1 dari 1",
     ]) {

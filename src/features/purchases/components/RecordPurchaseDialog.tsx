@@ -3,7 +3,9 @@
  * Each line is stock (a product, valued into inventory) or an account line
  * (a repair, a uniform order -- an expense or asset account with a
  * description). Due date and the vendor's own bill number make it payable
- * and findable later (accounting parity P3).
+ * and findable later (accounting parity P3). Every line carries its own
+ * Keterangan, which becomes its journal line's memo; "Input banyak" records
+ * many bills from one table (partner doc C8).
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +18,9 @@ import { recordGeneralPurchase } from "@/features/purchases/api/purchaseApi";
 import { useScope } from "@/features/tenancy/useScope";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { Field, SegmentedControl, SelectInput, TextareaInput, TextInput } from "@/components/common/Field";
+import { NumberInput } from "@/components/common/NumberInput";
+import { BulkPurchaseEntry } from "@/features/purchases/components/BulkPurchaseEntry";
+import { lineAmount } from "@/features/purchases/lib/bulkRows";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -37,7 +42,7 @@ interface LineRow {
 let lineKeySeq = 0;
 function emptyLine(kind: LineRow["kind"] = "product"): LineRow {
   lineKeySeq += 1;
-  return { key: lineKeySeq, kind, productId: "", accountId: "", description: "", quantity: 1, unitCost: 0 };
+  return { key: lineKeySeq, kind, productId: "", accountId: "", description: "", quantity: 0, unitCost: 0 };
 }
 
 const TERMS = [0, 7, 14, 30] as const;
@@ -49,6 +54,7 @@ interface RecordPurchaseDialogProps {
 }
 
 export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseDialogProps) {
+  const [mode, setMode] = useState<"single" | "bulk">("single");
   const [supplierId, setSupplierId] = useState("");
   const [date, setDate] = useState(todayIso);
   const [dueDate, setDueDate] = useState(todayIso);
@@ -67,6 +73,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
   );
 
   const reset = () => {
+    setMode("single");
     setSupplierId("");
     setDate(todayIso());
     setDueDate(todayIso());
@@ -87,7 +94,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
         branchId: branchId ?? undefined,
         lines: lines.map((l) =>
           l.kind === "product"
-            ? { productId: l.productId, quantity: l.quantity, unitCost: l.unitCost }
+            ? { productId: l.productId, description: l.description.trim() || undefined, quantity: l.quantity, unitCost: l.unitCost }
             : { accountId: l.accountId, description: l.description.trim(), quantity: l.quantity, unitCost: l.unitCost },
         ),
         notes: notes || undefined,
@@ -97,7 +104,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
     onDone: () => { onSaved(); reset(); onClose(); },
   });
 
-  const total = lines.reduce((sum, l) => sum + l.quantity * l.unitCost, 0);
+  const total = lines.reduce((sum, l) => sum + lineAmount(l.quantity, l.unitCost), 0);
   const lineOk = (l: LineRow) =>
     l.quantity > 0 && l.unitCost > 0 &&
     (l.kind === "product" ? !!l.productId : !!l.accountId && l.description.trim().length > 0);
@@ -105,7 +112,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) { reset(); onClose(); } }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className={mode === "bulk" ? "sm:max-w-[min(96vw,84rem)]" : "sm:max-w-2xl"}>
         <DialogHeader>
           <DialogTitle>Tagihan vendor baru</DialogTitle>
           <DialogDescription>
@@ -114,6 +121,25 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
           </DialogDescription>
         </DialogHeader>
 
+        <SegmentedControl
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "single" as const, label: "Satu tagihan" },
+            { value: "bulk" as const, label: "Input banyak" },
+          ]}
+        />
+
+        {mode === "bulk" ? (
+          <BulkPurchaseEntry
+            vendors={(vendors.data ?? []).filter((v) => v.status === "atv").map((v) => ({ id: v.id, label: `${v.code} · ${v.name}` }))}
+            products={(products.data ?? []).filter((p) => p.productKind !== "container").map((p) => ({ id: p.id, label: `${p.kode} · ${p.nama}` }))}
+            accounts={billable.map((a) => ({ id: a.akun.id, label: `${a.akun.kode} · ${a.akun.nama}` }))}
+            onCancel={() => { reset(); onClose(); }}
+            onSaved={() => { onSaved(); reset(); onClose(); }}
+          />
+        ) : (
+        <>
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Vendor" htmlFor="pur-supplier" required>
@@ -177,18 +203,18 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                {line.kind === "product" ? (
-                  <Field label="Produk" htmlFor={`pur-line-product-${line.key}`}>
-                    <SelectInput id={`pur-line-product-${line.key}`} value={line.productId}
-                      onChange={(e) => update(line.key, { productId: e.target.value })}>
-                      <option value="">— Pilih —</option>
-                      {(products.data ?? []).filter((p) => p.productKind !== "container").map((p) => (
-                        <option key={p.id} value={p.id}>{p.kode} · {p.nama}</option>
-                      ))}
-                    </SelectInput>
-                  </Field>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {line.kind === "product" ? (
+                    <Field label="Produk" htmlFor={`pur-line-product-${line.key}`}>
+                      <SelectInput id={`pur-line-product-${line.key}`} value={line.productId}
+                        onChange={(e) => update(line.key, { productId: e.target.value })}>
+                        <option value="">— Pilih —</option>
+                        {(products.data ?? []).filter((p) => p.productKind !== "container").map((p) => (
+                          <option key={p.id} value={p.id}>{p.kode} · {p.nama}</option>
+                        ))}
+                      </SelectInput>
+                    </Field>
+                  ) : (
                     <Field label="Akun" htmlFor={`pur-line-account-${line.key}`}>
                       <SelectInput id={`pur-line-account-${line.key}`} value={line.accountId}
                         onChange={(e) => update(line.key, { accountId: e.target.value })}>
@@ -198,23 +224,24 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
                         ))}
                       </SelectInput>
                     </Field>
-                    <Field label="Uraian" htmlFor={`pur-line-desc-${line.key}`}>
-                      <TextInput id={`pur-line-desc-${line.key}`} maxLength={500} value={line.description}
-                        onChange={(e) => update(line.key, { description: e.target.value })}
-                        placeholder="Contoh: servis truk B 1234 XY" />
-                    </Field>
-                  </div>
-                )}
+                  )}
+                  <Field label="Keterangan" htmlFor={`pur-line-desc-${line.key}`} required={line.kind === "account"}
+                    hint="Masuk ke keterangan baris jurnal.">
+                    <TextInput id={`pur-line-desc-${line.key}`} maxLength={500} value={line.description}
+                      onChange={(e) => update(line.key, { description: e.target.value })}
+                      placeholder={line.kind === "product" ? "Contoh: Terima 560 LPG SA 3107050 DN 23448709" : "Contoh: servis truk B 1234 XY"} />
+                  </Field>
+                </div>
                 <div className="flex items-end gap-2">
-                  <Field label="Qty" htmlFor={`pur-line-qty-${line.key}`} className="w-24">
-                    <TextInput id={`pur-line-qty-${line.key}`} type="number" min={1} mono value={line.quantity}
-                      onChange={(e) => update(line.key, { quantity: Number(e.target.value) })} />
+                  <Field label="Qty" htmlFor={`pur-line-qty-${line.key}`} className="w-28">
+                    <NumberInput id={`pur-line-qty-${line.key}`} decimals={0} placeholder="0" value={line.quantity}
+                      onValueChange={(quantity) => update(line.key, { quantity })} />
                   </Field>
-                  <Field label="Harga satuan" htmlFor={`pur-line-cost-${line.key}`} className="w-40">
-                    <TextInput id={`pur-line-cost-${line.key}`} type="number" min={1} mono value={line.unitCost}
-                      onChange={(e) => update(line.key, { unitCost: Number(e.target.value) })} />
+                  <Field label="Harga satuan" htmlFor={`pur-line-cost-${line.key}`} className="w-44">
+                    <NumberInput id={`pur-line-cost-${line.key}`} decimals={4} placeholder="0" value={line.unitCost}
+                      onValueChange={(unitCost) => update(line.key, { unitCost })} />
                   </Field>
-                  <p className="data ml-auto pb-2 text-sm text-ink">{formatRupiah(line.quantity * line.unitCost)}</p>
+                  <p className="data ml-auto pb-2 text-sm text-ink">{formatRupiah(lineAmount(line.quantity, line.unitCost))}</p>
                 </div>
               </div>
             ))}
@@ -246,6 +273,8 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
             Simpan tagihan
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -22,7 +22,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { RequestVoidDialog } from "@/features/approvals/components/RequestVoidDialog";
 import { Button } from "@/components/ui/button";
-import { formatDateId, formatRupiah } from "@/lib/format";
+import { formatDateId, formatRupiah, formatNumber } from "@/lib/format";
 import { scopeKey } from "@/lib/scope";
 
 export function PurchaseDetailPage() {
@@ -122,10 +122,16 @@ export function PurchaseDetailPage() {
                               {l.description}
                               <span className="data block text-2xs text-ink-muted">{l.accountCode} {l.accountName}</span>
                             </>
-                          ) : (l.productName ?? "—")}
+                          ) : (
+                            <>
+                              {l.productName ?? "—"}
+                              {l.description && <span className="block text-2xs text-ink-muted">{l.description}</span>}
+                            </>
+                          )}
                         </td>
-                        <td className="data py-2 text-right text-sm text-ink">{l.quantity}</td>
-                        <td className="data py-2 text-right text-sm text-ink">{formatRupiah(l.unitCost)}</td>
+                        <td className="data py-2 text-right text-sm text-ink">{formatNumber(l.quantity)}</td>
+                        {/* The unit cost keeps its decimals (11,584.4594); line totals are whole rupiah. */}
+                        <td className="data py-2 text-right text-sm text-ink">Rp {formatNumber(l.unitCost, { maximumFractionDigits: 4 })}</td>
                         <td className="data py-2 text-right text-sm text-ink">{formatRupiah(l.subtotal)}</td>
                       </tr>
                     ))}

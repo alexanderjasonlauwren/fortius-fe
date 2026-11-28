@@ -1,17 +1,14 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { formatRupiah } from "@/lib/format";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** `Rp 6,487,297`: whole rupiah, comma thousands (see NUMBER_LOCALE). */
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return formatRupiah(amount);
 }
 
 export function formatDate(date: string | Date): string {

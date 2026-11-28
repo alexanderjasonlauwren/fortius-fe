@@ -39,7 +39,7 @@ describe("closing distance on the surat jalan table", () => {
 
   it("keeps a stop closed past the geofence loud", () => {
     renderRows([row("B", { verdict: "jauh", jarakMeter: 1_900, radiusMeter: 500 })]);
-    const label = screen.getByText("Ditutup 1,9 km dari pangkalan");
+    const label = screen.getByText("Ditutup 1.9 km dari pangkalan");
     expect(label.closest("[title]")?.className).toContain("text-rust-ink");
   });
 

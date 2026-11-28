@@ -54,11 +54,11 @@ describe("Beranda financial summary", () => {
   it("reads today's position off the reports when the report pack is granted, and drops the capped figures", async () => {
     state.permissions = [PERMISSIONS.FINANCE_REPORTS_VIEW, PERMISSIONS.FINANCIAL_STATEMENTS_VIEW, PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.INVOICES_VIEW];
     setup();
-    await waitFor(() => expect(screen.getByTitle("Rp 50.600.000")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTitle("Rp 50,600,000")).toBeTruthy());
     // Piutang past due = total - not yet due; hutang due within a week is
     // aged as of a week ahead.
-    expect(screen.getByTitle("Rp 1.200.000")).toBeTruthy();
-    expect(screen.getByTitle("Rp 400.000")).toBeTruthy();
+    expect(screen.getByTitle("Rp 1,200,000")).toBeTruthy();
+    expect(screen.getByTitle("Rp 400,000")).toBeTruthy();
     const ap = state.report.mock.calls.find((c) => c[0] === "ap_aging")!;
     const ar = state.report.mock.calls.find((c) => c[0] === "ar_aging")!;
     expect(ap[1].asOf > ar[1].asOf).toBe(true);
@@ -79,7 +79,7 @@ describe("Beranda financial summary", () => {
   it("fetches only the permitted card and does not expose an inaccessible report link", async () => {
     state.permissions = [PERMISSIONS.PAYMENTS_VIEW];
     setup();
-    await waitFor(() => expect(screen.getByTitle("Rp 1.000")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTitle("Rp 1,000")).toBeTruthy());
     expect(screen.queryByText("Piutang bulan berjalan")).toBeNull();
     expect(screen.queryByText("Margin kotor")).toBeNull();
     expect(screen.queryByRole("link", { name: /Lihat laporan/ })).toBeNull();
@@ -110,19 +110,19 @@ describe("Beranda financial summary", () => {
     expect(screen.queryByTitle("Rp 0")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Coba lagi" }));
     await waitFor(() => expect(state.cash).toHaveBeenCalledTimes(2));
-    expect(await screen.findByTitle("Rp 1.000")).toBeTruthy();
+    expect(await screen.findByTitle("Rp 1,000")).toBeTruthy();
   });
 
   it("does not carry a previous scope's figure into a new tenant or branch", async () => {
     state.permissions = [PERMISSIONS.PAYMENTS_VIEW];
     const view = setup();
-    await screen.findByTitle("Rp 1.000");
+    await screen.findByTitle("Rp 1,000");
     state.scope = ["tenant-b", "branch-b"];
     state.cash.mockResolvedValue({ complete: true, amount: 5000 });
     view.rerender(<QueryClientProvider client={view.client}>
       <MemoryRouter><Harness /></MemoryRouter>
     </QueryClientProvider>);
-    expect(screen.queryByTitle("Rp 1.000")).toBeNull();
-    expect(await screen.findByTitle("Rp 5.000")).toBeTruthy();
+    expect(screen.queryByTitle("Rp 1,000")).toBeNull();
+    expect(await screen.findByTitle("Rp 5,000")).toBeTruthy();
   });
 });

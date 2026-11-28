@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import type { GridSection, TableSection } from "../api/contract";
+import { formatNumber } from "@/lib/format";
 
 /** Turn SIM3LON's camelCase field keys into readable headers. */
 function humanize(key: string): string {
@@ -10,7 +11,7 @@ function humanize(key: string): string {
 
 function formatCell(value: unknown): string {
   if (value == null) return "";
-  if (typeof value === "number") return value.toLocaleString("id-ID");
+  if (typeof value === "number") return formatNumber(value);
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
@@ -80,7 +81,7 @@ export function GridTableSection({ section }: { section: GridSection }) {
                   key={ci}
                   className={ci === 0 ? "px-3 py-1.5 font-medium text-ink" : "data px-1.5 py-1.5 text-center text-ink"}
                 >
-                  {typeof cell === "number" ? cell.toLocaleString("id-ID") : cell}
+                  {typeof cell === "number" ? formatNumber(cell) : cell}
                 </td>
               ))}
             </tr>

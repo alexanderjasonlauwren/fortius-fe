@@ -292,8 +292,8 @@ describe("tariff display", () => {
     const { formatTariff } = await import("../lib/rate");
     const { unitLabel } = await import("@/lib/lexicon");
     // The tenant's own word for a unit: "tabung" for an LPG agent.
-    expect(formatTariff(1050, "per_unit")).toBe(`Rp 1.050/${unitLabel()}`);
-    expect(formatTariff(354.64, "per_kg")).toBe("Rp 354,64/kg");
+    expect(formatTariff(1050, "per_unit")).toBe(`Rp 1,050/${unitLabel()}`);
+    expect(formatTariff(354.64, "per_kg")).toBe("Rp 354.64/kg");
   });
 });
 
