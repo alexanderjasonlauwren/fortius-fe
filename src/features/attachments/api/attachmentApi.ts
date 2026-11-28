@@ -20,7 +20,8 @@ export type AttachmentOwnerType =
   | "asset"
   | "void_request"
   | "payment_refund"
-  | "delivery";
+  | "delivery"
+  | "sa_redemption";
 
 /** Who may see and who may add or remove the files on each kind of
  *  document -- the owner's own read and create permissions, mirroring the
@@ -38,6 +39,8 @@ export const ATTACHMENT_PERMISSIONS: Record<AttachmentOwnerType, { view: Permiss
   payment_refund: { view: PERMISSIONS.PAYMENT_REFUNDS_VIEW, manage: PERMISSIONS.PAYMENT_REFUNDS_CREATE },
   // A photo taken at the drop: the delivery module's own proof permissions.
   delivery: { view: PERMISSIONS.DELIVERY_PROOFS_VIEW, manage: PERMISSIONS.DELIVERY_PROOFS_CREATE },
+  // A penebusan's BNI Pops PDF: a purchase of gas, under the purchase codes.
+  sa_redemption: { view: PERMISSIONS.PURCHASES_VIEW, manage: PERMISSIONS.PURCHASES_CREATE },
 };
 
 /** What the backend accepts (core/storage contenttype.go, finance_attachment). */

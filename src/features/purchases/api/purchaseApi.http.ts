@@ -182,13 +182,6 @@ async function getPurchase(id: string): Promise<PurchaseView> {
   return toView(await getOne<PurchaseResponse>(`/purchases/${id}`));
 }
 
-async function recordSAPurchase(agreementId: string, notes?: string): Promise<PurchaseView> {
-  return toView(await send<PurchaseResponse>("post", "/purchases", {
-    schedule_agreement_id: agreementId,
-    notes: notes?.trim() || undefined,
-  }));
-}
-
 async function recordGeneralPurchase(input: RecordGeneralPurchaseInput): Promise<PurchaseView> {
   const branchId = input.branchId || (await defaultBranchID());
   const row = await send<PurchaseResponse>("post", "/purchases/general", {
@@ -231,6 +224,6 @@ async function payPurchase(input: PayPurchaseInput): Promise<PurchaseView> {
 
 export const purchaseApiHttp: PurchaseApi = {
   getPurchases, getOpenPurchases, getPurchase, recordGeneralPurchase,
-  recordSAPurchase, recordPurchasePayment,
+  recordPurchasePayment,
   payPurchase,
 };

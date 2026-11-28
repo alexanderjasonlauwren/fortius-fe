@@ -14,7 +14,8 @@ export type VoidDocumentType =
   | "cash_voucher"
   | "depreciation_run"
   | "payment"
-  | "credit_note";
+  | "credit_note"
+  | "sa_redemption";
 
 export type RequestStatus = "pending" | "approved" | "rejected" | "cancelled";
 
@@ -27,6 +28,7 @@ export const DOCUMENT_TYPE_LABEL: Record<VoidDocumentType, string> = {
   depreciation_run: "Penyusutan",
   payment: "Penerimaan",
   credit_note: "Nota kredit",
+  sa_redemption: "Penebusan SA",
 };
 
 export const STATUS_LABEL: Record<RequestStatus, string> = {
