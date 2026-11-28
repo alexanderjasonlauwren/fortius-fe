@@ -133,6 +133,19 @@ export function OpeningBalanceWizardPage() {
               </div>
             )}
 
+            {preview.warnings.length > 0 && (
+              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-ink">
+                <p className="mb-1.5 font-semibold">{preview.warnings.length} hal untuk dicek (tidak menghalangi):</p>
+                <ul className="space-y-1">
+                  {preview.warnings.map((w, i) => (
+                    <li key={i}>
+                      <span className="data">{w.sheet} baris {w.row}</span>: {w.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <CanAccess permission={PERMISSIONS.FISCAL_YEARS_CLOSE}>
               <Button
                 disabled={!preview.balanced || preview.errors.length > 0 || commitMutation.isPending}

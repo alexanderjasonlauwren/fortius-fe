@@ -43,6 +43,20 @@ it("sends as_of alongside the file on preview, and maps the result", async () =>
   expect(preview.balanced).toBe(false);
   expect(preview.errors).toHaveLength(1);
   expect(preview.errors[0]).toEqual({ sheet: "Piutang", row: 3, message: "Akun tidak ditemukan" });
+  // A server from before warnings existed sends none.
+  expect(preview.warnings).toEqual([]);
+});
+
+it("keeps the warnings a clean preview carries", async () => {
+  upload.mockResolvedValue({
+    as_of: "2025-09-30", balanced: true, errors: null,
+    warnings: [{ sheet: "Saldo Awal", row: 2, message: "Saldo 111.02 Kas Kecil berlawanan dengan saldo normalnya" }],
+    trial_balance_rows: 69, total_debit: 1_736_863_682, total_credit: 1_736_863_682,
+    piutang_rows: 0, hutang_rows: 0, aset_rows: 4,
+  });
+  const preview = await openingBalanceApiHttp.previewOpeningBalance("2025-09-30", FILE);
+  expect(preview.errors).toEqual([]);
+  expect(preview.warnings).toHaveLength(1);
 });
 
 it("maps a commit result", async () => {

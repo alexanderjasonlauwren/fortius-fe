@@ -18,6 +18,7 @@ interface PreviewResponse {
   as_of: string;
   balanced: boolean;
   errors: OpeningBalanceValidationError[];
+  warnings?: OpeningBalanceValidationError[];
   trial_balance_rows: number;
   total_debit: number;
   total_credit: number;
@@ -38,6 +39,7 @@ function toPreview(row: PreviewResponse): OpeningBalancePreview {
     asOf: row.as_of,
     balanced: row.balanced,
     errors: row.errors ?? [],
+    warnings: row.warnings ?? [],
     trialBalanceRows: row.trial_balance_rows,
     totalDebit: row.total_debit,
     totalCredit: row.total_credit,
