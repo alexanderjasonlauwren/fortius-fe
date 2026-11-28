@@ -24,6 +24,7 @@ import { useOpenReceipt } from "@/features/ocr/hooks/useOpenReceipt";
 import { IN_FLIGHT_POLL_MS, isInFlight } from "@/features/ocr/lib/status";
 import { TransferProofPanel } from "@/features/finance/components/TransferProofPanel";
 import { isRecordable, prefillFromProof, type ProofPrefill } from "@/features/finance/lib/transferProof";
+import { reviewSecondsSince, reviewStartedNow } from "@/features/ocr/lib/reviewTime";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { useResettableState } from "@/hooks/useResettableState";
 import { CanAccess } from "@/features/rbac/components/CanAccess";
@@ -646,6 +647,9 @@ function RecordPaymentDialog({
   // form from it supplied.
   const [proofId, setProofId] = useState<string | undefined>(initialProofId || undefined);
   const [fromProof, setFromProof] = useState<ProofPrefill | null>(null);
+  // When the proof's values were put in the form: the cashier's review of
+  // what the engine read starts there (review_seconds).
+  const [proofAppliedAt, setProofAppliedAt] = useState<number | undefined>();
   // Polls only while the engine reads it, as the receipt queue does.
   const proof = useQuery({
     queryKey: [...scopeKey(), "transfer-proof", proofId],
@@ -734,10 +738,12 @@ function RecordPaymentDialog({
       metodeId: transfer?.id ?? rest.metodeId,
     });
     setFromProof(filled);
+    setProofAppliedAt(reviewStartedNow());
   };
   const changeProof = (id: string | undefined) => {
     setProofId(id);
     setFromProof(null);
+    setProofAppliedAt(undefined);
   };
   const close = () => {
     // A recorded proof is archived; carrying it, or this receipt's values,
@@ -752,6 +758,7 @@ function RecordPaymentDialog({
       submitPayment({
         ...form,
         buktiTransfer: proofId,
+        buktiReviewSeconds: reviewSecondsSince(proofAppliedAt),
         metodeId: method?.id,
         rekeningTujuanId: form.rekeningTujuanId || defaultAccount?.id,
         alokasi: Object.entries(alokasi)

@@ -168,6 +168,8 @@ export interface RecordPaymentInput {
   /** The bukti transfer (OCR extraction id) to record this receipt from; its
    *  photo becomes the payment's proof. */
   buktiTransfer?: string;
+  /** How long the form was open with that proof (its review_seconds). */
+  buktiReviewSeconds?: number;
   keterangan?: string;
   /** Payment method; omitted means bank transfer. */
   metodeId?: string;

@@ -119,6 +119,8 @@ export interface ReviewReceiptInput {
     incurredAt: string;
     description?: string;
   };
+  /** How long the review form was open (review_seconds). */
+  reviewSeconds?: number;
 }
 
 export interface ReviewReceiptResult {

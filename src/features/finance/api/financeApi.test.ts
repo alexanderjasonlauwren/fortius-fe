@@ -404,6 +404,7 @@ describe("payments", () => {
       // the reference, a pangkalan's second payment would read as the first.
       expect(body.bank_reference).toBeUndefined();
       expect(body.ocr_extraction_id).toBeUndefined();
+      expect(body.proof_review_seconds).toBeUndefined();
     });
 
     it("records a receipt from its bukti transfer, and reads the proof back", async () => {
@@ -412,9 +413,12 @@ describe("payments", () => {
       const p = await financeApiHttp.submitPayment({
         outletId: OUTLET_ID, jumlah: 640_000, tanggal: "2026-11-08", bank: "BNI", noRekening: "",
         metodeId: "m-transfer", referensi: "202611080930112233445566778", buktiTransfer: "x-1",
+        buktiReviewSeconds: 30,
       });
       const [, , body] = send.mock.calls[0];
-      expect(body).toMatchObject({ ocr_extraction_id: "x-1", bank_reference: "202611080930112233445566778" });
+      expect(body).toMatchObject({
+        ocr_extraction_id: "x-1", bank_reference: "202611080930112233445566778", proof_review_seconds: 30,
+      });
       expect(p.buktiTransfer).toBe("x-1");
     });
 

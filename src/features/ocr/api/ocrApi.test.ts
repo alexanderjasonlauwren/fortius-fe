@@ -97,6 +97,15 @@ describe("ocrApiHttp", () => {
     expect(result.expenseId).toBe("exp-1");
   });
 
+  it("sends how long the review form was open, and nothing about what changed", async () => {
+    send.mockResolvedValue({ extraction_id: "ext-1" });
+    await ocrApiHttp.reviewReceipt({ id: "ext-1", outcome: "approved", category: "toll", reviewSeconds: 42 });
+    const body = send.mock.calls[send.mock.calls.length - 1][2];
+    expect(body.review_seconds).toBe(42);
+    // The server compares with the engine's answer; the console sends no flag.
+    expect(Object.keys(body)).not.toContain("edited");
+  });
+
   it("sends a rejection with its note and nothing to archive or file", async () => {
     send.mockResolvedValue({ extraction_id: "ext-1" });
     await ocrApiHttp.reviewReceipt({
