@@ -41,7 +41,7 @@ const ROLE_CODES: Record<UserEntity["role"], readonly string[]> = {
   manager: ["ops_manager"],
   finance: ["finance_officer"],
   staff: ["dispatcher", "warehouse_staff"],
-  viewer: ["auditor_viewer"],
+  viewer: ["auditor_viewer", "investor"],
   driver: ["driver"],
 };
 

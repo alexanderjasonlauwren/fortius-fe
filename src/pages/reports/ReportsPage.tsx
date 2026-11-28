@@ -83,8 +83,10 @@ export function ReportsPage() {
   // Realised margin is ledger data (revenue minus COGS, posted per delivery
   // as it's actually confirmed) — a different permission than the rest of
   // this page's INVOICES_VIEW-gated figures, so it is fetched only when held
-  // and the tile simply does not render otherwise, rather than 403ing.
-  const canSeeMargin = useAuthStore((state) => state.hasPermission(PERMISSIONS.JOURNALS_VIEW));
+  // and the tile simply does not render otherwise, rather than 403ing. It is
+  // read from the trial balance, which GET /financial-statements/trial-balance
+  // guards with the statements read, not the journals one.
+  const canSeeMargin = useAuthStore((state) => state.hasPermission(PERMISSIONS.FINANCIAL_STATEMENTS_VIEW));
   const margin = useQuery({
     queryKey: [...scopeKey(), "report-margin", range],
     queryFn: () => getProfitAndLoss(resolveRange(range)),

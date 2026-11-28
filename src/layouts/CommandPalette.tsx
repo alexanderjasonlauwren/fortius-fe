@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ChartColumn, CornerDownLeft, Search, Store, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ALL_NAV_ITEMS, mayOpen, isAvailableForIntake } from "./nav";
+import { navItemsFor, usesReportConsole } from "./nav";
 import { getReportCatalogue } from "@/features/financereports/api/financereportsApi";
 import { hubEntries } from "@/features/financereports/lib/catalogue";
 import { PERMISSIONS } from "@/features/rbac/permissions";
@@ -44,16 +44,17 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const held = useAuthStore((s) => s.user?.permissions) ?? EMPTY_PERMISSIONS;
+  // The report console has no pangkalan or sopir pages to jump to.
   const records = useQuery({
     queryKey: [...scopeKey(), "palette-records"],
     queryFn: async () => {
       const [outlets, drivers] = await Promise.all([getOutletList(), getDrivers()]);
       return { outlet: outlets, drivers };
     },
-    enabled: open,
+    enabled: open && !usesReportConsole(held),
   });
 
-  const held = useAuthStore((s) => s.user?.permissions) ?? EMPTY_PERMISSIONS;
   // Every report and statement by name, so "umur" or "arus" opens it
   // straight from ⌘K -- the client wanted reports fast (accounting parity P6).
   const catalogue = useQuery({
@@ -67,7 +68,7 @@ export function CommandPalette({
   const entries = useMemo<Entry[]>(() => {
     // Filtered like the sidebar: ⌘K offering a page that answers a refusal
     // panel is the same broken promise, just faster to reach.
-    const nav: Entry[] = ALL_NAV_ITEMS.filter((i) => mayOpen(i, held) && isAvailableForIntake(i, intakeMode)).map((i) => ({
+    const nav: Entry[] = navItemsFor(held, intakeMode).map((i) => ({
       id: `nav-${i.href}`,
       label: i.name,
       hint: i.hint,
