@@ -751,7 +751,17 @@ const SOURCE_TYPE: Record<string, JournalView["sourceType"]> = {
   asset_acquisition: "assetAcquisition",
   asset_disposal: "assetDisposal",
   payment_refund: "paymentRefund",
+  stock_count: "stockCount",
+  sa_redemption: "saRedemption",
+  sa_redemption_receipt: "saRedemptionReceipt",
+  inventory_revaluation: "inventoryRevaluation",
+  import: "import",
 };
+
+/** The wire value of a source type, for filtering the list by it. */
+export function journalSourceWire(type: JournalView["sourceType"]): string | undefined {
+  return Object.entries(SOURCE_TYPE).find(([, view]) => view === type)?.[0];
+}
 
 function toJournalView(row: JournalResponse): JournalView {
   const lines = row.lines ?? [];
@@ -790,6 +800,8 @@ async function getJournals(range?: DateRange, query?: JournalQuery, page = 1): P
   if (range?.from) filters.push({ field: "journal_date", operator: "gte", value: range.from });
   if (range?.to) filters.push({ field: "journal_date", operator: "lte", value: range.to });
   if (query?.accountId) filters.push({ field: "account_id", operator: "eq", value: query.accountId });
+  const sourceWire = query?.sourceType && journalSourceWire(query.sourceType);
+  if (sourceWire) filters.push({ field: "source_type", operator: "eq", value: sourceWire });
   // The list carries each journal's lines and its source document, so a page
   // is one request.
   return getPage<JournalResponse, JournalView>("/journals", {

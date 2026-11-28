@@ -283,6 +283,8 @@ export interface JournalQuery {
   search?: string;
   /** Only journals with a line on this account. */
   accountId?: string;
+  /** Only journals this kind of document posted. */
+  sourceType?: JournalSourceType;
 }
 
 export interface ManualJournalLineInput {

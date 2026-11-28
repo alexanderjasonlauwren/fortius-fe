@@ -505,7 +505,15 @@ export type JournalSourceType =
   | "assetAcquisition"
   | "assetDisposal"
   // The refund of an overpaid receipt (client answer 5); links to the receipt.
-  | "paymentRefund";
+  | "paymentRefund"
+  // Stock movements' own journals (partner doc C7): a stock count's
+  // difference, a penebusan paid and each delivery received, an HPP
+  // re-costed at the moving average, and imported history.
+  | "stockCount"
+  | "saRedemption"
+  | "saRedemptionReceipt"
+  | "inventoryRevaluation"
+  | "import";
 
 export type ReceiptStatus = "Menunggu Diperiksa" | "Tervalidasi" | "Ditolak";
 
@@ -585,8 +593,8 @@ export interface ProductEntity {
    * mirrors the backend's own UpdateProductRequest carrying no ProductKind
    * field at all).
    */
-  /** "container" is an empty cylinder: counted by quantity only, never
-   *  bought or sold (client answer 2). */
+  /** "container" is an empty cylinder: bought and sold at a value on its
+   *  own Persediaan Tabung Kosong (partner doc C7, replacing client answer 2). */
   productKind: "commodity" | "accessory" | "container";
   /** The measurement unit (core.units): tabung, kg, pcs... -- what `satuan`
    *  reads from. Accounting parity P3. */

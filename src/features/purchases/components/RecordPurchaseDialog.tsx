@@ -133,7 +133,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
         {mode === "bulk" ? (
           <BulkPurchaseEntry
             vendors={(vendors.data ?? []).filter((v) => v.status === "atv").map((v) => ({ id: v.id, label: `${v.code} · ${v.name}` }))}
-            products={(products.data ?? []).filter((p) => p.productKind !== "container").map((p) => ({ id: p.id, label: `${p.kode} · ${p.nama}` }))}
+            products={(products.data ?? []).map((p) => ({ id: p.id, label: `${p.kode} · ${p.nama}` }))}
             accounts={billable.map((a) => ({ id: a.akun.id, label: `${a.akun.kode} · ${a.akun.nama}` }))}
             onCancel={() => { reset(); onClose(); }}
             onSaved={() => { onSaved(); reset(); onClose(); }}
@@ -209,7 +209,7 @@ export function RecordPurchaseDialog({ open, onClose, onSaved }: RecordPurchaseD
                       <SelectInput id={`pur-line-product-${line.key}`} value={line.productId}
                         onChange={(e) => update(line.key, { productId: e.target.value })}>
                         <option value="">— Pilih —</option>
-                        {(products.data ?? []).filter((p) => p.productKind !== "container").map((p) => (
+                        {(products.data ?? []).map((p) => (
                           <option key={p.id} value={p.id}>{p.kode} · {p.nama}</option>
                         ))}
                       </SelectInput>

@@ -132,6 +132,8 @@ export function ProductFormPage() {
     if (form.hargaJual <= 0) next.hargaJual = "Harga jual harus lebih dari nol.";
     if (form.hargaBeli > form.hargaJual)
       next.hargaBeli = "Harga beli melebihi harga jual, jadi marginnya negatif.";
+    if (form.productKind === "container" && !form.inventoryAccountCode)
+      next.inventoryAccountCode = "Tabung kosong perlu akun persediaannya sendiri (113.01), bukan Persediaan Isi Gas.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     saveMutation.mutate(form);
@@ -317,7 +319,7 @@ export function ProductFormPage() {
               hint={isEdit
                 ? "Tidak dapat diubah setelah dibuat."
                 : form.productKind === "container"
-                  ? "Tabung kosong hanya dihitung jumlahnya di stok opname; tidak dibeli, dijual, atau dinilai."
+                  ? "Tabung kosong dibeli dan dijual dengan nilai, di akun Persediaan Tabung Kosong (113.01) dan HPP Tabung Kosong (412.02)."
                   : undefined}
             >
               {isEdit ? (
@@ -327,7 +329,16 @@ export function ProductFormPage() {
               ) : (
                 <SegmentedControl
                   value={form.productKind}
-                  onChange={(productKind) => set("productKind", productKind)}
+                  onChange={(productKind) => {
+                    set("productKind", productKind);
+                    // An empty cylinder needs its own Persediaan (the default
+                    // one is Isi Gas); offer the chart's own when it has them.
+                    if (productKind === "container") {
+                      const has = (code: string) => postableAccounts.some((a) => a.akun.kode === code);
+                      if (!form.inventoryAccountCode && has("113.01")) set("inventoryAccountCode", "113.01");
+                      if (!form.cogsAccountCode && has("412.02")) set("cogsAccountCode", "412.02");
+                    }
+                  }}
                   options={[
                     { value: "commodity" as const, label: "Komoditas" },
                     { value: "accessory" as const, label: "Perlengkapan" },
@@ -336,7 +347,8 @@ export function ProductFormPage() {
                 />
               )}
             </Field>
-            <Field label="Akun persediaan" htmlFor="product-inv-account" hint="Menimpa akun 'persediaan' bawaan.">
+            <Field label="Akun persediaan" htmlFor="product-inv-account" hint="Menimpa akun 'persediaan' bawaan."
+              error={errors.inventoryAccountCode} required={form.productKind === "container"}>
               <SelectInput
                 id="product-inv-account"
                 value={form.inventoryAccountCode}
