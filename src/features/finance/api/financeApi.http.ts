@@ -27,6 +27,7 @@ import type {
   AgingReport,
   AgingRow,
   AllocationLine,
+  ChartRemapResult,
   ChartUpgradeResult,
   CreateAccountInput,
   CreateManualInvoiceInput,
@@ -1004,7 +1005,7 @@ async function getProfitAndLoss(range: { from: string; to: string }): Promise<Pr
  *  controlAccountModule, purchase's controlRoles). */
 const CONTROL_ROLES = new Set([
   "receivable", "registration_receivable", "transport_receivable", "customer_deposit",
-  "payable", "payable_pertamina", "inventory", "output_vat", "retained_earnings", "opening_balance_equity", "cash", "bank",
+  "payable", "payable_pertamina", "purchase_advance", "inventory", "output_vat", "retained_earnings", "opening_balance_equity", "cash", "bank",
 ]);
 
 /** Ids of accounts that carry a control role or sit under one. */
@@ -1090,6 +1091,31 @@ async function upgradeChart(dryRun = true): Promise<ChartUpgradeResult> {
   };
 }
 
+interface ChartRemapApiResponse {
+  dry_run: boolean;
+  actions: { from: string; to: string; kind: "rename" | "merge" | "retire"; balance: number }[] | null;
+  unmapped: string[] | null;
+  accounts_added: string[] | null;
+  layouts_added: string[] | null;
+  conflicts: ChartUpgradeConflictResponse[] | null;
+  reclass_journal_id?: number;
+}
+
+async function remapChart(dryRun = true): Promise<ChartRemapResult> {
+  const result = await send<ChartRemapApiResponse>("post", "/accounts/chart-remap", {
+    dry_run: dryRun,
+  });
+  return {
+    dryRun: result.dry_run,
+    aksi: (result.actions ?? []).map((a) => ({ dari: a.from, ke: a.to, jenis: a.kind, saldo: a.balance })),
+    tidakDipetakan: result.unmapped ?? [],
+    akunDitambahkan: result.accounts_added ?? [],
+    layoutDitambahkan: result.layouts_added ?? [],
+    konflik: (result.conflicts ?? []).map((c) => ({ kode: c.code, alasan: c.reason })),
+    jurnalReklasId: result.reclass_journal_id,
+  };
+}
+
 export const financeApiHttp: FinanceApi = {
   getInvoices,
   getAgingReport,
@@ -1118,4 +1144,5 @@ export const financeApiHttp: FinanceApi = {
   getChartOfAccounts,
   createAccount,
   upgradeChart,
+  remapChart,
 };

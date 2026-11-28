@@ -7,6 +7,7 @@ export type {
   AgingReport,
   AgingRow,
   ChartUpgradeConflict,
+  ChartRemapResult,
   ChartUpgradeResult,
   CreateAccountInput,
   CreateManualInvoiceInput,
@@ -63,6 +64,7 @@ export const getProfitAndLoss = api.getProfitAndLoss.bind(api);
 export const getChartOfAccounts = api.getChartOfAccounts.bind(api);
 export const createAccount = api.createAccount.bind(api);
 export const upgradeChart = api.upgradeChart.bind(api);
+export const remapChart = api.remapChart.bind(api);
 
 export async function exportAging(): Promise<number> {
   const report = await getAgingReport();

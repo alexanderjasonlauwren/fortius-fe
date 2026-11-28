@@ -163,8 +163,8 @@ function Tile({ label, value, hint, to, loading, alert }: {
 const PROFIT_ROWS: { key: keyof ProfitSummary; label: string; strong?: boolean; cost?: boolean }[] = [
   { key: "pendapatan", label: "Pendapatan" },
   { key: "hpp", label: "HPP", cost: true },
-  { key: "labaKotor", label: "Laba kotor", strong: true },
-  { key: "biayaOperasional", label: "Biaya operasional", cost: true },
+  { key: "labaKotor", label: "Value added", strong: true },
+  { key: "biayaOperasional", label: "Biaya umum & administrasi", cost: true },
   { key: "ebitda", label: "EBITDA", strong: true },
   { key: "labaBersih", label: "Laba bersih", strong: true },
 ];

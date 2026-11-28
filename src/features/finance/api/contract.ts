@@ -402,6 +402,10 @@ export interface FinanceApi {
    *  current chart-v2 seed (financial-statements plan, phase P1). dryRun
    *  defaults true: preview before writing. Only ever adds. */
   upgradeChart(dryRun?: boolean): Promise<ChartUpgradeResult>;
+  /** Renumbers this tenant's chart to the consultant's codes (chart v4) in
+   *  place: renames, merges with one reclass journal, retires, then adds
+   *  what is missing. dryRun defaults true; any conflict refuses the apply. */
+  remapChart(dryRun?: boolean): Promise<ChartRemapResult>;
 }
 
 export interface CreateAccountInput {
@@ -415,6 +419,24 @@ export interface CreateAccountInput {
 export interface ChartUpgradeConflict {
   kode: string;
   alasan: string;
+}
+
+export interface ChartRemapAction {
+  dari: string;
+  ke: string;
+  jenis: "rename" | "merge" | "retire";
+  saldo: number;
+}
+
+export interface ChartRemapResult {
+  dryRun: boolean;
+  aksi: ChartRemapAction[];
+  tidakDipetakan: string[];
+  akunDitambahkan: string[];
+  layoutDitambahkan: string[];
+  konflik: ChartUpgradeConflict[];
+  /** The reclass journal a merge posted; absent when nothing had a balance. */
+  jurnalReklasId?: number;
 }
 
 export interface ChartUpgradeResult {

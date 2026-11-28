@@ -771,6 +771,38 @@ describe("chart of accounts: create + upgrade (phase P1)", () => {
     expect(send).toHaveBeenCalledWith("post", "/accounts/chart-upgrade", { dry_run: true });
   });
 
+  it("previews the chart v4 remap by default and maps every action", async () => {
+    send.mockResolvedValue({
+      dry_run: true,
+      actions: [
+        { from: "1-1000", to: "111.02", kind: "rename", balance: -100 },
+        { from: "5-3200", to: "522.14", kind: "merge", balance: 50 },
+        { from: "3-3000", to: "", kind: "retire", balance: 0 },
+      ],
+      unmapped: null,
+      accounts_added: ["111", "116.03"],
+      layouts_added: ["laba_rugi_v3"],
+      conflicts: null,
+    });
+
+    const result = await financeApiHttp.remapChart();
+
+    expect(send).toHaveBeenCalledWith("post", "/accounts/chart-remap", { dry_run: true });
+    expect(result).toEqual({
+      dryRun: true,
+      aksi: [
+        { dari: "1-1000", ke: "111.02", jenis: "rename", saldo: -100 },
+        { dari: "5-3200", ke: "522.14", jenis: "merge", saldo: 50 },
+        { dari: "3-3000", ke: "", jenis: "retire", saldo: 0 },
+      ],
+      tidakDipetakan: [],
+      akunDitambahkan: ["111", "116.03"],
+      layoutDitambahkan: ["laba_rugi_v3"],
+      konflik: [],
+      jurnalReklasId: undefined,
+    });
+  });
+
   // Caught live posting a manual journal to "5-4000 Beban Umum dan
   // Administrasi", a grouping header still selectable because `induk` was
   // never resolved from the wire's `parent_id` (gap-closing plan, Phase E) --

@@ -1,13 +1,20 @@
 /**
  * The chart of accounts: every account with its running balance, each one
- * opening its own Buku Besar, and the chart-v2/v3 upgrade. Lifted out of the
+ * opening its own Buku Besar, the chart upgrade, and the move to the
+ * consultant's codes (chart v4, partner doc C1). Lifted out of the
  * old Buku Besar page's "Bagan akun" tab into Daftar Akun (accounting parity
  * P6).
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { getChartOfAccounts, upgradeChart, type ChartUpgradeResult } from "@/features/finance/api/financeApi";
+import {
+  getChartOfAccounts,
+  remapChart,
+  upgradeChart,
+  type ChartRemapResult,
+  type ChartUpgradeResult,
+} from "@/features/finance/api/financeApi";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useDeskMutation } from "@/hooks/useDeskMutation";
 import { PERMISSIONS } from "@/features/rbac/permissions";
@@ -65,6 +72,22 @@ export function ChartOfAccountsPanel() {
     onDone: () => setPreview(null),
   });
 
+  const [remapPreview, setRemapPreview] = useState<ChartRemapResult | null>(null);
+  const remapPreviewMutation = useDeskMutation({
+    mutationFn: () => remapChart(true),
+    errorTitle: "Pratinjau kode akun konsultan gagal",
+    onDone: (result) => setRemapPreview(result),
+  });
+  const remapApplyMutation = useDeskMutation({
+    mutationFn: () => remapChart(false),
+    errorTitle: "Pindah ke kode akun konsultan gagal",
+    success: (result) => ({
+      title: "Kode akun konsultan diterapkan",
+      description: `${result.aksi.length} akun diubah, ${result.akunDitambahkan.length} akun ditambahkan.`,
+    }),
+    onDone: () => setRemapPreview(null),
+  });
+
   if (chart.isLoading) return <Skeleton className="h-96 w-full" />;
 
   const indukByKode = new Map((chart.data ?? []).map((r) => [r.akun.kode, r.akun.induk]));
@@ -77,14 +100,24 @@ export function ChartOfAccountsPanel() {
           hint="Akun bertanda sistem dipakai aturan pemostingan dan tidak dapat dihapus"
           actions={
             canManageAccounts && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => previewMutation.mutate(undefined as never)}
-                disabled={previewMutation.isPending}
-              >
-                Perbarui bagan akun
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => remapPreviewMutation.mutate(undefined as never)}
+                  disabled={remapPreviewMutation.isPending}
+                >
+                  Kode akun konsultan
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => previewMutation.mutate(undefined as never)}
+                  disabled={previewMutation.isPending}
+                >
+                  Perbarui bagan akun
+                </Button>
+              </div>
             )
           }
         />
@@ -219,7 +252,117 @@ export function ChartOfAccountsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ChartRemapDialog
+        preview={remapPreview}
+        onClose={() => setRemapPreview(null)}
+        onApply={() => remapApplyMutation.mutate(undefined as never)}
+        applying={remapApplyMutation.isPending}
+      />
     </>
   );
 }
 
+
+const REMAP_KIND_LABEL: Record<ChartRemapResult["aksi"][number]["jenis"], string> = {
+  rename: "Ganti kode",
+  merge: "Gabung",
+  retire: "Nonaktifkan",
+};
+
+/** The chart v4 remap preview: what is renamed, merged (with the balance a
+ *  reclass journal will move) or retired, before anything is written. */
+function ChartRemapDialog({
+  preview,
+  onClose,
+  onApply,
+  applying,
+}: {
+  preview: ChartRemapResult | null;
+  onClose: () => void;
+  onApply: () => void;
+  applying: boolean;
+}) {
+  const moving = preview?.aksi.filter((a) => a.jenis !== "rename" || a.saldo !== 0) ?? [];
+  const renamed = preview?.aksi.filter((a) => a.jenis === "rename").length ?? 0;
+  const nothingToDo = !!preview && preview.aksi.length === 0 && preview.akunDitambahkan.length === 0;
+  return (
+    <Dialog open={!!preview} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Pindah ke kode akun konsultan</DialogTitle>
+          <DialogDescription>
+            Kode dan nama akun diganti mengikuti bagan akun konsultan. Saldo dan
+            riwayat transaksi tetap; akun yang digabung dipindah saldonya dengan
+            satu jurnal reklas hari ini. Langkah ini tidak bisa dibatalkan.
+          </DialogDescription>
+        </DialogHeader>
+
+        {preview && (
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm">
+            <p>
+              <span className="font-semibold text-ink">{renamed}</span> akun ganti kode,{" "}
+              <span className="font-semibold text-ink">{preview.akunDitambahkan.length}</span> akun
+              baru, <span className="font-semibold text-ink">{preview.layoutDitambahkan.length}</span>{" "}
+              laporan baru.
+            </p>
+            {moving.length > 0 && (
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-line text-ink-muted">
+                    <th className="py-1.5 pr-3">Akun lama</th>
+                    <th className="py-1.5 pr-3">Akun baru</th>
+                    <th className="py-1.5 pr-3">Tindakan</th>
+                    <th className="py-1.5 text-right">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {moving.map((a) => (
+                    <tr key={a.dari} className="border-b border-line">
+                      <td className="data py-1.5 pr-3">{a.dari}</td>
+                      <td className="data py-1.5 pr-3">{a.ke || "-"}</td>
+                      <td className="py-1.5 pr-3">{REMAP_KIND_LABEL[a.jenis]}</td>
+                      <td className="data py-1.5 text-right">{formatRupiah(a.saldo)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {preview.tidakDipetakan.length > 0 && (
+              <p className="text-xs text-ink-muted">
+                Akun buatan sendiri yang tidak diubah:{" "}
+                <span className="data">{preview.tidakDipetakan.join(", ")}</span>
+              </p>
+            )}
+            {preview.konflik.length > 0 && (
+              <div className="rounded-md border border-rust bg-rust/5 p-3 text-xs text-rust-ink">
+                <p className="mb-1 font-semibold">
+                  {preview.konflik.length} masalah harus diselesaikan dulu:
+                </p>
+                <ul className="space-y-0.5">
+                  {preview.konflik.map((k) => (
+                    <li key={k.kode}>
+                      <span className="data">{k.kode}</span>: {k.alasan}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {nothingToDo && <p className="text-ink-muted">Bagan akun sudah memakai kode konsultan.</p>}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Batal
+          </Button>
+          <Button
+            disabled={!preview || nothingToDo || preview.konflik.length > 0 || applying}
+            onClick={onApply}
+          >
+            Terapkan
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

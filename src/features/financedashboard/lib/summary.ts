@@ -49,8 +49,10 @@ export function plLine(lines: StatementLine[] | undefined, code: string): number
   return line ? line.amount : null;
 }
 
-/** The figures a summary shows, by laba_rugi_v2 line code. Costs come back
- *  negative from the layout (it adds every line); shown as positive costs. */
+/** The figures a summary shows, by Laba Rugi line code: the 2026 layout's
+ *  (laba_rugi_v3) first, the older v2 code where a tenant still reads that
+ *  one. Costs come back negative from the layout (it adds every line); shown
+ *  as positive costs. */
 export interface ProfitSummary {
   pendapatan: number | null;
   hpp: number | null;
@@ -62,11 +64,18 @@ export interface ProfitSummary {
 
 export function profitSummary(lines: StatementLine[] | undefined): ProfitSummary {
   const cost = (v: number | null) => (v === null ? null : Math.abs(v));
+  const first = (...codes: string[]) => {
+    for (const code of codes) {
+      const v = plLine(lines, code);
+      if (v !== null) return v;
+    }
+    return null;
+  };
   return {
-    pendapatan: plLine(lines, "total_pendapatan"),
-    hpp: cost(plLine(lines, "hpp")),
-    labaKotor: plLine(lines, "laba_kotor"),
-    biayaOperasional: cost(plLine(lines, "total_biaya_operasional")),
+    pendapatan: first("total_penjualan", "total_pendapatan"),
+    hpp: cost(first("perubahan_persediaan", "hpp")),
+    labaKotor: first("value_added", "laba_kotor"),
+    biayaOperasional: cost(first("hrga", "total_biaya_operasional")),
     ebitda: plLine(lines, "ebitda"),
     labaBersih: plLine(lines, "laba_bersih"),
   };

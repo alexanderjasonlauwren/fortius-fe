@@ -28,6 +28,14 @@ describe("dashboard figures", () => {
     expect(s.buckets.map((b) => b.amount)).toEqual([1_500_000, 0, 0, 1_200_000, 0]);
   });
 
+  it("read the 2026 Laba Rugi (laba_rugi_v3) by its own line codes", () => {
+    const s = profitSummary([
+      line("total_penjualan", 3_500_000), line("perubahan_persediaan", 1_000_000), line("value_added", 2_300_000),
+      line("hrga", -600_000), line("ebitda", 1_700_000), line("laba_bersih", 1_650_000),
+    ]);
+    expect(s).toEqual({ pendapatan: 3_500_000, hpp: 1_000_000, labaKotor: 2_300_000, biayaOperasional: 600_000, ebitda: 1_700_000, labaBersih: 1_650_000 });
+  });
+
   it("read the Laba Rugi by line code, costs as positive, a missing line as unknown", () => {
     const s = profitSummary([
       line("total_pendapatan", 3_500_000), line("hpp", -1_000_000), line("laba_kotor", 2_500_000),
