@@ -76,3 +76,15 @@ describe("the dispatch board for a role that can't open Monitoring or Sopir", ()
     expect(hrefs).toContain("/drivers/Ishak");
   });
 });
+
+describe("the empty dispatch board", () => {
+  // The investor (27 Nov) and finance can't open Perencanaan; the empty
+  // board offered it to them anyway.
+  it("offers the planning page only to a role that can open it", () => {
+    render(<MemoryRouter><DispatchRail data={rail([])} canPlan={false} /></MemoryRouter>);
+    expect(screen.queryByRole("link", { name: /perencanaan/i })).toBeNull();
+    cleanup();
+    render(<MemoryRouter><DispatchRail data={rail([])} /></MemoryRouter>);
+    expect(screen.getByRole("link", { name: /perencanaan/i }).getAttribute("href")).toBe("/distribution");
+  });
+});

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { describeAccess, describeRoles } from "./access";
 import { PERMISSIONS } from "./permissions";
 import { setLexicon } from "@/lib/lexicon";
-import { NAV_GROUPS, bottomNavFor, navGroupsFor, landingPathFor, titleFor, usesDriverConsole } from "@/layouts/nav";
+import { NAV_GROUPS, bottomNavFor, navGroupsFor, navItemsFor, landingPathFor, titleFor, usesDriverConsole, usesReportConsole } from "@/layouts/nav";
 
 describe("financial report navigation", () => {
   // Accounting parity P6 (client decision): Menu utama is Beranda, then the
@@ -341,4 +341,53 @@ it("names menu entries in the tenant's words once its settings arrive", () => {
     .find((i) => i.href === "/outlet");
   expect(entry?.name).toBe("Pangkalan");
   expect(titleFor("/outlet")).toBe("Pangkalan");
+});
+
+// Client request 27 Nov: the investor account sees Beranda and the reports
+// only. Its bundle (fortius-backend seeds, rolePermissionMap["investor"])
+// holds reads that would otherwise list Penerimaan Kas, Tagihan, Pangkalan and
+// Schedule Agreement, because the reports read them.
+describe("the report console", () => {
+  const investor = [
+    PERMISSIONS.DISTRIBUTION_VIEW,
+    PERMISSIONS.DELIVERIES_VIEW,
+    PERMISSIONS.SA_VIEW,
+    PERMISSIONS.OUTLETS_VIEW,
+    PERMISSIONS.BRANCHES_VIEW,
+    PERMISSIONS.SETTINGS_VIEW,
+    PERMISSIONS.FINANCE_REPORTS_VIEW,
+    PERMISSIONS.FINANCE_REPORTS_EXPORT,
+    PERMISSIONS.FINANCIAL_STATEMENTS_VIEW,
+    PERMISSIONS.FINANCIAL_STATEMENTS_EXPORT,
+    PERMISSIONS.INVOICES_VIEW,
+    PERMISSIONS.INVOICES_EXPORT,
+    PERMISSIONS.PAYMENTS_VIEW,
+    PERMISSIONS.NOTIFICATIONS_VIEW,
+  ];
+  const reportPages = ["/dashboard", "/finance-dashboard", "/laporan", "/reports", "/financial-statements"];
+
+  it("shows the seeded investor Beranda and the reports, nothing else", () => {
+    expect(usesReportConsole(investor)).toBe(true);
+    expect(navGroupsFor(investor, "manual").flatMap((g) => g.items.map((i) => i.href))).toEqual(reportPages);
+  });
+
+  it("offers the same pages in the command palette", () => {
+    const pages = navItemsFor(investor, "manual").map((i) => i.href);
+    expect(pages.filter((href) => !reportPages.includes(href))).toEqual(["/notifications", "/settings"]);
+    for (const href of ["/payments", "/receivables", "/outlet", "/sa", "/dispatch-funding"]) {
+      expect(pages).not.toContain(href);
+    }
+  });
+
+  it("leaves a role holding anything more on its ordinary menu", () => {
+    const finance = [...investor, PERMISSIONS.JOURNALS_VIEW];
+    expect(usesReportConsole(finance)).toBe(false);
+    expect(navGroupsFor(finance).flatMap((g) => g.items.map((i) => i.href))).toContain("/payments");
+  });
+
+  it("is not the console of someone without the report pack", () => {
+    expect(usesReportConsole([])).toBe(false);
+    expect(usesReportConsole([PERMISSIONS.INVOICES_VIEW])).toBe(false);
+    expect(landingPathFor(investor)).toBe("/dashboard");
+  });
 });

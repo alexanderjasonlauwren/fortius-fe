@@ -88,7 +88,9 @@ describe("Beranda financial summary", () => {
   });
 
   it("shows all permitted figures and links to the month-to-date report", async () => {
-    state.permissions = [PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.INVOICES_VIEW, PERMISSIONS.JOURNALS_VIEW];
+    // The margin is the trial balance's, which the server guards with the
+    // statements read (GET /financial-statements/trial-balance).
+    state.permissions = [PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.INVOICES_VIEW, PERMISSIONS.FINANCIAL_STATEMENTS_VIEW];
     setup();
     await waitFor(() => expect(state.margin).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("link", { name: /Lihat laporan/ }).getAttribute("href")).toBe("/reports?range=bulan-ini");
@@ -98,6 +100,13 @@ describe("Beranda financial summary", () => {
       expect(state.receivables).toHaveBeenCalledTimes(2);
       expect(state.margin).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("does not ask for the margin on the journals read alone, which the server refuses", async () => {
+    state.permissions = [PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.JOURNALS_VIEW];
+    setup();
+    await waitFor(() => expect(state.cash).toHaveBeenCalledTimes(1));
+    expect(state.margin).not.toHaveBeenCalled();
   });
 
   it("isolates incomplete and failed cards, allowing retry without replacing them with zero", async () => {

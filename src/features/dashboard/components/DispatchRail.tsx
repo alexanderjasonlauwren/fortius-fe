@@ -39,6 +39,7 @@ export function DispatchRail({
   isLoading,
   canMonitor = true,
   canOpenDrivers = true,
+  canPlan = true,
 }: {
   data?: RailData;
   isLoading?: boolean;
@@ -46,6 +47,9 @@ export function DispatchRail({
   canMonitor?: boolean;
   /** Whether a driver's name links to their page; false without drivers read. */
   canOpenDrivers?: boolean;
+  /** Whether the empty board offers the planning page; false for a role
+   *  that can't open it (finance, the investor). */
+  canPlan?: boolean;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -82,9 +86,11 @@ export function DispatchRail({
         title="Belum ada armada berangkat hari ini"
         description="Rencana distribusi yang dikonfirmasi akan menerbitkan surat jalan dan mengisi papan ini."
         action={
-          <Button asChild size="sm">
-            <Link to="/distribution">Buka perencanaan distribusi</Link>
-          </Button>
+          canPlan ? (
+            <Button asChild size="sm">
+              <Link to="/distribution">Buka perencanaan distribusi</Link>
+            </Button>
+          ) : undefined
         }
       />
     );

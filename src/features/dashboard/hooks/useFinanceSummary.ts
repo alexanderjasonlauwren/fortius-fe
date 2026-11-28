@@ -24,7 +24,8 @@ export function useFinanceSummary() {
     state.hasPermission(PERMISSIONS.FINANCE_REPORTS_VIEW) && state.hasPermission(PERMISSIONS.FINANCIAL_STATEMENTS_VIEW));
   const canSeeCash = useAuthStore((state) => state.hasPermission(PERMISSIONS.PAYMENTS_VIEW)) && !canSeeReports;
   const canSeeReceivables = useAuthStore((state) => state.hasPermission(PERMISSIONS.INVOICES_VIEW)) && !canSeeReports;
-  const canSeeMargin = useAuthStore((state) => state.hasPermission(PERMISSIONS.JOURNALS_VIEW));
+  // The trial balance's read, which is what getGrossMargin requests.
+  const canSeeMargin = useAuthStore((state) => state.hasPermission(PERMISSIONS.FINANCIAL_STATEMENTS_VIEW));
   const window = resolveRange("bulan-ini");
   const today = todayIso();
   const weekAhead = addDaysIso(today, 7);

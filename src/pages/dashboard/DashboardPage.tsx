@@ -1,6 +1,7 @@
 import { PERMISSIONS } from "@/features/rbac/permissions";
 import { holds } from "@/features/rbac/holds";
-import { MONITORING_PERMISSIONS } from "@/layouts/nav";
+import { MONITORING_PERMISSIONS, PLANNING_PERMISSIONS, usesReportConsole } from "@/layouts/nav";
+import { useAuthStore } from "@/features/auth/store/authStore";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -95,6 +96,11 @@ export function DashboardPage() {
   // Finance reads the day's stops here but can't open the board (R3-14).
   const canMonitor = MONITORING_PERMISSIONS.every(holds);
   const canOpenDrivers = holds(PERMISSIONS.DRIVERS_VIEW);
+  const canPlan = PLANNING_PERMISSIONS.every(holds);
+  // The investor reads the quota and the payments for these tiles, but its
+  // menu is the reports alone: the tiles stay, their links to the working
+  // pages (Schedule Agreement, Penerimaan Kas) do not.
+  const reportOnly = usesReportConsole(useAuthStore((s) => s.user?.permissions));
 
   const delta = kpi ? formatDelta(kpi.dailyDistributed, kpi.previousDayDistributed) : null;
   const quotaUsed = kpi ? kpi.monthlyQuotaTotal - kpi.monthlyQuotaRemaining : 0;
@@ -132,7 +138,7 @@ export function DashboardPage() {
           }
         />
         <DispatchRail data={rail} isLoading={isLoading} canMonitor={canMonitor}
-          canOpenDrivers={canOpenDrivers}
+          canOpenDrivers={canOpenDrivers} canPlan={canPlan}
         />
         {rail && rail.idleDrivers.length > 0 && (
           <p className="border-t border-line px-5 py-2.5 text-xs text-ink-muted">
@@ -195,7 +201,7 @@ export function DashboardPage() {
                 <span className="data">{formatNumber(kpi.monthlyQuotaTotal)}</span>
               </>
             }
-            href="/sa"
+            href={reportOnly ? undefined : "/sa"}
             icon={Package}
           />
         ) : (
@@ -215,7 +221,7 @@ export function DashboardPage() {
                 </>
               ) : undefined
             }
-            href="/sa"
+            href={reportOnly ? undefined : "/sa"}
             icon={Package}
           />
         )}
@@ -247,7 +253,7 @@ export function DashboardPage() {
                 </>
               ) : undefined
             }
-            href="/payments"
+            href={reportOnly ? undefined : "/payments"}
             icon={Wallet}
             tone={kpi?.pendingPayments ? "signal" : undefined}
           />
@@ -325,9 +331,11 @@ export function DashboardPage() {
             emptyMessage="Belum ada surat jalan hari ini"
             emptyDescription="Konfirmasi rencana distribusi untuk menerbitkan surat jalan."
             emptyAction={
-              <Button asChild size="sm">
-                <Link to="/distribution">Buka perencanaan</Link>
-              </Button>
+              canPlan ? (
+                <Button asChild size="sm">
+                  <Link to="/distribution">Buka perencanaan</Link>
+                </Button>
+              ) : undefined
             }
             dense
           />

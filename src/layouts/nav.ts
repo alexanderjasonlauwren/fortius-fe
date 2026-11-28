@@ -522,6 +522,61 @@ export function usesDriverConsole(permissions: readonly string[] = []): boolean 
 }
 
 /**
+ * The pages of the report console: Beranda and the reports, nothing that
+ * runs the day or keeps the books. The client's investor account (27 Nov):
+ * "view only -- Beranda, and the operational and finance reports".
+ */
+const REPORT_CONSOLE_PAGES = new Set<string>([
+  "/dashboard",
+  "/finance-dashboard",
+  "/laporan",
+  "/reports",
+  "/financial-statements",
+]);
+
+/**
+ * The permissions the seeded `investor` role grants -- mirrors
+ * fortius-backend/seeds/04-role-permissions/seeder.go, rolePermissionMap
+ * ["investor"], kept in sync by hand the way DRIVER_ROLE_PERMISSIONS is.
+ *
+ * The reports need reads that would otherwise put working pages in the menu:
+ * Rekap Operasional reads payments (Penerimaan Kas, Tagihan), Beranda reads
+ * the agreement and the pangkalan (Schedule Agreement, Pangkalan). Without
+ * those reads the reports show Rp 0 rather than an error. So the reads are
+ * granted and the menu is narrowed here instead. A permission the seed adds
+ * and this set lacks sends an investor to the full, permission-filtered menu
+ * -- still read only, since the server refuses every write.
+ */
+const REPORT_ROLE_PERMISSIONS = new Set<string>([
+  PERMISSIONS.DISTRIBUTION_VIEW,
+  PERMISSIONS.DELIVERIES_VIEW,
+  PERMISSIONS.SA_VIEW,
+  PERMISSIONS.OUTLETS_VIEW,
+  PERMISSIONS.BRANCHES_VIEW,
+  PERMISSIONS.SETTINGS_VIEW,
+  PERMISSIONS.FINANCE_REPORTS_VIEW,
+  PERMISSIONS.FINANCE_REPORTS_EXPORT,
+  PERMISSIONS.FINANCIAL_STATEMENTS_VIEW,
+  PERMISSIONS.FINANCIAL_STATEMENTS_EXPORT,
+  PERMISSIONS.INVOICES_VIEW,
+  PERMISSIONS.INVOICES_EXPORT,
+  PERMISSIONS.PAYMENTS_VIEW,
+  PERMISSIONS.NOTIFICATIONS_VIEW,
+]);
+
+/**
+ * Whether this person works from the report console: they may read the
+ * report pack and hold nothing outside the investor bundle. Derived from the
+ * grants, like usesDriverConsole, not from a role name.
+ */
+export function usesReportConsole(permissions: readonly string[] = []): boolean {
+  return (
+    permissions.includes(PERMISSIONS.FINANCE_REPORTS_VIEW) &&
+    permissions.every((code) => REPORT_ROLE_PERMISSIONS.has(code))
+  );
+}
+
+/**
  * Whether this person may open the page an item links to.
  *
  * All of them when several are named, matching what the route asserts and what
@@ -558,10 +613,28 @@ export function isAvailableForIntake(item: NavItem, mode?: OrderIntakeMode): boo
 export function navGroupsFor(permissions?: readonly string[], mode?: OrderIntakeMode): NavGroup[] {
   if (usesDriverConsole(permissions)) return DRIVER_NAV_GROUPS;
   const held = permissions ?? [];
+  const reportOnly = usesReportConsole(held);
   return NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => mayOpen(item, held) && isAvailableForIntake(item, mode)),
+    items: group.items.filter(
+      (item) =>
+        mayOpen(item, held) &&
+        isAvailableForIntake(item, mode) &&
+        (!reportOnly || REPORT_CONSOLE_PAGES.has(item.href)),
+    ),
   })).filter((group) => group.items.length > 0);
+}
+
+/**
+ * Every page this person's menu offers, the sidebar's groups and the links
+ * under them, for the command palette: ⌘K must not reach further than the
+ * menu does.
+ */
+export function navItemsFor(permissions?: readonly string[], mode?: OrderIntakeMode): NavItem[] {
+  const held = permissions ?? [];
+  return [...navGroupsFor(held, mode).flatMap((group) => group.items), ...bottomNavFor(held)].filter(
+    (item) => mayOpen(item, held),
+  );
 }
 
 /**
